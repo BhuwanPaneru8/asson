@@ -1,6 +1,6 @@
 # Asson — Deployment Plan (free tier, launch-grade)
 
-**Status 9 Nov 2026:** staging is live at https://staging-asson.bhuwanpaneru.com on Oracle Always Free `asson-micro` (AMD, 1 GB + 2 GB swap) behind a Cloudflare Tunnel. How it runs day to day: [deploy/README.md](../deploy/README.md). Open: `DEPLOY_SSH_KEY` secret (owner), R2 off-site backups, uptime monitor, Sentry, production go-live.
+**Status 9 Nov 2026:** staging is live at https://staging-asson.bhuwanpaneru.com on Oracle Always Free `asson-micro` (AMD, 1 GB + 2 GB swap) behind a Cloudflare Tunnel. How it runs day to day: [deploy/README.md](../deploy/README.md). Done since: automatic staging deploys, owner login, off-site backups (Oracle Object Storage instead of R2: same free 20 GB, no extra account or card). Open: uptime monitor, Sentry, production go-live.
 
 *Written 9 Nov 2026. Free-tier terms change often: re-check each provider's pricing page on the day you sign up.*
 

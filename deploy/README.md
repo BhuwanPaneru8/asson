@@ -58,7 +58,17 @@ sudo systemctl stop asson@staging
 sudo -u postgres pg_restore --clean --if-exists -d asson_staging /var/backups/asson/asson_staging-<stamp>.dump
 sudo systemctl start asson@staging
 ```
-Off-site copies to Cloudflare R2 are still to do (needs an R2 bucket + token).
+**Off-site copies:** every dump is also uploaded to the private Oracle Object Storage bucket `asson-backups` (namespace `axyo2zdstaon`, Hyderabad, Always Free 20 GB) as `<host>/<db>/<db>-<stamp>.dump`.
+- The server only holds a **write-only pre-authenticated link** (`/etc/asson/backup.env`, root-only, named `asson-server-upload`, **expires 2029-11-01**: renew before then). It can add files but cannot list, read or delete them (checked: 404), so a compromised server can't wipe the off-site copies.
+- Success and failure are logged (`journalctl -t asson-backup`); `/var/backups/asson/.last-offsite-ok` holds the time of the last full upload.
+- No automatic expiry yet: dumps are a few hundred KB, so 20 GB lasts years. Add a lifecycle rule when production data grows.
+- Restore from off-site, from the owner's Mac (OCI CLI is configured there):
+```bash
+oci os object list -bn asson-backups --prefix asson-micro/asson_production/ --query 'data[].name'
+oci os object get -bn asson-backups --name <name> --file latest.dump
+scp -i ~/.ssh/asson_deploy latest.dump ubuntu@HOST:/tmp/   # then pg_restore as above
+```
+Restore drill done 9 Nov 2026: the staging dump downloaded from the bucket restored into a scratch DB with identical row counts (57 products, 901 variants, 161 orders, 47 users, 11 migrations).
 
 ## Moving to the bigger Ampere server later
 Create it, run `server-setup.sh` + `tunnel-setup.sh` on it (`cloudflared tunnel login` again or copy `/etc/cloudflared`), restore the latest dumps, update `DEPLOY_HOST`/`DEPLOY_KNOWN_HOSTS`, and run the Deploy workflow. The bundle already contains the arm64 Prisma engine.
