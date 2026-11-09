@@ -705,17 +705,21 @@ model ReturnItem {
 }
 
 model Supplier {
-  id        String          @id @default(cuid())
-  name      String
-  contact   String?
-  phone     String?
-  email     String?
-  location  String?
-  country   String          @default("Nepal")
-  notes     String?
-  active    Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  orders    PurchaseOrder[]
+  id               String            @id @default(cuid())
+  name             String
+  contact          String?
+  phone            String?
+  email            String?
+  location         String?
+  country          String            @default("Nepal")
+  notes            String?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  orders           PurchaseOrder[]
+  bills            SupplierBill[]
+  payments         SupplierPayment[]
+  /// days after the bill date that a bill falls due
+  paymentTermsDays Int               @default(30)
 }
 
 model PurchaseOrder {
@@ -734,6 +738,7 @@ model PurchaseOrder {
   updatedAt   DateTime            @updatedAt
   items       PurchaseOrderItem[]
   receipts    GoodsReceipt[]
+  bills       SupplierBill[]
 
   @@index([status, createdAt])
   @@index([supplierId])
@@ -1060,4 +1065,84 @@ model StockCountLine {
   added       Boolean    @default(false)
 
   @@unique([countId, variantId])
+}
+
+enum BillStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+enum SupplierPayMethod {
+  CASH
+  BANK
+  CHEQUE
+  ESEWA
+  KHALTI
+  FONEPAY
+}
+
+/// A supplier's invoice: what we owe them. Never deleted; mistakes are voided with a reason.
+model SupplierBill {
+  id              String              @id @default(cuid())
+  number          Int                 @unique @default(autoincrement())
+  supplierId      String
+  supplier        Supplier            @relation(fields: [supplierId], references: [id])
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  /// the supplier's own invoice number
+  reference       String
+  billDate        DateTime
+  dueDate         DateTime
+  /// total payable in paisa, VAT included
+  amount          Int
+  /// VAT part of `amount` (input VAT for the VAT return)
+  vatAmount       Int                 @default(0)
+  /// sum of live payment allocations, kept in step in each transaction (CHECK 0 <= paid <= amount)
+  paid            Int                 @default(0)
+  status          BillStatus          @default(OPEN)
+  note            String?
+  voidReason      String?
+  createdById     String
+  createdAt       DateTime            @default(now())
+  allocations     PaymentAllocation[]
+
+  @@unique([supplierId, reference])
+  @@index([status, dueDate])
+  @@index([supplierId, billDate])
+}
+
+/// Money paid to a supplier. Whatever isn't allocated to bills is credit for later bills.
+model SupplierPayment {
+  id          String              @id @default(cuid())
+  number      Int                 @unique @default(autoincrement())
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  amount      Int
+  /// not yet allocated to a bill = supplier credit (CHECK 0 <= unallocated <= amount)
+  unallocated Int
+  method      SupplierPayMethod
+  reference   String?
+  paidAt      DateTime
+  note        String?
+  voidedAt    DateTime?
+  voidReason  String?
+  createdById String
+  createdAt   DateTime            @default(now())
+  allocations PaymentAllocation[]
+
+  @@index([supplierId, paidAt])
+}
+
+model PaymentAllocation {
+  id        String          @id @default(cuid())
+  paymentId String
+  payment   SupplierPayment @relation(fields: [paymentId], references: [id])
+  billId    String
+  bill      SupplierBill    @relation(fields: [billId], references: [id])
+  amount    Int
+  createdAt DateTime        @default(now())
+
+  @@unique([paymentId, billId])
+  @@index([billId])
 }

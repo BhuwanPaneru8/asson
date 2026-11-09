@@ -21,7 +21,7 @@ describe("stock counts", () => {
   it("blind count → submit → approve adjusts only the differences, with ledger and audit", async () => {
     const shop = await makeLocation({ code: "SHOP" });
     const p = await makeProduct({ cost: 500, stock: { S: 5, M: 3, L: 2 }, at: shop.id });
-    const [s, m, l] = p.variants;
+    const [s, m] = p.variants;
     const cashier = await makeUser("CASHIER");
     actAs(cashier);
     const { id } = await start(shop.id);

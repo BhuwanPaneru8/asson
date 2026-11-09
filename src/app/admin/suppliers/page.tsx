@@ -14,7 +14,7 @@ export default async function SuppliersPage() {
     const damaged = s.orders.flatMap((o) => o.items).reduce((a, i) => a + i.quantityDamaged, 0);
     const spend = s.orders.flatMap((o) => o.items).reduce((a, i) => a + i.quantityReceived * i.unitCost, 0);
     return {
-      id: s.id, name: s.name, contact: s.contact ?? "", phone: s.phone ?? "", email: s.email ?? "", location: s.location ?? "", country: s.country, notes: s.notes ?? "", active: s.active,
+      id: s.id, name: s.name, paymentTermsDays: s.paymentTermsDays, contact: s.contact ?? "", phone: s.phone ?? "", email: s.email ?? "", location: s.location ?? "", country: s.country, notes: s.notes ?? "", active: s.active,
       orders: s.orders.length, spend: formatPrice(spend), units, damageRate: units + damaged ? Math.round((damaged / (units + damaged)) * 1000) / 10 : 0,
     };
   });

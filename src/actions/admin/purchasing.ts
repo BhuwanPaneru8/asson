@@ -32,6 +32,7 @@ const supplierSchema = z.object({
   country: z.string().trim().max(60).default("Nepal"),
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
   active: z.boolean().default(true),
+  paymentTermsDays: z.coerce.number().int().min(0, "0–365 days").max(365, "0–365 days").default(30),
 });
 
 export async function saveSupplier(input: unknown, id?: string): Promise<R<{ id: string }>> {
