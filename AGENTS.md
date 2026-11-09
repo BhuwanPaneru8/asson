@@ -7,3 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Asson project docs
+
+Before changing code, read `docs/Memory.md` (current state, gotchas, next steps), then `docs/Rules.md`. Product scope is in `docs/PRD.md`, system design in `docs/Architecture.md`, roadmap in `docs/Phases.md`, and UI standards in `docs/Design.md`. Update `docs/Memory.md` at the end of every session.
