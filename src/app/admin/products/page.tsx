@@ -1,3 +1,4 @@
+import { can } from "@/lib/permissions";
 import Image from "next/image";
 import { requirePermission } from "@/lib/auth";
 import Link from "next/link";
@@ -11,7 +12,8 @@ export const metadata = { title: "Products" };
 const TAKE = 30;
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; category?: string; page?: string }> }) {
-  await requirePermission("catalog.view");
+  const user = await requirePermission("catalog.view");
+  const canEdit = can(user.role, "catalog.edit");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const where: Prisma.ProductWhereInput = {};
@@ -30,7 +32,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Products" description={`${total} products`} actions={<Link href="/admin/products/new" className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-4 text-[14px] text-white"><Plus className="h-4 w-4" /> Add product</Link>} />
+      <PageHeader title="Products" description={`${total} products`} actions={<div className="flex flex-wrap gap-2">{canEdit && <Link href="/admin/products/import" className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-4 text-[14px] hover:border-ink">Import / export</Link>}<Link href="/admin/products/new" className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-4 text-[14px] text-white"><Plus className="h-4 w-4" /> Add product</Link></div>} />
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={sp.q} placeholder="Search name, brand or exact SKU" className="h-10 w-full max-w-xs rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
         <select name="status" defaultValue={sp.status ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select>
