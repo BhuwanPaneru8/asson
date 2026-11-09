@@ -46,7 +46,7 @@ describe("spreadsheet import", () => {
   });
 
   it("reports every problem with its row number and imports nothing", async () => {
-    await db.variant.create({ data: { sku: "TAKEN-1", color: "Black", colorHex: "#000000", size: "M", stock: 1, product: { create: { name: "Other", slug: "other", description: DESC, brand: "Asson", gender: "MEN", price: 100, categoryId: (await db.category.findFirstOrThrow({ where: { slug: "men-shirts" } })).id } } } });
+    await db.variant.create({ data: { sku: "TAKEN-1", color: "Black", colorHex: "#000000", size: "M", product: { create: { name: "Other", slug: "other", description: DESC, brand: "Asson", gender: "MEN", price: 100, categoryId: (await db.category.findFirstOrThrow({ where: { slug: "men-shirts" } })).id } } } });
     const csv = sheet([
       ["linen-shirt", "Linen Shirt", "", "Shirts", "1999", "", DESC, "", "", "", "", "White", "", "M", "", "5", ""], // "Shirts" is ambiguous (men + women)
       ["linen-shirt", "", "", "", "", "", "", "", "", "", "", "White", "", "M", "", "5", ""], // duplicate colour/size
@@ -71,7 +71,8 @@ describe("spreadsheet import", () => {
     await runImport(templateCsv());
     const before = await db.variant.findMany({ orderBy: { sku: "asc" } });
     // someone sells a unit meanwhile; the stale spreadsheet must not undo it
-    await db.variant.update({ where: { sku: "AS-00001" }, data: { stock: { decrement: 1 } } });
+    const sold = await db.variant.findUniqueOrThrow({ where: { sku: "AS-00001" } });
+    await db.storeStock.updateMany({ where: { variantId: sold.id, quantity: { gte: 1 } }, data: { quantity: { decrement: 1 } } });
 
     const rows = parseCsv(await exportCatalogueCsv(db, { includeCost: true }));
     const h = rows[0];

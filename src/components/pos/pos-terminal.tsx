@@ -11,7 +11,7 @@ import { cn, formatDateTime, formatPrice } from "@/lib/utils";
 type Line = PosItem & { quantity: number };
 type TenderMethod = "CASH" | "ESEWA_QR" | "KHALTI_QR" | "FONEPAY_QR" | "CARD" | "BANK" | "VOUCHER";
 type Tender = { method: TenderMethod; amount: number; tendered?: number; reference?: string };
-type Shift = { openedAt: string; openingFloat: number; expectedCash: number; sales: number; total: number } | null;
+type Shift = { store: string; openedAt: string; openingFloat: number; expectedCash: number; sales: number; total: number } | null;
 
 const METHODS: { id: TenderMethod; label: string }[] = [
   { id: "CASH", label: "Cash" }, { id: "ESEWA_QR", label: "eSewa QR" }, { id: "KHALTI_QR", label: "Khalti QR" },
@@ -22,9 +22,9 @@ const REASONS = ["Loyal customer", "Damaged / display piece", "Staff purchase", 
 const rupees = (s: string) => Math.round((Number(s.replace(/[^\d.]/g, "")) || 0) * 100);
 const newRef = () => `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export function PosTerminal({ cashier, shift }: { cashier: { name: string; discountLimit: number; canApproveReturns: boolean }; shift: Shift }) {
+export function PosTerminal({ cashier, shift, shops }: { cashier: { name: string; discountLimit: number; canApproveReturns: boolean }; shift: Shift; shops: { id: string; name: string }[] }) {
   const [mode, setMode] = useState<"sale" | "return">("sale");
-  if (!shift) return <OpenShift name={cashier.name} />;
+  if (!shift) return <OpenShift name={cashier.name} shops={shops} />;
   return (
     <div>
       <div className="-mx-4 -mt-4 mb-4 flex gap-1 border-b border-line bg-white px-4 md:-mx-8 md:-mt-8 md:px-8">
@@ -39,14 +39,22 @@ export function PosTerminal({ cashier, shift }: { cashier: { name: string; disco
   );
 }
 
-function OpenShift({ name }: { name: string }) {
+function OpenShift({ name, shops }: { name: string; shops: { id: string; name: string }[] }) {
   const [float, setFloat] = useState("");
+  const [shop, setShop] = useState(shops[0]?.id ?? "");
   const [pending, start] = useTransition();
   return (
     <div className="mx-auto mt-10 max-w-md rounded-lg border border-line bg-white p-8">
       <h1 className="text-[22px] font-semibold">Open your shift</h1>
       <p className="mt-1 text-[14px] text-muted">Hi {name.split(" ")[0]}. Count the cash in the drawer before your first sale.</p>
-      <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await openShift(Number(float || 0)); if (!r.ok) toast.error(r.error); else toast.success("Shift opened"); }); }}>
+      <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await openShift(Number(float || 0), shop || undefined); if (!r.ok) toast.error(r.error); else toast.success("Shift opened"); }); }}>
+        {shops.length > 1 && (
+          <label className="block text-[13px] font-medium text-ink-soft">Shop
+            <select value={shop} onChange={(e) => setShop(e.target.value)} className="mt-1.5 h-12 w-full rounded-md border border-line bg-white px-3 text-[15px] outline-none focus:border-ink">
+              {shops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+        )}
         <label className="block text-[13px] font-medium text-ink-soft">Opening cash (Rs.)
           <input autoFocus value={float} onChange={(e) => setFloat(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder="e.g. 5000" className="mt-1.5 h-12 w-full rounded-md border border-line px-3 text-[18px] tabular-nums outline-none focus:border-ink" />
         </label>
@@ -148,7 +156,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
       {/* Left: scan & search */}
       <section className="flex min-w-0 flex-1 flex-col border-line bg-white lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-5 py-3 text-[13px]">
-          <span className="text-muted">Shift opened {formatDateTime(shift.openedAt)} · {shift.sales} sales · {formatPrice(shift.total)}</span>
+          <span className="text-muted">{shift.store} · shift opened {formatDateTime(shift.openedAt)} · {shift.sales} sales · {formatPrice(shift.total)}</span>
           <button onClick={() => setClosing(true)} className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 hover:border-ink"><LogOut className="h-3.5 w-3.5" /> Close shift</button>
         </div>
         <form onSubmit={scan} className="flex gap-2 border-b border-line p-4">

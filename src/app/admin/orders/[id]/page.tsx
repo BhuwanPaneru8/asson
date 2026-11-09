@@ -18,7 +18,7 @@ type Addr = { fullName: string; phone: string; line1: string; line2?: string | n
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("orders");
   const { id } = await params;
-  const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
+  const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
   if (!order) notFound();
   const a = order.shippingAddress as Addr;
 
@@ -48,6 +48,11 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
                   <div className="min-w-0 flex-1 text-[14px]">
                     <Link href={`/admin/products/${it.productId}`} className="font-medium hover:underline">{it.name}</Link>
                     <p className="text-[12.5px] text-muted">{it.color} · {it.size} · SKU {it.sku}</p>
+                    {order.allocations.some((x) => x.orderItemId === it.id) && (
+                      <p className="mt-0.5 text-[12px] text-muted">
+                        From {order.allocations.filter((x) => x.orderItemId === it.id).map((x) => `${x.store.name}${x.quantity < it.quantity ? ` ×${x.quantity}` : ""}${x.pickedAt ? " ✓ picked" : ""}`).join(" + ")}
+                      </p>
+                    )}
                   </div>
                   <p className="text-[13.5px] tabular-nums text-muted">{formatPrice(it.unitPrice)} × {it.quantity}</p>
                   <p className="w-24 text-right text-[14px] font-medium tabular-nums">{formatPrice(it.unitPrice * it.quantity)}</p>

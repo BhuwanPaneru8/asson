@@ -26,7 +26,7 @@ describe("starter catalogue", () => {
 
   it("is safe to re-run: never duplicates or edits existing products, and continues the SKU sequence", async () => {
     await db.product.create({
-      data: { name: "Owner Tee", slug: "owner-tee", description: "x", brand: "Asson", gender: "MEN", price: 100000, categoryId: (await db.category.findFirstOrThrow()).id, variants: { create: { sku: "AS-00041", color: "Black", colorHex: "#000", size: "M", stock: 1 } } },
+      data: { name: "Owner Tee", slug: "owner-tee", description: "x", brand: "Asson", gender: "MEN", price: 100000, categoryId: (await db.category.findFirstOrThrow()).id, variants: { create: { sku: "AS-00041", color: "Black", colorHex: "#000", size: "M" } } },
     });
     await loadStarterCatalogue(db);
     await db.product.update({ where: { slug: "supima-cotton-crew-tee" }, data: { price: 175000 } });

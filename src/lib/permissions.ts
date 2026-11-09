@@ -1,7 +1,7 @@
 // Client-safe role → permission map. The ONLY place that decides who can do what.
 // Segregation of duties (from the owner's operating rules):
 //   Cashier  sells and takes payment; can't change prices, stock or history.
-//   Staff    fulfils online orders.
+//   Staff    fulfils online orders (picks, packs) and sends/receives stock transfers.
 //   Manager  approves discounts ≤ 15%, adjusts stock, closes the day.
 //   Owner    (ADMIN) everything, incl. prices, costs & profit, delivery rates, roles and large discounts.
 //   Returns always need a manager or owner (cashiers ask for a PIN on the till).
@@ -26,13 +26,15 @@ export type Permission =
   | "approve.return"
   | "purchasing"
   | "finance"
-  | "audit";
+  | "audit"
+  | "transfers"
+  | "locations";
 
 const MAP: Record<StaffRole, Permission[]> = {
   CASHIER: ["pos.sell", "catalog.view"],
-  STAFF: ["dashboard", "orders", "catalog.view", "reviews"],
-  MANAGER: ["dashboard", "orders", "catalog.view", "inventory.adjust", "customers", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing"],
-  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance", "audit"],
+  STAFF: ["dashboard", "orders", "catalog.view", "reviews", "transfers"],
+  MANAGER: ["dashboard", "orders", "catalog.view", "inventory.adjust", "customers", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "transfers"],
+  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance", "audit", "transfers", "locations"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { CUSTOMER: "Customer", CASHIER: "Cashier", STAFF: "Fulfilment staff", MANAGER: "Manager", ADMIN: "Owner" };

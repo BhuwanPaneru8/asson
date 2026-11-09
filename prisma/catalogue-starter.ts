@@ -126,6 +126,10 @@ export async function loadStarterCatalogue(db: PrismaClient) {
   const skus = await db.variant.findMany({ where: { sku: { startsWith: "AS-" } }, select: { sku: true } });
   let next = Math.max(0, ...skus.map((v) => Number(v.sku.slice(3))).filter(Number.isFinite)) + 1;
 
+  // where opening stock lands: the first active warehouse, else the first shop (same rule as lib/stock.ts)
+  const into = (await db.store.findFirst({ where: { active: true }, orderBy: [{ kind: "desc" }, { priority: "asc" }, { createdAt: "asc" }], select: { id: true } }))
+    ?? (await db.store.upsert({ where: { code: "FLAGSHIP" }, update: { active: true }, create: { code: "FLAGSHIP", name: "Asson Flagship", address: "Kathmandu, Nepal", priority: 10 }, select: { id: true } }));
+
   for (const item of STARTER) {
     const slug = slugify(item.name);
     if (await db.product.findUnique({ where: { slug } })) { result.productsSkipped++; continue; }
@@ -146,19 +150,22 @@ export async function loadStarterCatalogue(db: PrismaClient) {
             create: item.colors.flatMap((color, ci) =>
               item.sizes.map((size, si) => ({
                 sku: `AS-${String(next++).padStart(5, "0")}`, color, colorHex: COLORS[color], size,
-                stock: startStock(size), lowStockThreshold: 2, position: ci * 100 + si,
+                lowStockThreshold: 2, position: ci * 100 + si,
               })),
             ),
           },
         },
         include: { variants: true },
       });
+      // Variant.stock is derived from location stock (DB trigger): stock goes into the receiving location
+      const units = p.variants.map((v) => ({ variantId: v.id, storeId: into.id, quantity: startStock(v.size) }));
+      await tx.storeStock.createMany({ data: units });
       await tx.inventoryLog.createMany({
-        data: p.variants.map((v) => ({ variantId: v.id, delta: v.stock, reason: "RECEIVED", note: "Starter catalogue" })),
+        data: units.map((u) => ({ variantId: u.variantId, storeId: u.storeId, delta: u.quantity, reason: "RECEIVED", note: "Starter catalogue" })),
       });
       result.productsCreated++;
       result.variantsCreated += p.variants.length;
-      result.unitsStocked += p.variants.reduce((n, v) => n + v.stock, 0);
+      result.unitsStocked += units.reduce((n, u) => n + u.quantity, 0);
     });
   }
 

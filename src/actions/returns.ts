@@ -8,7 +8,8 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { findApproverByPin } from "@/lib/approvals";
-import { getOpenShift } from "@/lib/pos";
+import { getOpenShift, getShop } from "@/lib/pos";
+import { moveStock } from "@/lib/stock";
 import { store } from "@/lib/config";
 import { refundPerUnit } from "@/lib/costing";
 import { audit } from "@/lib/audit";
@@ -135,6 +136,7 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
     for (const p of parts) rows.push({ item, quantity: p.quantity, condition: p.condition, amount: refundPerUnit(item.unitPrice, order.subtotal, order.discount + order.pointsDiscount) * p.quantity });
   }
   const refund = rows.reduce((s, r) => s + r.amount, 0);
+  const shop = await getShop(shift?.storeId);
   const voucherCode = d.refundMethod === "STORE_CREDIT" ? `CR-${randomBytes(4).toString("hex").toUpperCase()}` : null;
 
   try {
@@ -149,12 +151,13 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
         select: { id: true, number: true },
       });
       for (const r of rows) {
-        if (r.condition === "RESELLABLE" && r.item.variantId) {
-          await tx.variant.update({ where: { id: r.item.variantId }, data: { stock: { increment: r.quantity } } });
-          await tx.inventoryLog.create({ data: { variantId: r.item.variantId, delta: r.quantity, reason: "RETURN_RESTOCK", note: `Store return R${created.number}`, orderId: order.id, actorId: me.id } });
-        } else if (r.item.variantId) {
-          // damaged: recorded for the audit trail, never back into sellable stock
-          await tx.inventoryLog.create({ data: { variantId: r.item.variantId, delta: 0, reason: "DAMAGED", note: `Returned damaged ×${r.quantity} — quarantined (R${created.number})`, orderId: order.id, actorId: me.id } });
+        // back on the shelf of the shop taking the return; damaged units are only recorded (quarantined)
+        if (r.item.variantId) {
+          const resellable = r.condition === "RESELLABLE";
+          await moveStock(tx, {
+            variantId: r.item.variantId, storeId: shop.id, delta: resellable ? r.quantity : 0, reason: resellable ? "RETURN_RESTOCK" : "DAMAGED",
+            note: resellable ? `Store return R${created.number}` : `Returned damaged ×${r.quantity} — quarantined (R${created.number})`, orderId: order.id, actorId: me.id,
+          });
         }
         await tx.product.update({ where: { id: r.item.productId }, data: { soldCount: { decrement: r.quantity } } });
       }

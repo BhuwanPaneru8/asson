@@ -16,7 +16,7 @@ const rs = (paisa: number) => (paisa / 100).toString();
 const toPaisa = (s: string) => Math.round((Number(s.replace(/[^\d.]/g, "")) || 0) * 100);
 const num = "h-8 w-20 rounded border border-line bg-white px-2 text-right text-[13px] tabular-nums outline-none focus:border-ink disabled:bg-cloud";
 
-export function PurchaseOrderEditor({ po }: { po: PO }) {
+export function PurchaseOrderEditor({ po, locations }: { po: PO; locations: { id: string; name: string }[] }) {
   const [items, setItems] = useState<Item[]>(po.items);
   const [landed, setLanded] = useState(rs(po.landedCost));
   const [notes, setNotes] = useState(po.notes);
@@ -25,6 +25,7 @@ export function PurchaseOrderEditor({ po }: { po: PO }) {
   const [hits, setHits] = useState<VariantHit[]>([]);
   const [counts, setCounts] = useState<Record<string, { good: string; damaged: string }>>({});
   const [grnNote, setGrnNote] = useState("");
+  const [into, setInto] = useState(locations[0]?.id ?? "");
   const [pending, start] = useTransition();
 
   const editable = po.status === "DRAFT" || po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED";
@@ -50,7 +51,7 @@ export function PurchaseOrderEditor({ po }: { po: PO }) {
   });
   const receive = () => start(async () => {
     const lines = items.filter((i) => i.id).map((i) => ({ poItemId: i.id!, quantity: Number(counts[i.variantId]?.good || 0), damaged: Number(counts[i.variantId]?.damaged || 0) }));
-    const r = await receiveGoods({ poId: po.id, note: grnNote, lines });
+    const r = await receiveGoods({ poId: po.id, storeId: into || undefined, note: grnNote, lines });
     if (r.ok) { toast.success(`GRN-${r.receiptNumber} recorded — stock and costs updated`); setCounts({}); setGrnNote(""); } else toast.error(r.error);
   });
 
@@ -126,6 +127,13 @@ export function PurchaseOrderEditor({ po }: { po: PO }) {
           <Card title="Receive goods (count & verify)">
             <div className="space-y-3 p-4">
               <p className="text-[13px] text-muted">Count every box. Enter only what physically arrived — good units go into stock, damaged units are recorded against the supplier. Missing units stay outstanding.</p>
+              {locations.length > 1 && (
+                <label className="mb-2 flex items-center gap-2 text-[13px] text-ink-soft">Receive into
+                  <select value={into} onChange={(e) => setInto(e.target.value)} className="h-8 rounded border border-line bg-white px-2 text-[13px]">
+                    {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </label>
+              )}
               <textarea value={grnNote} onChange={(e) => setGrnNote(e.target.value)} rows={2} placeholder="Delivery note / invoice no. / remarks" aria-label="Receipt note" className="w-full rounded border border-line p-2 text-[13px]" />
               <button onClick={receive} disabled={pending || !Object.values(counts).some((c) => Number(c.good) || Number(c.damaged))} className="h-10 w-full rounded-md bg-ink text-[14px] font-medium text-white disabled:opacity-40">Record goods received</button>
             </div>

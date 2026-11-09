@@ -3,6 +3,7 @@ import type { RefundMethod, TenderMethod } from "@prisma/client";
 import { db } from "./db";
 import { store as storeConfig } from "./config";
 import { formatPrice } from "./utils";
+import { ensureFlagship } from "./stock";
 
 export const TENDER_LABEL: Record<TenderMethod, string> = {
   CASH: "Cash",
@@ -30,13 +31,16 @@ export function dayBounds(date: string) {
   return { start, end };
 }
 
-/** The flagship store (created on first use). */
-export async function getDefaultStore() {
-  return db.store.upsert({
-    where: { code: "FLAGSHIP" },
-    update: {},
-    create: { code: "FLAGSHIP", name: `${storeConfig.name} Flagship`, address: storeConfig.storeAddress },
-  });
+/** Active shops (locations with a till), in priority order. */
+export async function getShops() {
+  const shops = await db.store.findMany({ where: { active: true, kind: "SHOP" }, select: { id: true, code: true, name: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
+  return shops.length ? shops : [await ensureFlagship()];
+}
+
+/** A shop by id, or the first shop. Used by the till and daily closing. */
+export async function getShop(id?: string | null) {
+  const shops = await getShops();
+  return shops.find((s) => s.id === id) ?? shops[0];
 }
 
 export async function getOpenShift(cashierId: string) {
@@ -77,7 +81,7 @@ export async function buildDaySummary(storeId: string, date: string) {
     db.order.aggregate({ where: { channel: "ONLINE", createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" } }, _count: { _all: true }, _sum: { total: true } }),
     db.order.count({ where: { updatedAt: { gte: start, lt: end }, status: { in: ["CANCELLED", "RETURNED"] } } }),
     db.inventoryLog.findMany({
-      where: { createdAt: { gte: start, lt: end }, reason: { in: ["MANUAL_ADJUST", "DAMAGED", "RECEIVED", "RETURN_RESTOCK"] } },
+      where: { storeId, createdAt: { gte: start, lt: end }, reason: { in: ["MANUAL_ADJUST", "DAMAGED", "RECEIVED", "RETURN_RESTOCK", "TRANSFER_LOSS"] } },
       include: { variant: { select: { sku: true, product: { select: { name: true } } } } },
       orderBy: { createdAt: "asc" },
       take: 200,

@@ -73,7 +73,7 @@ describe("store returns", () => {
       },
       include: { items: true },
     });
-    await db.variant.update({ where: { id: p.variants[0].id }, data: { stock: 7 } });
+    await db.storeStock.updateMany({ where: { variantId: p.variants[0].id }, data: { quantity: 7 } }); // the 3 sold units left the shop
     await processReturn({ clientRef: ref(), orderId: order.id, lines: [{ orderItemId: order.items[0].id, quantity: 1, condition: "RESELLABLE" }], reason: "Size", refundMethod: "CASH" });
     expect((await db.variant.findUniqueOrThrow({ where: { id: p.variants[0].id } })).stock).toBe(8);
     await transitionOrder({ orderId: order.id, to: "RETURN_REQUESTED", actor: "test" });

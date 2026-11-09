@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/utils";
 import { landedUnitCost } from "@/lib/costing";
+import { defaultReceivingLocation, getLocations } from "@/lib/stock";
 import { Card } from "@/components/admin/ui";
 import { PurchaseOrderEditor } from "@/components/admin/purchase-order-editor";
 
@@ -23,12 +24,15 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   if (!po) notFound();
   const people = await db.user.findMany({ where: { id: { in: [po.createdById, ...po.receipts.map((r) => r.receivedById)] } }, select: { id: true, name: true } });
   const who = (id: string) => people.find((p) => p.id === id)?.name ?? "—";
+  const [main, locations] = await Promise.all([defaultReceivingLocation(), getLocations()]);
+  const receiving = [main, ...locations.filter((l) => l.id !== main.id)].map((l) => ({ id: l.id, name: l.name }));
   const goodsValue = po.items.reduce((s, i) => s + i.unitCost * i.quantityOrdered, 0);
 
   return (
     <>
       <Link href="/admin/purchasing" className="mb-4 inline-flex items-center gap-1.5 text-[13.5px] text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> Purchasing</Link>
       <PurchaseOrderEditor
+        locations={receiving}
         po={{
           id: po.id, number: `PO-${String(po.number).padStart(5, "0")}`, status: po.status, supplier: po.supplier.name,
           notes: po.notes ?? "", landedCost: po.landedCost, expectedAt: po.expectedAt ? po.expectedAt.toISOString().slice(0, 10) : "",
