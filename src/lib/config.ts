@@ -39,6 +39,8 @@ export const store = {
   onlinePaymentsLive: false,
   codMaxOrder: 3000000, // COD allowed up to Rs 30,000
   returnWindowDays: 7,
+  /** Code advertised on the home page to new shoppers; the banner only shows while this coupon exists and is usable. */
+  welcomeCouponCode: "WELCOME10",
   loyalty: {
     /** 1 point per Rs 100 paid for goods (delivery excluded) */
     earnPer: 10_000,

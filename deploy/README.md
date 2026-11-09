@@ -7,6 +7,7 @@ Server: Oracle Always Free, Ubuntu 24.04, Hyderabad. Current host: `asson-micro`
 | `server-setup.sh` | One-time, re-runnable server setup: swap, updates, Node 24, PostgreSQL (localhost), user `asson`, `/srv/asson/<env>`, `/etc/asson/<env>.env` (secrets generated on the server), `asson@<env>` systemd unit, cron, nightly backups, cloudflared. |
 | `tunnel-setup.sh` | Creates the `asson` tunnel, DNS records and ingress after `cloudflared tunnel login`. |
 | `build-bundle.sh` | Builds a standalone bundle for one environment (used by CI). |
+| `with-db.sh` | From the Mac: `deploy/with-db.sh <env> <command>` runs a command with `DATABASE_URL` pointing at that server database through an SSH tunnel (never printed). |
 | `owner-login.sh` | From the Mac: `deploy/owner-login.sh <staging\|production>` opens a DB tunnel and runs `scripts/create-owner.ts` (hidden password prompt). Run it in a real Terminal tab, not a non-interactive shell. |
 | `release.sh` | Runs on the server: migrate → switch `current` → restart → health check → roll back on failure. |
 
@@ -50,6 +51,15 @@ After a staging re-seed: clear the data cache (`rm -rf /srv/asson/staging/curren
 H=$(node -e 'const b=require("bcryptjs");console.log(b.hashSync(require("crypto").randomBytes(48).toString("hex"),12))')
 ssh -i ~/.ssh/asson_deploy ubuntu@HOST "sudo -u postgres psql -d asson_staging -c \"update \\\"User\\\" set \\\"passwordHash\\\"='$H', \\\"approvalPinHash\\\"=null, \\\"tokenVersion\\\"=\\\"tokenVersion\\\"+1 where email like '%@asson.test' and role <> 'CUSTOMER'\""
 ```
+
+## First production setup
+1. Deploy production once (Actions → Deploy → production). The release runs the migrations, so the database gets its tables.
+2. Load the reference data (categories, 77 district delivery rates, suppliers). Safe to re-run; never deletes or overwrites:
+   ```bash
+   deploy/with-db.sh production npx tsx prisma/bootstrap.ts
+   ```
+3. Owner login, in a Terminal tab: `deploy/owner-login.sh production` (use a different password from staging).
+4. Never run `npm run db:seed` against production: it wipes everything (it also refuses when `NODE_ENV=production`).
 
 ## Backups and restore
 Nightly at 02:30 (Nepal time) into `/var/backups/asson`. Restore into an env:
