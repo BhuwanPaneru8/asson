@@ -1,5 +1,6 @@
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { scopeFor } from "@/lib/scope";
 import { expectedCashForShift, getOpenShift, getShops } from "@/lib/pos";
 import { can, discountLimitPercent } from "@/lib/permissions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
@@ -9,7 +10,7 @@ export const metadata = { title: "Point of sale" };
 export default async function PosPage() {
   const me = await requirePermission("pos.sell");
   const shift = await getOpenShift(me.id);
-  const shops = shift ? [] : await getShops();
+  const shops = shift ? [] : await getShops(await scopeFor(me));
   const store = shift ? await db.store.findUnique({ where: { id: shift.storeId }, select: { name: true } }) : null;
   const stats = shift
     ? await db.order.aggregate({ where: { shiftId: shift.id, channel: "STORE" }, _count: { _all: true }, _sum: { total: true } })

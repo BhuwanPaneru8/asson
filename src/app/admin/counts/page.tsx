@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { scopeFor, canActAt } from "@/lib/scope";
 import { getLocations } from "@/lib/stock";
 import { getCategoryTree } from "@/lib/catalog";
 import { countNo } from "@/lib/counts";
@@ -14,20 +15,25 @@ const LABEL = { COUNTING: "Counting", SUBMITTED: "Waiting for approval", APPROVE
 const TONE = { COUNTING: "warn", SUBMITTED: "warn", APPROVED: "success", CANCELLED: "neutral" } as const;
 
 export default async function CountsPage() {
-  await requirePermission("stock.count");
-  const [locations, tree, counts] = await Promise.all([
+  const me = await requirePermission("stock.count");
+  const scope = await scopeFor(me);
+  const [all, tree, counts] = await Promise.all([
     getLocations(),
     getCategoryTree(),
     db.stockCount.findMany({
+      where: scope.all ? {} : { storeId: { in: scope.storeIds } },
       orderBy: { createdAt: "desc" }, take: 50,
       include: { store: { select: { name: true } }, _count: { select: { lines: true } }, lines: { where: { counted: { not: null } }, select: { id: true } } },
     }),
   ]);
+  const locations = all.filter((l) => canActAt(scope, l.id));
   const categories = tree.flatMap((r) => [{ id: r.id, name: r.name }, ...r.children.map((c) => ({ id: c.id, name: `${r.name} / ${c.name}` }))]);
   return (
     <>
       <PageHeader title="Stock counts" description="Count what's really on the shelves. Counting is blind and the shop stays open: sales during the count are allowed for. A manager approves the differences before stock changes." />
-      <Card title="Start a count" className="mb-4"><StartCount locations={locations.map((l) => ({ id: l.id, name: l.name }))} categories={categories} /></Card>
+      {locations.length
+        ? <Card title="Start a count" className="mb-4"><StartCount locations={locations.map((l) => ({ id: l.id, name: l.name }))} categories={categories} /></Card>
+        : <p className="mb-4 rounded-lg border border-line bg-white p-5 text-[14px] text-muted">You&apos;re not assigned to a location yet, so you can&apos;t start a count. Ask the owner to add you under Customers &amp; team.</p>}
       <Card title="Counts">
         <div className="overflow-x-auto">
           <table className="w-full text-[14px]">

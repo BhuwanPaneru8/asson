@@ -11,6 +11,7 @@ import { can } from "@/lib/permissions";
 import { findApproverByPin } from "@/lib/approvals";
 import { getOpenShift, getShop } from "@/lib/pos";
 import { moveStock } from "@/lib/stock";
+import { scopeFor } from "@/lib/scope";
 import { reverseReferral } from "@/lib/referrals";
 import { store } from "@/lib/config";
 import { refundPerUnit } from "@/lib/costing";
@@ -138,7 +139,9 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
     for (const p of parts) rows.push({ item, quantity: p.quantity, condition: p.condition, amount: refundPerUnit(item.unitPrice, order.subtotal, order.discount + order.pointsDiscount) * p.quantity });
   }
   const refund = rows.reduce((s, r) => s + r.amount, 0);
-  const shop = await getShop(shift?.storeId);
+  // a return goes back on the shelf of the shop taking it: the cashier's shift, else their first shop
+  const shop = await getShop(shift?.storeId, await scopeFor(me));
+  if (!shop) return { ok: false, error: "You're not assigned to a shop yet, so there's nowhere to put the return." };
   const voucherCode = d.refundMethod === "STORE_CREDIT" ? `CR-${randomBytes(4).toString("hex").toUpperCase()}` : null;
 
   try {

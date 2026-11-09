@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { audit, type AuditActor } from "./audit";
 import { moveStock, moveStockOrThrow } from "./stock";
 import { queueBackInStock } from "./stock-alerts";
+import { requireStoreAccess } from "./scope";
 
 // Stock transfers between locations:
 //   DRAFT ──send──▶ SENT ──receive (counted)──▶ RECEIVED
@@ -34,6 +35,7 @@ async function claim(tx: Tx, id: string, from: "DRAFT" | "SENT", data: Prisma.St
 
 export async function createTransfer(tx: Tx, actor: NonNullable<AuditActor>, d: { fromId: string; toId: string; note?: string; items: { variantId: string; quantity: number }[] }) {
   if (d.fromId === d.toId) throw new TransferError("Pick two different locations.");
+  await requireStoreAccess(actor, d.fromId, tx); // the sending location starts a transfer
   const ends = await tx.store.findMany({ where: { id: { in: [d.fromId, d.toId] }, active: true }, select: { id: true, name: true } });
   if (ends.length !== 2) throw new TransferError("Both locations must be active.");
   const qty = new Map<string, number>();
@@ -51,6 +53,7 @@ export async function createTransfer(tx: Tx, actor: NonNullable<AuditActor>, d: 
 export async function sendTransfer(tx: Tx, actor: NonNullable<AuditActor>, id: string) {
   const t = await load(tx, id);
   if (t.status !== "DRAFT") throw new TransferError("Only a draft can be sent.");
+  await requireStoreAccess(actor, t.fromId, tx);
   if (!t.from.active || !t.to.active) throw new TransferError("Both locations must be active.");
   if (!t.items.length) throw new TransferError("Add at least one item.");
   await claim(tx, id, "DRAFT", { status: "SENT", sentAt: new Date(), sentById: actor.id });
@@ -69,6 +72,7 @@ export async function sendTransfer(tx: Tx, actor: NonNullable<AuditActor>, id: s
 export async function receiveTransfer(tx: Tx, actor: NonNullable<AuditActor>, id: string, received: Record<string, number>, note?: string) {
   const t = await load(tx, id);
   if (t.status !== "SENT") throw new TransferError("Only a transfer in transit can be received.");
+  await requireStoreAccess(actor, t.toId, tx); // only the receiving location counts it in
   if (!t.to.active) throw new TransferError(`${t.to.name} isn't active.`);
   if (!note?.trim() && t.items.some((i) => (received[i.id] ?? i.quantity) < i.quantity)) throw new TransferError("Some units are missing. Add a note saying what happened.");
   await claim(tx, id, "SENT", { status: "RECEIVED", receivedAt: new Date(), receivedById: actor.id, ...(note ? { note: [t.note, `On arrival: ${note}`].filter(Boolean).join("\n").slice(0, 1000) } : {}) });
@@ -98,6 +102,7 @@ export async function receiveTransfer(tx: Tx, actor: NonNullable<AuditActor>, id
 export async function cancelTransfer(tx: Tx, actor: NonNullable<AuditActor>, id: string, reason: string) {
   const t = await load(tx, id);
   if (t.status !== "DRAFT" && t.status !== "SENT") throw new TransferError("This transfer is already closed.");
+  await requireStoreAccess(actor, t.fromId, tx); // the sender cancels or recalls
   await claim(tx, id, t.status, { status: "CANCELLED", note: [t.note, `Cancelled: ${reason}`].filter(Boolean).join("\n").slice(0, 1000) });
   if (t.status === "SENT") {
     for (const i of t.items) await moveStock(tx, { variantId: i.variantId, storeId: t.fromId, delta: i.quantity, reason: "TRANSFER_IN", note: `${transferNo(t.number)} recalled`, actorId: actor.id });

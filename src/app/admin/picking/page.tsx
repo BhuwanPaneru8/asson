@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth";
 import { cn, formatDateTime, formatOrderNumber } from "@/lib/utils";
 import { getLocations } from "@/lib/stock";
 import { getPickList, pickCounts } from "@/lib/picking";
+import { scopeFor, canActAt } from "@/lib/scope";
 import { Card, PageHeader } from "@/components/admin/ui";
 import { PickButton } from "@/components/admin/pick-button";
 import { PrintButton } from "@/components/admin/print-button";
@@ -10,13 +11,14 @@ import { PrintButton } from "@/components/admin/print-button";
 export const metadata = { title: "Pick lists" };
 
 export default async function PickingPage({ searchParams }: { searchParams: Promise<{ at?: string }> }) {
-  await requirePermission("orders");
+  const me = await requirePermission("orders");
   const sp = await searchParams;
-  const [locations, counts] = await Promise.all([getLocations(), pickCounts()]);
+  const [all, counts, scope] = await Promise.all([getLocations(), pickCounts(), scopeFor(me)]);
+  const locations = all.filter((l) => canActAt(scope, l.id)); // pick lists only for where you work
   // default: the location with the most waiting, else the first
   const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
   const here = locations.find((l) => l.id === sp.at) ?? locations.find((l) => l.id === busiest) ?? locations[0];
-  if (!here) return <PageHeader title="Pick lists" description="Add a location first." />;
+  if (!here) return <PageHeader title="Pick lists" description={all.length ? "You're not assigned to a location yet. Ask the owner to add you under Customers & team." : "Add a location first."} />;
   const list = await getPickList(here.id);
 
   return (

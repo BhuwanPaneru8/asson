@@ -194,12 +194,15 @@ model User {
   wishlist           WishlistItem[]
   cart               Cart?
   /// personal referral code (made on first view of the account page)
-  referralCode       String?        @unique
+  referralCode       String?         @unique
   /// who referred them (set on their first order with a referral code)
   referredById       String?
   /// "MM-DD"; birthday points once a year
   birthday           String?
   birthdayRewardYear Int?
+  /// staff: may act at every location (HQ, owner); otherwise only at their assigned locations
+  allLocations       Boolean         @default(false)
+  locations          StaffLocation[]
 
   @@index([role])
   @@index([createdAt])
@@ -505,6 +508,7 @@ model Store {
   transfersIn   StockTransfer[]   @relation("TransferTo")
   pickupOrders  Order[]           @relation("PickupOrders")
   stockCounts   StockCount[]
+  staff         StaffLocation[]
 
   @@index([active, priority])
 }
@@ -1216,4 +1220,16 @@ model LookItem {
 
   @@unique([lookId, productId])
   @@index([productId])
+}
+
+/// Which locations a staff member works at (tills, stock, transfers, counts, picking).
+model StaffLocation {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, storeId])
+  @@index([storeId])
 }

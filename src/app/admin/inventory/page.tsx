@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { scopeFor, canActAt } from "@/lib/scope";
 import { defaultReceivingLocation, getLocations } from "@/lib/stock";
 import { AdminPager, Card, PageHeader } from "@/components/admin/ui";
 import { StockRow } from "@/components/admin/stock-row";
@@ -17,7 +18,9 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
   const canAdjust = can(me.role, "inventory.adjust");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
-  const [locations, main] = await Promise.all([getLocations(), defaultReceivingLocation()]);
+  const [locations, main, scope] = await Promise.all([getLocations(), defaultReceivingLocation(), scopeFor(me)]);
+  // everyone may see stock everywhere; adjusting is only at their own locations
+  const mine = locations.filter((l) => canActAt(scope, l.id));
   const here = locations.find((l) => l.id === sp.at);
 
   // low / out of stock: at the chosen location, else across the business
@@ -78,9 +81,9 @@ export default async function Inventory({ searchParams }: { searchParams: Promis
               {rows.map((v) => (
                 <StockRow
                   key={v.id}
-                  canAdjust={canAdjust}
-                  locations={locations.map((l) => ({ id: l.id, code: l.code, name: l.name }))}
-                  adjustAt={here?.id ?? main.id}
+                  canAdjust={canAdjust && mine.length > 0}
+                  locations={mine.map((l) => ({ id: l.id, code: l.code, name: l.name }))}
+                  adjustAt={here && canActAt(scope, here.id) ? here.id : canActAt(scope, main.id) ? main.id : mine[0]?.id ?? main.id}
                   columns={locations.length > 1 ? columns.map((l) => ({ id: l.id, quantity: v.storeStock.find((s) => s.storeId === l.id)?.quantity ?? 0, highlight: here?.id === l.id })) : []}
                   v={{ id: v.id, sku: v.sku, stock: v.stock, color: v.color, colorHex: v.colorHex, size: v.size, productId: v.product.id, productName: v.product.name }}
                 />

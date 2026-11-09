@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { REFUND_LABEL } from "@/lib/pos";
 import { db } from "@/lib/db";
+import { scopeFor } from "@/lib/scope";
 import { buildDaySummary, getShop, getShops, ktmDate, type DaySummary } from "@/lib/pos";
 import { formatDate, formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
@@ -17,7 +18,9 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
   const today = ktmDate();
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
-  const [store, shops] = await Promise.all([getShop(sp.store), getShops()]);
+  const scope = await scopeFor(me);
+  const [store, shops] = await Promise.all([getShop(sp.store, scope), getShops(scope)]);
+  if (!store) return <PageHeader title="Daily closing" description="You're not assigned to a shop yet. Ask the owner to add you under Customers & team." />;
   const [locked, history] = await Promise.all([
     db.dayClose.findUnique({ where: { storeId_date: { storeId: store.id, date } } }),
     db.dayClose.findMany({ where: { storeId: store.id }, orderBy: { date: "desc" }, take: 14 }),
