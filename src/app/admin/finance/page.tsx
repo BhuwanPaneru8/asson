@@ -33,7 +33,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Finance"
         description={`Profit & loss for ${label} — revenue by order date, cost of goods at the cost recorded when each item was sold.`}
-        actions={<form className="flex gap-2"><input type="month" name="month" defaultValue={month} max={thisMonth} aria-label="Month" className="h-10 rounded-md border border-line bg-white px-3 text-[14px]" /><button className="h-10 rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Go</button></form>}
+        actions={<form className="flex gap-2"><input type="month" name="month" defaultValue={month} max={thisMonth} aria-label="Month" className="h-10 rounded-md border border-line bg-white px-3 text-[14px]" /><button className="h-10 rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Go</button><Link href="/admin/finance/export" className="flex h-10 items-center rounded-md bg-ink px-3 text-[14px] text-white">Accounting export</Link></form>}
       />
       {(pl.unitsWithoutCost > 0 || stock.skusWithoutCost > 0) && (
         <p className="mb-4 flex gap-2 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
