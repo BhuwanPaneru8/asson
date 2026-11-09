@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { store } from "@/lib/config";
+import { store, whatsappUrl } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Help & FAQs" };
@@ -45,7 +45,7 @@ export default function HelpPage() {
       ))}
       <section id="contact" className="mt-12 scroll-mt-24 bg-cloud p-6">
         <h2 className="text-[20px] font-semibold">Contact us</h2>
-        <p className="mt-2 text-[14.5px] text-ink-soft">Call {store.supportPhone}, WhatsApp {store.supportWhatsApp} (Sun–Fri, 10am–7pm) or email {store.supportEmail}. We reply within 24 hours.</p>
+        <p className="mt-2 text-[14.5px] text-ink-soft">Call <a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="underline hover:text-accent">{store.supportPhone}</a>, WhatsApp <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">{store.supportWhatsApp}</a> (Sun–Fri, 10am–7pm) or email <a href={`mailto:${store.supportEmail}`} className="underline hover:text-accent">{store.supportEmail}</a>. We reply within 24 hours.</p>
       </section>
       <section id="privacy" className="mt-12 scroll-mt-24"><h2 className="text-[20px] font-semibold">Privacy</h2><p className="mt-2 text-[14.5px] text-ink-soft">We only use your details to fulfil orders and, if you opt in, to send offers. We never sell your data. Replace this with your full privacy policy.</p></section>
       <section id="terms" className="mt-8 scroll-mt-24"><h2 className="text-[20px] font-semibold">Terms</h2><p className="mt-2 text-[14.5px] text-ink-soft">Replace this with your terms of sale.</p></section>

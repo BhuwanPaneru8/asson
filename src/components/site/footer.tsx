@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { store } from "@/lib/config";
+import { store, whatsappUrl } from "@/lib/config";
 import { getProductRail } from "@/lib/catalog";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter";
@@ -31,8 +31,8 @@ export async function Footer() {
         ))}
         <div className="md:col-span-2">
           <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Contact</p>
-          <p className="text-[14.5px] text-ink-soft">{store.supportPhone}<br />WhatsApp {store.supportWhatsApp}<br />Sun–Fri, 10am–7pm</p>
-          <p className="mt-2 break-all text-[14.5px] text-ink-soft">{store.supportEmail}</p>
+          <p className="text-[14.5px] text-ink-soft"><a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="hover:text-accent">{store.supportPhone}</a><br /><a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="hover:text-accent">WhatsApp {store.supportWhatsApp}</a><br />Sun–Fri, 10am–7pm</p>
+          <p className="mt-2 break-all text-[14.5px] text-ink-soft"><a href={`mailto:${store.supportEmail}`} className="hover:text-accent">{store.supportEmail}</a></p>
         </div>
       </div>
       <div className="border-t border-line">
