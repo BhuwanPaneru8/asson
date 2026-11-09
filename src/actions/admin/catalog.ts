@@ -180,6 +180,19 @@ export async function toggleCoupon(id: string): Promise<R> {
   return { ok: true };
 }
 
+/** Feature a coupon in the home-page offer banner (only one at a time), or take it off. */
+export async function setCouponOnHome(id: string, on: boolean): Promise<R> {
+  await requireAdmin();
+  const c = await db.coupon.findUnique({ where: { id } });
+  if (!c || c.isCredit) return { ok: false, error: "Not found" };
+  await db.$transaction([
+    ...(on ? [db.coupon.updateMany({ where: { showOnHome: true, NOT: { id } }, data: { showOnHome: false } })] : []),
+    db.coupon.update({ where: { id }, data: { showOnHome: on } }),
+  ]);
+  refresh();
+  return { ok: true };
+}
+
 export async function setReviewStatus(id: string, status: "PUBLISHED" | "HIDDEN"): Promise<R> {
   await requirePermission("reviews");
   const r = await db.review.update({ where: { id }, data: { status } });

@@ -6,7 +6,7 @@ import { store } from "@/lib/config";
 
 const coupon = (c: Partial<Coupon>): Coupon => ({
   id: "c", code: "X", description: null, type: "PERCENT", value: 10, isCredit: false, minSubtotal: 0, maxDiscount: null,
-  usageLimit: null, usedCount: 0, startsAt: null, endsAt: null, active: true, createdAt: new Date(), ...c,
+  usageLimit: null, usedCount: 0, startsAt: null, endsAt: null, active: true, showOnHome: false, createdAt: new Date(), ...c,
 });
 const ktm = defaultRate("Kathmandu");
 const humla = defaultRate("Humla");

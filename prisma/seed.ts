@@ -347,7 +347,7 @@ async function main() {
   console.log("Coupons…");
   await db.coupon.createMany({
     data: [
-      { code: "WELCOME10", description: "10% off your first order (up to Rs. 500)", type: "PERCENT", value: 10, maxDiscount: 50000, minSubtotal: 0 },
+      { code: "WELCOME10", description: "10% off your first order (up to Rs. 500)", type: "PERCENT", value: 10, maxDiscount: 50000, minSubtotal: 0, showOnHome: true },
       { code: "FLAT300", description: "Rs. 300 off orders above Rs. 2,499", type: "FIXED", value: 30000, minSubtotal: 249900 },
       { code: "FREESHIP", description: "Free standard delivery anywhere in Nepal", type: "FREE_SHIPPING", value: 0 },
       { code: "DASHAIN25", description: "Dashain offer: 25% off above Rs. 4,999 (max Rs. 1,500)", type: "PERCENT", value: 25, maxDiscount: 150000, minSubtotal: 499900, usageLimit: 1000 },

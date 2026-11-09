@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { store } from "@/lib/config";
+import { getProductRail } from "@/lib/catalog";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter";
 
@@ -9,7 +10,9 @@ const cols = [
   { title: "Account", links: [["Sign in", "/login"], ["Create account", "/register"], ["Orders", "/account/orders"], ["Wishlist", "/account/wishlist"]] },
 ];
 
-export function Footer() {
+export async function Footer() {
+  const hasSale = (await getProductRail("sale", 1)).length > 0;
+  const columns = cols.map((c) => ({ ...c, links: c.links.filter(([label]) => label !== "Sale" || hasSale) }));
   return (
     <footer className="mt-24 border-t border-line bg-cloud/50">
       <div className="container-page grid gap-10 py-16 md:grid-cols-12 md:gap-8 [&>*]:min-w-0">
@@ -18,7 +21,7 @@ export function Footer() {
           <p className="mt-4 max-w-xs text-[14.5px] text-ink-soft">{store.tagline} Delivering to all 77 districts of Nepal.</p>
           <div className="mt-6"><NewsletterForm /></div>
         </div>
-        {cols.map((c) => (
+        {columns.map((c) => (
           <div key={c.title} className="md:col-span-2">
             <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">{c.title}</p>
             <ul className="space-y-2.5 text-[14.5px]">

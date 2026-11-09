@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getCategoryTree, getCollections } from "@/lib/catalog";
+import { getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
 import { store } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
 import { Logo } from "./logo";
@@ -8,7 +8,8 @@ import { SearchBar } from "./search-bar";
 import { MegaNav } from "./mega-nav";
 
 export async function Header() {
-  const [tree, collections] = await Promise.all([getCategoryTree(), getCollections()]);
+  const [tree, collections, onSale] = await Promise.all([getCategoryTree(), getCollections(), getProductRail("sale", 1)]);
+  const hasSale = onSale.length > 0; // no "Sale" link to an empty page
   const nav = tree.map((c) => ({ name: c.name, slug: c.slug, image: c.image, children: c.children.map((x) => ({ name: x.name, slug: x.slug })) }));
   const featured = collections.filter((c) => c.featured).map((c) => ({ name: c.name, slug: c.slug, image: c.image }));
 
@@ -25,9 +26,9 @@ export async function Header() {
       </div>
       <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/85">
         <div className="container-page flex h-16 items-center gap-4">
-          <MobileNavButton nav={nav} collections={featured} />
+          <MobileNavButton nav={nav} collections={featured} hasSale={hasSale} />
           <Logo className="shrink-0" />
-          <MegaNav nav={nav} collections={featured} />
+          <MegaNav nav={nav} collections={featured} hasSale={hasSale} />
           <div className="ml-auto flex flex-1 items-center justify-end gap-1 lg:flex-none">
             <SearchBar />
             <HeaderActions />
