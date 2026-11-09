@@ -69,7 +69,8 @@ export async function queueOrderNotice(tx: Tx, orderId: string, notice: OrderNot
 type SendResult = { ok: true; ref?: string } | { ok: false; error: string; retry: boolean };
 type Provider = { name: string; send: (to: string, body: string) => Promise<SendResult> };
 
-const providers: Record<string, Provider> = {
+/** SMS gateways by name (NOTIFY_SMS_PROVIDER). Exported so tests can register a controllable one. */
+export const providers: Record<string, Provider> = {
   log: {
     name: "log",
     async send(to, body) {
@@ -86,14 +87,24 @@ export function smsProvider(): Provider | null {
 }
 
 const MAX_ATTEMPTS = 5;
+const CLAIM_TIMEOUT_MS = 10 * 60_000;
 
 /** Send queued messages (and retry failures with backoff). Safe to call often and concurrently. */
 export async function dispatchNotifications(limit = 50) {
   const provider = smsProvider();
   if (!provider) return { sent: 0, failed: 0, waiting: await db.notification.count({ where: { status: "QUEUED" } }) };
   const now = Date.now();
+  const staleClaim = new Date(now - CLAIM_TIMEOUT_MS);
   const due = await db.notification.findMany({
-    where: { channel: "SMS" satisfies NotificationChannel, OR: [{ status: "QUEUED" }, { status: "FAILED", attempts: { lt: MAX_ATTEMPTS } }] },
+    where: {
+      channel: "SMS" satisfies NotificationChannel,
+      OR: [
+        { status: "QUEUED" },
+        { status: "FAILED", attempts: { lt: MAX_ATTEMPTS } },
+        // the dispatcher that claimed it died mid-send: retry (at-least-once after a crash)
+        { status: "SENDING", claimedAt: { lt: staleClaim }, attempts: { lt: MAX_ATTEMPTS } },
+      ],
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
   });
@@ -101,8 +112,12 @@ export async function dispatchNotifications(limit = 50) {
   for (const n of due) {
     // exponential backoff for retries: 1, 2, 4, 8 minutes
     if (n.status === "FAILED" && now - n.createdAt.getTime() < 60_000 * 2 ** (n.attempts - 1)) continue;
-    // claim it so two dispatchers never send the same SMS
-    const claimed = await db.notification.updateMany({ where: { id: n.id, status: n.status, attempts: n.attempts }, data: { attempts: { increment: 1 } } });
+    // claim it so two dispatchers never send the same SMS: compare-and-swap on (status, attempts),
+    // and move it to SENDING so a dispatcher that reads it mid-send can't claim it again
+    const claimed = await db.notification.updateMany({
+      where: { id: n.id, status: n.status, attempts: n.attempts },
+      data: { status: "SENDING", claimedAt: new Date(), attempts: { increment: 1 } },
+    });
     if (!claimed.count) continue;
     const r = await provider.send(n.to, n.body).catch((e): SendResult => ({ ok: false, error: String(e), retry: true }));
     if (r.ok) {
