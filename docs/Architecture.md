@@ -180,7 +180,9 @@ erDiagram
 | `Job` | Background work queue: type, payload, idempotency `key`, status QUEUED/RUNNING/DONE/DEAD, `runAt`, attempts/maxAttempts, lock, last error, result. Claimed with `FOR UPDATE SKIP LOCKED` by the in-process worker (`instrumentation.ts`) or `/api/cron/jobs` |
 | `ErrorEvent` | Errors grouped by fingerprint (source + where + normalised message) with count, first/last seen, stack, digest; resolve reopens on recurrence. Fed by `onRequestError`, `reportError()`, job failures and `/api/errors` |
 
-**Planned tables:** `SupplierBill` / `SupplierPayment`, `StockCount`, `Shipment` (NCM).
+| `StockCount` / `StockCountLine` | Count at one location (whole or one category): COUNTING → SUBMITTED → APPROVED/CANCELLED. Lines hold `counted` and `systemAt` (location stock when counted); approval moves stock by the difference (reason `COUNT`) |
+
+**Planned tables:** `SupplierBill` / `SupplierPayment`, `Shipment` (NCM).
 
 ## 7. Key flows
 

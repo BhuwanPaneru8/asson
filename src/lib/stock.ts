@@ -18,7 +18,7 @@ export class StockError extends Error {
 
 export type StockReason =
   | "SALE" | "CANCEL_RESTOCK" | "RETURN_RESTOCK" | "MANUAL_ADJUST" | "RECEIVED" | "DAMAGED"
-  | "TRANSFER_OUT" | "TRANSFER_IN" | "TRANSFER_LOSS";
+  | "TRANSFER_OUT" | "TRANSFER_IN" | "TRANSFER_LOSS" | "COUNT";
 
 export type StockMove = {
   variantId: string;

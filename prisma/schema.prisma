@@ -337,6 +337,7 @@ model Variant {
   storeStock    StoreStock[]
   allocations   OrderAllocation[]
   transferItems StockTransferItem[]
+  countLines    StockCountLine[]
 
   @@unique([productId, color, size])
   @@index([color])
@@ -490,6 +491,7 @@ model Store {
   transfersOut  StockTransfer[]   @relation("TransferFrom")
   transfersIn   StockTransfer[]   @relation("TransferTo")
   pickupOrders  Order[]           @relation("PickupOrders")
+  stockCounts   StockCount[]
 
   @@index([active, priority])
 }
@@ -1008,4 +1010,54 @@ model SearchStat {
 
   @@id([day, term])
   @@index([term])
+}
+
+enum StockCountStatus {
+  COUNTING
+  SUBMITTED
+  APPROVED
+  CANCELLED
+}
+
+/// A physical count at one location (whole location or one category). Counting is blind; the
+/// system figure is captured per line at the moment it's counted, so sales can go on meanwhile.
+model StockCount {
+  id            String           @id @default(cuid())
+  number        Int              @unique @default(autoincrement())
+  storeId       String
+  store         Store            @relation(fields: [storeId], references: [id])
+  /// null = whole location
+  categoryId    String?
+  scopeLabel    String
+  status        StockCountStatus @default(COUNTING)
+  note          String?
+  createdById   String
+  submittedById String?
+  submittedAt   DateTime?
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  lines         StockCountLine[]
+
+  @@index([storeId, status])
+  @@index([status, createdAt])
+}
+
+model StockCountLine {
+  id          String     @id @default(cuid())
+  countId     String
+  count       StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  variantId   String
+  variant     Variant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  /// physical units counted (null = not counted yet; left unchanged on approval)
+  counted     Int?
+  /// system units at this location when the line was last counted
+  systemAt    Int?
+  countedAt   DateTime?
+  countedById String?
+  /// found during the count, not in the original list
+  added       Boolean    @default(false)
+
+  @@unique([countId, variantId])
 }

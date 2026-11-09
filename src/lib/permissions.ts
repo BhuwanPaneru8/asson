@@ -1,6 +1,6 @@
 // Client-safe role → permission map. The ONLY place that decides who can do what.
 // Segregation of duties (from the owner's operating rules):
-//   Cashier  sells and takes payment; can't change prices, stock or history.
+//   Cashier  sells and takes payment; counts stock (blind) but can't change prices, stock or history.
 //   Staff    fulfils online orders (picks, packs) and sends/receives stock transfers.
 //   Manager  approves discounts ≤ 15%, adjusts stock, closes the day.
 //   Owner    (ADMIN) everything, incl. prices, costs & profit, delivery rates, roles and large discounts.
@@ -30,13 +30,14 @@ export type Permission =
   | "transfers"
   | "locations"
   | "system"
-  | "insights";
+  | "insights"
+  | "stock.count";
 
 const MAP: Record<StaffRole, Permission[]> = {
-  CASHIER: ["pos.sell", "catalog.view"],
-  STAFF: ["dashboard", "orders", "catalog.view", "reviews", "transfers"],
-  MANAGER: ["dashboard", "orders", "catalog.view", "inventory.adjust", "customers", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "transfers", "insights"],
-  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance", "audit", "transfers", "locations", "system", "insights"],
+  CASHIER: ["pos.sell", "catalog.view", "stock.count"],
+  STAFF: ["dashboard", "orders", "catalog.view", "reviews", "transfers", "stock.count"],
+  MANAGER: ["dashboard", "orders", "catalog.view", "inventory.adjust", "customers", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "transfers", "insights", "stock.count"],
+  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance", "audit", "transfers", "locations", "system", "insights", "stock.count"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { CUSTOMER: "Customer", CASHIER: "Cashier", STAFF: "Fulfilment staff", MANAGER: "Manager", ADMIN: "Owner" };
