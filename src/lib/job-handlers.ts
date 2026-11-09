@@ -4,6 +4,7 @@ import { db } from "./db";
 import { dispatchNotifications } from "./notifications";
 import { expireUnpaidOrders } from "./payments";
 import { birthdayRun } from "./referrals";
+import { autoDraftReplenishment } from "./replenishment";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -31,6 +32,7 @@ export const HANDLERS = {
   "payments.expire": { label: "Release unpaid online orders", run: () => expireUnpaidOrders(), maxAttempts: 3 },
   // a mismatch is a bug, not a flaky network: fail once, loudly
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
+  "replenishment.drafts": { label: "Draft shop restock transfers (if switched on)", run: () => autoDraftReplenishment(), maxAttempts: 2, timeoutMs: 5 * MIN },
   "loyalty.birthdays": { label: "Birthday points and greetings", run: () => birthdayRun(), maxAttempts: 3 },
   "jobs.prune": {
     label: "Tidy finished jobs",
@@ -49,6 +51,7 @@ export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "stock.audit", everyMs: DAY },
   { type: "jobs.prune", everyMs: DAY },
   { type: "loyalty.birthdays", everyMs: DAY },
+  { type: "replenishment.drafts", everyMs: DAY },
 ];
 
 export const EVERY_LABEL = (ms: number) => (ms >= DAY ? "daily" : ms >= 60 * MIN ? `every ${ms / (60 * MIN)} h` : `every ${ms / MIN} min`);
