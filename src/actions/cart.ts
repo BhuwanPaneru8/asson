@@ -5,6 +5,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { ensureCartId, getCart } from "@/lib/cart";
 import { store } from "@/lib/config";
+import { headers } from "next/headers";
+import { after } from "next/server";
+import { isBot, recordFunnel } from "@/lib/funnel";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -15,7 +18,7 @@ export async function addToCart(input: { variantId: string; quantity?: number })
   if (!parsed.success) return { ok: false, error: "Invalid item." };
   const { variantId, quantity } = parsed.data;
 
-  const variant = await db.variant.findUnique({ where: { id: variantId }, select: { stock: true, product: { select: { status: true } } } });
+  const variant = await db.variant.findUnique({ where: { id: variantId }, select: { stock: true, product: { select: { id: true, status: true } } } });
   if (!variant || variant.product.status !== "ACTIVE") return { ok: false, error: "This item is no longer available." };
   if (variant.stock <= 0) return { ok: false, error: "Sorry, this size just sold out." };
 
@@ -29,6 +32,8 @@ export async function addToCart(input: { variantId: string; quantity?: number })
     create: { cartId, variantId, quantity: capped },
   });
   await db.cart.update({ where: { id: cartId }, data: { updatedAt: new Date() } });
+  const productId = variant.product.id;
+  if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("add", productId));
   if (capped < desired) return { ok: true, message: `Only ${capped} available — we've added the maximum.` };
   return { ok: true };
 }

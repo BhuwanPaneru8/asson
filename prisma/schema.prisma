@@ -275,6 +275,7 @@ model Product {
   pairedBy    Product[]      @relation("CompleteTheLook")
   reviews     Review[]
   wishlistBy  WishlistItem[]
+  stats       ProductStat[]
 
   @@index([status, categoryId])
   @@index([status, gender])
@@ -1147,4 +1148,26 @@ model PaymentAllocation {
 
   @@unique([paymentId, billId])
   @@index([billId])
+}
+
+/// Shop funnel counters per Nepal day (product views, add to bag, checkout visits). No per-visitor data;
+/// known bots are not counted. Orders come from the Order table.
+model FunnelStat {
+  day   String // YYYY-MM-DD in Asia/Kathmandu
+  step  String // view | add | checkout
+  count Int    @default(0)
+
+  @@id([day, step])
+}
+
+/// Per-product views and adds to bag per Nepal day.
+model ProductStat {
+  day       String
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  views     Int     @default(0)
+  adds      Int     @default(0)
+
+  @@id([day, productId])
+  @@index([productId])
 }
