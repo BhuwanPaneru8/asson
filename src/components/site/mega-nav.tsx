@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export type NavItem = { name: string; slug: string; image: string | null; children: { name: string; slug: string }[] };
 export type NavCollection = { name: string; slug: string; image: string | null };
 
-export function MegaNav({ nav, collections, hasSale = true }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean }) {
+export function MegaNav({ nav, collections, hasSale = true, hasLooks = false }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean; hasLooks?: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pathname = usePathname();
@@ -32,6 +32,7 @@ export function MegaNav({ nav, collections, hasSale = true }: { nav: NavItem[]; 
         </div>
       ))}
       <Link href="/shop?sort=new" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>New In</Link>
+      {hasLooks && <Link href="/lookbook" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>Lookbook</Link>}
       {hasSale && <Link href="/shop?sale=1" className="flex items-center px-3.5 text-[14px] font-medium text-accent hover:opacity-80" onMouseEnter={leave}>Sale</Link>}
 
       {active && (

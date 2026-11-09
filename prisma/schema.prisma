@@ -276,6 +276,7 @@ model Product {
   reviews     Review[]
   wishlistBy  WishlistItem[]
   stats       ProductStat[]
+  lookItems   LookItem[]
 
   @@index([status, categoryId])
   @@index([status, gender])
@@ -1169,5 +1170,39 @@ model ProductStat {
   adds      Int     @default(0)
 
   @@id([day, productId])
+  @@index([productId])
+}
+
+/// Lookbook: a styled outfit or mood built only from Asson's own products.
+model Look {
+  id        String     @id @default(cuid())
+  slug      String     @unique
+  title     String
+  /// one line under the title, e.g. "Linen, sandals and a late lunch by Phewa"
+  subtitle  String?
+  /// a short paragraph about the look (plain text)
+  story     String?
+  /// hero photo (uploaded media or an https link); falls back to the first piece's photo
+  heroImage String?
+  published Boolean    @default(false)
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     LookItem[]
+
+  @@index([published, position])
+}
+
+model LookItem {
+  id        String  @id @default(cuid())
+  lookId    String
+  look      Look    @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  position  Int     @default(0)
+  /// styling tip shown with the piece, e.g. "Sleeves rolled twice"
+  note      String?
+
+  @@unique([lookId, productId])
   @@index([productId])
 }
