@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { db } from "@/lib/db";
@@ -36,7 +37,7 @@ export default async function LocationsPage() {
   });
   return (
     <>
-      <PageHeader title="Locations" description="Shops and warehouses that hold stock. Online orders are filled from the lowest priority number first, preferring one location that has the whole order." />
+      <PageHeader actions={<Link href="/admin/locations/new" className="flex h-10 items-center rounded-md bg-ink px-4 text-[14px] text-white">Open a shop</Link>} title="Locations" description="Shops and warehouses that hold stock. Online orders are filled from the lowest priority number first, preferring one location that has the whole order." />
       <Card><LocationManager rows={rows} /></Card>
     </>
   );
