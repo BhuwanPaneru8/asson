@@ -17,7 +17,7 @@ import { addressLines, cn, formatPrice } from "@/lib/utils";
 type PickupPoint = { id: string; name: string; address: string; hours: string | null; readyNow: boolean };
 type Addr = { id: string; fullName: string; phone: string; line1: string; line2: string | null; city: string; district: string; state: string; postalCode: string | null; isDefault: boolean };
 
-export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pickupPoints }: { cart: CartView; user: { name: string; email: string; phone: string | null } | null; addresses: Addr[]; onlineEnabled: boolean; rates: RateMap; pickupPoints: PickupPoint[] }) {
+export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pickupPoints, initialCode }: { cart: CartView; user: { name: string; email: string; phone: string | null } | null; addresses: Addr[]; onlineEnabled: boolean; rates: RateMap; pickupPoints: PickupPoint[]; initialCode?: string }) {
   const [fulfil, setFulfil] = useState<"delivery" | "pickup">("delivery");
   const [pickupId, setPickupId] = useState(pickupPoints.find((p) => p.readyNow)?.id ?? pickupPoints[0]?.id ?? "");
   const [pickupName, setPickupName] = useState(user?.name ?? "");
@@ -29,8 +29,9 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
   const [saveAddress, setSaveAddress] = useState(true);
   const [method, setMethod] = useState<string>("standard");
   const [payment, setPayment] = useState<"COD" | "ONLINE">(onlineEnabled ? "ONLINE" : "COD");
-  const [couponInput, setCouponInput] = useState("");
-  const [coupon, setCoupon] = useState<string | undefined>();
+  // a friend's code from a share link (/r/CODE) is tried automatically; the quote says if it doesn't apply
+  const [couponInput, setCouponInput] = useState(initialCode ?? "");
+  const [coupon, setCoupon] = useState<string | undefined>(initialCode);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [usePoints, setUsePoints] = useState(false);
   const [note, setNote] = useState("");

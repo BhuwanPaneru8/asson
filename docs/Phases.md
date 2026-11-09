@@ -163,7 +163,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ✅ Product catalogue feed for Google Merchant Center and Meta: `/feeds/products.xml`
 - ⬜ Phone number and OTP sign-in (needs the SMS gateway)
 - ⬜ Meta pixel and conversions API, TikTok pixel (need the ad accounts)
-- ⬜ Birthday offers, referral codes
+- ✅ Birthday points and refer-a-friend codes (first-order discount for the friend, points for the referrer on delivery)
 - Nepali language (नेपाली) interface
 - ✅ Top search terms and zero-result searches; reorder by sales speed, dead stock, size/colour sell-through and margin (Admin → Insights)
 - ✅ Analytics: shop funnel (views → bag → checkout → order), customer cohorts, repeat rate, RFM segments (Admin → Insights)

@@ -186,13 +186,20 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  addresses     Address[]
-  orders        Order[]
-  pointsEntries PointsEntry[]
-  stockAlerts   StockAlert[]
-  reviews       Review[]
-  wishlist      WishlistItem[]
-  cart          Cart?
+  addresses          Address[]
+  orders             Order[]
+  pointsEntries      PointsEntry[]
+  stockAlerts        StockAlert[]
+  reviews            Review[]
+  wishlist           WishlistItem[]
+  cart               Cart?
+  /// personal referral code (made on first view of the account page)
+  referralCode       String?        @unique
+  /// who referred them (set on their first order with a referral code)
+  referredById       String?
+  /// "MM-DD"; birthday points once a year
+  birthday           String?
+  birthdayRewardYear Int?
 
   @@index([role])
   @@index([createdAt])
@@ -445,6 +452,9 @@ model Order {
   /// click-and-collect: the shop the customer collects from (null = delivered by courier)
   pickupStoreId        String?
   pickupStore          Store?           @relation("PickupOrders", fields: [pickupStoreId], references: [id])
+  /// referral: the customer whose code gave this first order its discount, and when they were rewarded
+  referrerId           String?
+  referralRewardedAt   DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -464,6 +474,7 @@ model Order {
   @@index([channel, createdAt])
   @@index([shiftId])
   @@index([pickupStoreId, status])
+  @@index([referrerId])
 }
 
 /// A physical shop. One today (flagship); more later.

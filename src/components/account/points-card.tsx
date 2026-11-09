@@ -6,6 +6,7 @@ import { formatPrice } from "@/lib/utils";
 const REASON: Record<string, string> = {
   EARN: "Earned on order", REDEEM: "Used at checkout", REDEEM_REFUND: "Returned — order cancelled",
   RETURN_REVERSE: "Taken back — items returned", ADJUST: "Adjustment", WELCOME: "Welcome bonus",
+  REFERRAL: "A friend's first order", REFERRAL_REVERSE: "Taken back — friend's order returned", BIRTHDAY: "Happy birthday",
 };
 
 type Entry = { id: string; delta: number; reason: string; note: string | null; createdAt: Date; orderNumber?: string };

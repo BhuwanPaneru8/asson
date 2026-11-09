@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { after } from "next/server";
 import { isBot, recordFunnel } from "@/lib/funnel";
 import { getCart } from "@/lib/cart";
@@ -33,6 +33,7 @@ export default async function CheckoutPage() {
       onlineEnabled={store.onlinePaymentsLive && onlinePaymentsEnabled()}
       rates={rates}
       pickupPoints={pickupPoints}
+      initialCode={(await cookies()).get("asson_ref")?.value}
     />
   );
 }
