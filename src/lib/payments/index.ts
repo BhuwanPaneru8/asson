@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Payment, PaymentProvider, Prisma } from "@prisma/client";
 import { db } from "../db";
+import { reportError } from "../errors";
 import { TransitionError, transitionOrder } from "../orders";
 import { formatOrderNumber } from "../utils";
 import { buildEsewaForm, esewaEnabled, esewaStatus } from "./esewa";
@@ -79,7 +80,7 @@ export async function startPayment(orderId: string, provider: PaymentProvider): 
   });
   if (!r.ok) {
     await db.payment.update({ where: { id: payment.id }, data: { status: "FAILED", raw: { initiateError: r.error ?? null, httpStatus: r.status } as Prisma.InputJsonValue } });
-    console.error("Khalti initiate failed", r.status, r.error);
+    void reportError("Khalti initiate failed", new Error(`HTTP ${r.status}: ${r.error}`), { source: "action" });
     return { kind: "error", message: "We couldn't reach Khalti. Please try again or choose another payment method." };
   }
   await db.payment.update({ where: { id: payment.id }, data: { providerRef: r.data.pidx } });

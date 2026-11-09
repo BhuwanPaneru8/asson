@@ -198,10 +198,9 @@ EOF
 chmod 755 /usr/local/bin/asson-cron /usr/local/bin/asson-backup
 cat > /etc/cron.d/asson <<'EOF'
 SHELL=/bin/bash
-*/2 * * * * asson /usr/local/bin/asson-cron production /api/cron/notifications
-*/10 * * * * asson /usr/local/bin/asson-cron production /api/cron/payments
-*/5 * * * * asson /usr/local/bin/asson-cron staging /api/cron/notifications
-*/10 * * * * asson /usr/local/bin/asson-cron staging /api/cron/payments
+# heartbeat for the job queue (SMS, payment expiry, stock audit…); the app also runs it in-process
+* * * * * asson /usr/local/bin/asson-cron production /api/cron/jobs
+*/2 * * * * asson /usr/local/bin/asson-cron staging /api/cron/jobs
 30 2 * * * root /usr/local/bin/asson-backup
 EOF
 

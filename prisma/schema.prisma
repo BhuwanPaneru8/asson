@@ -947,3 +947,53 @@ model AuditLog {
   @@index([actorId, at])
   @@index([action, at])
 }
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  DONE
+  DEAD
+}
+
+/// Background work, run by the in-process worker (lib/jobs.ts). Claimed with FOR UPDATE SKIP LOCKED,
+/// retried with backoff, and parked as DEAD after maxAttempts so a human can look.
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payload     Json      @default("{}")
+  /// idempotency: enqueueing the same key twice is a no-op (recurring slots use type@slot)
+  key         String?   @unique
+  status      JobStatus @default(QUEUED)
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  result      Json?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+
+  @@index([status, runAt])
+  @@index([type, createdAt])
+}
+
+/// Errors grouped by fingerprint (where + normalised message). Never holds request bodies,
+/// headers, query strings or personal data.
+model ErrorEvent {
+  id          String    @id @default(cuid())
+  fingerprint String    @unique
+  source      String // server | action | job | client
+  where       String
+  message     String
+  stack       String?
+  digest      String?
+  context     Json?
+  count       Int       @default(1)
+  firstSeen   DateTime  @default(now())
+  lastSeen    DateTime  @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+
+  @@index([resolvedAt, lastSeen])
+}

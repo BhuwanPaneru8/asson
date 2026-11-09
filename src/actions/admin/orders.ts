@@ -1,5 +1,6 @@
 "use server";
 
+import { reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag } from "next/cache";
 import { z } from "zod";
 import type { OrderStatus } from "@prisma/client";
@@ -11,7 +12,7 @@ import { TransitionError, transitionOrder } from "@/lib/orders";
 import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
 
-const sendSoon = () => after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+const sendSoon = () => after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
 
 type R = { ok: boolean; error?: string; message?: string };
 const statusEnum = z.enum(["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "RETURN_REQUESTED", "RETURNED"]);

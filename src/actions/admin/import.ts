@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError } from "@/lib/errors";
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
@@ -64,7 +65,7 @@ export async function runImport(text: string): Promise<{ ok: boolean; error?: st
     revalidateTag("catalog", { expire: 0 });
     return { ok: true, created: touched.filter((t) => t.action === "create").length, updated: touched.filter((t) => t.action === "update").length, products: touched };
   } catch (e) {
-    console.error("runImport", e);
+    void reportError("runImport", e);
     const msg = String(e);
     if (/Unique constraint/i.test(msg)) return { ok: false, error: "Someone else added a product or SKU with the same name while you were importing. Preview again and retry." };
     return { ok: false, error: "The import failed and nothing was changed. Try again." };

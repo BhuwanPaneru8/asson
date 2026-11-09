@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag, revalidatePath } from "next/cache";
 import { queueBackInStock } from "@/lib/stock-alerts";
 import { activeLocation, defaultReceivingLocation, moveStock, moveStockOrThrow, StockError, zeroVariant, type StockReason } from "@/lib/stock";
@@ -144,7 +145,7 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
     revalidatePath(`/p/${slug}`);
     return { ok: true, id: productId };
   } catch (e) {
-    console.error("saveProduct", e);
+    void reportError("saveProduct", e);
     return { ok: false, error: "Couldn't save the product. Check for duplicate colour/size combinations or SKUs." };
   }
 }
@@ -178,12 +179,12 @@ export async function adjustStock(variantId: string, delta: number, reason: stri
       return { stock: v.stock, here };
     });
     revalidateTag("products", { expire: 60 });
-    if (delta > 0) after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+    if (delta > 0) after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
     refresh();
     return { ok: true, stock: v.stock, here: v.here };
   } catch (e) {
     if (e instanceof StockError) return { ok: false, error: e.message };
-    console.error("adjustStock", e);
+    void reportError("adjustStock", e);
     return { ok: false, error: "Couldn't adjust stock. Please try again." };
   }
 }

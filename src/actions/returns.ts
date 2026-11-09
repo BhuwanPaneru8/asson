@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag } from "next/cache";
 import { queueBackInStock } from "@/lib/stock-alerts";
 import { randomBytes } from "node:crypto";
@@ -186,13 +187,13 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
       return created;
     });
     revalidateTag("products", { expire: 60 });
-    after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+    after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
     refresh();
     return { ok: true, returnId: ret.id, refund, voucherCode };
   } catch (e) {
     const again = await db.return.findUnique({ where: { clientRef: d.clientRef }, select: { id: true, refundAmount: true, voucherCode: true } });
     if (again) return { ok: true, returnId: again.id, refund: again.refundAmount, voucherCode: again.voucherCode };
-    console.error("processReturn", e);
+    void reportError("processReturn", e);
     return { ok: false, error: "The return didn't go through. Nothing was changed — please try again." };
   }
 }

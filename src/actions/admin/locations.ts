@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError, reportErrorSoon } from "@/lib/errors";
 import { after } from "next/server";
 import { refresh, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -93,7 +94,7 @@ const newTransferSchema = z.object({
 
 function failure(e: unknown, where: string): { ok: false; error: string } {
   if (e instanceof TransferError || e instanceof StockError) return { ok: false, error: e.message };
-  console.error(where, e);
+  void reportError(where, e);
   return { ok: false, error: "Couldn't update the transfer. Nothing was moved — please try again." };
 }
 
@@ -136,7 +137,7 @@ export async function receiveStockTransfer(input: z.input<typeof receiveSchema>)
   try {
     const r = await db.$transaction((tx) => receiveTransfer(tx, me, p.data.id, p.data.counts, p.data.note));
     revalidateTag("products", { expire: 60 });
-    after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+    after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
     refresh();
     return { ok: true, short: r.short };
   } catch (e) {
