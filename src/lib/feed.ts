@@ -1,3 +1,4 @@
+import { absoluteImageUrl } from "./media-url";
 // Product catalogue feed for Google Merchant Center and Meta (Facebook/Instagram) Commerce.
 // One <item> per variant (colour × size), grouped by item_group_id — the format both accept.
 import type { Gender } from "@prisma/client";
@@ -15,7 +16,7 @@ const GENDER: Record<Gender, string> = { MEN: "male", WOMEN: "female", UNISEX: "
 
 export function renderFeed(products: FeedProduct[], opts: { siteUrl: string; storeName: string }) {
   const base = opts.siteUrl.replace(/\/$/, "");
-  const abs = (u: string) => (u.startsWith("http") ? u : `${base}${u}`);
+  const abs = (u: string) => absoluteImageUrl(u, base);
   const items: string[] = [];
   for (const p of products) {
     const onSale = p.compareAtPrice != null && p.compareAtPrice > p.price;

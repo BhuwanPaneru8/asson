@@ -10,6 +10,9 @@ import { Reviews } from "@/components/product/reviews";
 import { ProductRail } from "@/components/product/product-rail";
 import { store } from "@/lib/config";
 import { getDeliveryRates } from "@/lib/delivery";
+import { absoluteImageUrl } from "@/lib/media-url";
+
+const siteBase = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -20,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: p.name,
     description: p.description.slice(0, 155),
     alternates: { canonical: `/p/${p.slug}` },
-    openGraph: { title: p.name, description: p.description.slice(0, 155), images: p.images.slice(0, 1).map((i) => ({ url: i.url })) },
+    openGraph: { title: p.name, description: p.description.slice(0, 155), images: p.images.slice(0, 1).map((i) => ({ url: absoluteImageUrl(i.url, siteBase) })) },
   };
 }
 
@@ -49,7 +52,7 @@ export default async function ProductPage({ params }: Props) {
     name: product.name,
     description: product.description,
     brand: { "@type": "Brand", name: product.brand },
-    image: product.images.map((i) => i.url),
+    image: product.images.map((i) => absoluteImageUrl(i.url, siteBase)),
     sku: product.variants[0]?.sku,
     ...(product.ratingCount > 0 ? { aggregateRating: { "@type": "AggregateRating", ratingValue: product.ratingAvg, reviewCount: product.ratingCount } } : {}),
     offers: { "@type": "Offer", priceCurrency: store.currency, price: (product.price / 100).toFixed(2), availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: `/p/${product.slug}` },

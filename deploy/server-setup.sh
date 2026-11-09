@@ -66,7 +66,7 @@ step "User asson and folders"
 id asson >/dev/null 2>&1 || useradd --create-home --shell /bin/bash asson
 usermod -aG systemd-journal asson
 install -d -o asson -g asson -m 750 /srv/asson /srv/asson/tools /var/backups/asson
-for e in "${ENVS[@]}"; do install -d -o asson -g asson -m 750 /srv/asson/$e /srv/asson/$e/releases /srv/asson/$e/incoming; done
+for e in "${ENVS[@]}"; do install -d -o asson -g asson -m 750 /srv/asson/$e /srv/asson/$e/releases /srv/asson/$e/incoming /srv/asson/$e/media; done
 install -d -o asson -g asson -m 700 /home/asson/.ssh
 touch /home/asson/.ssh/authorized_keys
 if [ -n "$CI_PUBKEY" ] && ! grep -qF "$CI_PUBKEY" /home/asson/.ssh/authorized_keys; then echo "$CI_PUBKEY" >> /home/asson/.ssh/authorized_keys; fi
@@ -108,6 +108,8 @@ CRON_SECRET=$(openssl rand -hex 32)
 NEXT_TELEMETRY_DISABLED=1
 EOF
   fi
+  # settings added after the first install (kept idempotent for existing servers)
+  grep -q '^MEDIA_DIR=' "$f" || echo "MEDIA_DIR=/srv/asson/$e/media" >> "$f"
   chown root:asson "$f" && chmod 640 "$f"
 done
 
@@ -171,6 +173,22 @@ for e in staging production; do
       logger -p user.err -t asson-backup "UPLOAD FAILED $db-$ts.dump"; failed=1
     fi
   fi
+done
+# Uploaded product photos: files are content-addressed and never change, so copy each one off-site
+# exactly once (a list of already-copied files is kept next to the dumps).
+for e in staging production; do
+  m=/srv/asson/$e/media; list="$d/.media-offsite-$e"
+  [ -d "$m" ] && [ -n "${BACKUP_UPLOAD_URL:-}" ] || continue
+  touch "$list"
+  n=0
+  while IFS= read -r rel; do
+    if curl -fsS -m 120 --retry 3 -T "$m/$rel" "${BACKUP_UPLOAD_URL}$host/media/$e/$rel" >/dev/null; then
+      echo "$rel" >> "$list"; n=$((n+1))
+    else
+      logger -p user.err -t asson-backup "MEDIA UPLOAD FAILED $e/$rel"; failed=1; break
+    fi
+  done < <(comm -23 <(cd "$m" && find . -type f ! -name '*.tmp' | sed 's|^\./||' | sort) <(sort "$list"))
+  if [ "$n" -gt 0 ]; then logger -t asson-backup "uploaded $n new $e photos"; fi
 done
 chown asson:asson "$d"/*.dump 2>/dev/null || true
 find "$d" -name '*.dump' -mtime +14 -delete

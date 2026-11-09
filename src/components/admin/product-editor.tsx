@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { saveProduct, type ProductInput } from "@/actions/admin/catalog";
 import { formatPrice, slugify } from "@/lib/utils";
 import { Card } from "./ui";
+import { PhotoUploader } from "./photo-uploader";
 
 type V = { id?: string; sku: string; color: string; colorHex: string; size: string; stock: number; costPrice?: number | null };
 type Img = { url: string; alt: string; color: string | null };
@@ -119,10 +120,16 @@ export function ProductEditor({ initial, categories, collections, readOnly, show
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex gap-2">
-                <input className={input} value={newImg} onChange={(e) => setNewImg(e.target.value)} placeholder="Paste image URL (https://…)" />
-                <button type="button" onClick={() => { if (/^https:\/\//.test(newImg)) { setImages((x) => [...x, { url: newImg.trim(), alt: f.name, color: null }]); setNewImg(""); } else toast.error("Use an https:// image URL"); }} className="h-10 shrink-0 rounded-md border border-line bg-white px-4 text-[14px] hover:border-ink">Add</button>
+              <div className={images.length ? "mt-4" : ""}>
+                <PhotoUploader disabled={readOnly || pending} slotsLeft={20 - images.length} onUploaded={(url) => setImages((x) => (x.some((y) => y.url === url) ? x : [...x, { url, alt: f.name, color: null }]))} />
               </div>
+              <details className="mt-3 text-[13px]">
+                <summary className="cursor-pointer text-muted">Or add a photo by link</summary>
+                <div className="mt-2 flex gap-2">
+                  <input className={input} value={newImg} onChange={(e) => setNewImg(e.target.value)} placeholder="https://…" aria-label="Image link" />
+                  <button type="button" onClick={() => { if (/^https:\/\//.test(newImg)) { setImages((x) => [...x, { url: newImg.trim(), alt: f.name, color: null }]); setNewImg(""); } else toast.error("Use an https:// image link"); }} className="h-10 shrink-0 rounded-md border border-line bg-white px-4 text-[14px] hover:border-ink">Add</button>
+                </div>
+              </details>
               <p className="mt-2 text-[12.5px] text-muted">Tip: use 3:4 portrait photos. Assign images to a colour so shoppers see the right shot when they switch swatches.</p>
               {errors["images.0.url"] && <p className="mt-1 text-[12.5px] text-danger">{errors["images.0.url"]}</p>}
             </div>
