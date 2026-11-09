@@ -6,9 +6,10 @@ import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { parseOrderNumber } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/auth";
+import { clientIp } from "@/lib/client-ip";
 
 export async function trackOrder(_: { error?: string } | undefined, form: FormData): Promise<{ error?: string }> {
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0] ?? "local";
+  const ip = clientIp(await headers());
   if (!rateLimit(`track:${ip}`, 15, 15 * 60_000)) return { error: "Too many attempts. Please try again in a few minutes." };
   const n = parseOrderNumber(String(form.get("number") ?? ""));
   const email = String(form.get("email") ?? "").trim().toLowerCase();

@@ -45,3 +45,5 @@ next-env.d.ts
 /.next-e2e/
 /test-results/
 /playwright-report/
+/.next-bundle/
+*.tgz

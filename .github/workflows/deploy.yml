@@ -1,0 +1,75 @@
+name: Deploy
+
+# Staging deploys automatically after CI passes on main.
+# Production deploys only when started by hand: Actions → Deploy → Run workflow → production.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.environment == 'staging' || github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || 'staging' }}
+    env:
+      ENV_NAME: ${{ inputs.environment || 'staging' }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build release bundle
+        run: |
+          if [ "$ENV_NAME" = production ]; then URL=https://asson.bhuwanpaneru.com; else URL=https://staging-asson.bhuwanpaneru.com; fi
+          ASSON_RELEASE=$(git rev-parse --short HEAD) deploy/build-bundle.sh "$ENV_NAME" "$URL" bundle.tgz
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" -a -n "$DEPLOY_HOST" -a -n "$DEPLOY_KNOWN_HOSTS" || { echo "::error::Set secret DEPLOY_SSH_KEY and variables DEPLOY_HOST, DEPLOY_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host asson\n  HostName %s\n  User asson\n  IdentityFile ~/.ssh/id_deploy\n  IdentitiesOnly yes\n  ServerAliveInterval 30\n' "$DEPLOY_HOST" > ~/.ssh/config
+
+      - name: Upload and release
+        run: |
+          ID=$(date -u +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)
+          scp -q bundle.tgz "asson:/srv/asson/$ENV_NAME/incoming/$ID.tgz"
+          ssh asson "set -e
+            d=/srv/asson/$ENV_NAME/releases/$ID
+            mkdir -p \$d
+            tar -xzf /srv/asson/$ENV_NAME/incoming/$ID.tgz -C \$d
+            rm -f /srv/asson/$ENV_NAME/incoming/$ID.tgz
+            bash \$d/deploy/release.sh $ENV_NAME $ID"
+
+      - name: Summary
+        if: always()
+        run: echo "Deployed to **$ENV_NAME** ($(git rev-parse --short HEAD)) — ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"

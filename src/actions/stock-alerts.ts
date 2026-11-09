@@ -5,6 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 const schema = z.object({ variantId: z.string().min(1).max(40), phone: z.string().trim().regex(/^9[678]\d{8}$/, "Enter a 10-digit Nepali mobile number") });
 
@@ -12,7 +13,7 @@ export async function subscribeStockAlert(input: { variantId: string; phone: str
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the number." };
   const { variantId, phone } = parsed.data;
-  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIp(await headers());
   if (!rateLimit(`alert:${ip}`, 20, 60 * 60_000)) return { ok: false, error: "Too many requests. Please try again later." };
   const v = await db.variant.findUnique({ where: { id: variantId }, select: { stock: true, product: { select: { status: true } } } });
   if (!v || v.product.status !== "ACTIVE") return { ok: false, error: "This item isn't available." };

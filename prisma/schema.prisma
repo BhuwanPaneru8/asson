@@ -4,6 +4,8 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["fullTextSearchPostgres"]
+  // native = this machine; the others are the Linux servers we build for in CI (x86_64 and Ampere arm64)
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x"]
 }
 
 datasource db {

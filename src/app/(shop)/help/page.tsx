@@ -18,7 +18,7 @@ const FAQ = [
     ["When will I get my refund?", "Online payments are refunded to the same wallet or card. Cash on delivery orders are refunded to your eSewa/Khalti wallet or bank account within 3–5 working days of the return reaching us."],
   ]},
   { id: "payments", title: "Payments", items: [
-    ["Which payment methods do you accept?", "Cash on delivery, eSewa, Khalti, Fonepay QR and cards."],
+    ["Which payment methods do you accept?", store.onlinePaymentsLive ? "Online: cash on delivery, eSewa and Khalti. In our store: cash, Fonepay QR and cards." : "Online orders are cash on delivery for now. In our store we take cash, Fonepay QR and cards."],
     ["Is Cash on Delivery available?", `Yes, everywhere we deliver, for orders up to ${formatPrice(store.codMaxOrder)}. You can also pay the rider by QR.`],
     ["Are prices inclusive of VAT?", "Yes, all prices include 13% VAT."],
   ]},

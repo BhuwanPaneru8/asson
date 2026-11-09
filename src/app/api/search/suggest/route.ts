@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { getCategoryTree, searchProductIds } from "@/lib/catalog";
 import { rateLimit } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 const suggest = unstable_cache(
   async (q: string) => {
@@ -32,7 +33,7 @@ const suggest = unstable_cache(
 export async function GET(req: NextRequest) {
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 80);
   if (q.length < 2) return NextResponse.json({ products: [], categories: [] });
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local";
+  const ip = clientIp(req.headers);
   if (!rateLimit(`suggest:${ip}`, 120, 60_000)) return NextResponse.json({ products: [], categories: [] }, { status: 429 });
   const data = await suggest(q.toLowerCase());
   return NextResponse.json(data, { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } });

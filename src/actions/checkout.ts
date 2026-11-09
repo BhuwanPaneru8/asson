@@ -18,6 +18,7 @@ import { after } from "next/server";
 import { dispatchNotifications, queueOrderNotice } from "@/lib/notifications";
 import { formatPrice } from "@/lib/utils";
 import { maxRedeemable, pointsValue } from "@/lib/loyalty-shared";
+import { clientIp } from "@/lib/client-ip";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -81,7 +82,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
   const user = await getCurrentUser();
 
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+  const ip = clientIp(h);
   if (!rateLimit(`order:${ip}`, 20, 60 * 60_000)) return { error: "Too many orders from this network. Please try again later." };
 
   // Resolve shipping address

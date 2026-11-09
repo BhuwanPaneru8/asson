@@ -35,7 +35,7 @@ export function Footer() {
       <div className="border-t border-line">
         <div className="container-page flex flex-col gap-3 py-6 text-[13px] text-muted md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} {store.name}. All rights reserved.</p>
-          <div className="flex gap-5"><Link href="/help#privacy">Privacy</Link><Link href="/help#terms">Terms</Link><span>eSewa · Khalti · Fonepay · Cards · COD</span></div>
+          <div className="flex gap-5"><Link href="/help#privacy">Privacy</Link><Link href="/help#terms">Terms</Link><span>{store.onlinePaymentsLive ? "eSewa · Khalti · Cash on delivery" : "Cash on delivery"}</span></div>
         </div>
       </div>
     </footer>

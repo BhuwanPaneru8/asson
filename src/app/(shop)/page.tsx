@@ -59,7 +59,9 @@ export default async function HomePage() {
             [Truck, "Free delivery", `All over Nepal above ${formatPrice(store.shipping.freeThreshold)}`],
             [RotateCcw, `${store.returnWindowDays}-day returns`, "Easy, no-fuss returns"],
             [Banknote, "Cash on delivery", "Pay when it arrives"],
-            [ShieldCheck, "Pay your way", "eSewa, Khalti, Fonepay & cards"],
+            store.onlinePaymentsLive
+              ? [ShieldCheck, "Pay your way", "eSewa, Khalti & cash on delivery"]
+              : [ShieldCheck, "Secure shopping", "Your details stay private"],
           ].map(([Icon, t, d]) => {
             const I = Icon as typeof Truck;
             return (

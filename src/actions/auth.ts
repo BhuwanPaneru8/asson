@@ -10,6 +10,7 @@ import { mergeGuestCart } from "@/lib/cart";
 import { rateLimit } from "@/lib/rate-limit";
 import { phoneSchema } from "@/lib/validators";
 import { homeFor, isStaffRole } from "@/lib/permissions";
+import { clientIp } from "@/lib/client-ip";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -20,7 +21,7 @@ function safeNext(next: FormDataEntryValue | null) {
 
 async function clientKey(prefix: string, id: string) {
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? "local";
+  const ip = clientIp(h);
   return `${prefix}:${ip}:${id.toLowerCase()}`;
 }
 
