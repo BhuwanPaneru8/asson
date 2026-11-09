@@ -5,6 +5,7 @@ import { store } from "@/lib/config";
 import { getCategoryTree } from "@/lib/catalog";
 import { deadStock, marginPct, reorderPlan, searchInsights, sizeColourMix, type MixRow } from "@/lib/insights";
 import { cn, formatDate, formatPrice } from "@/lib/utils";
+import { customerInsights, funnelInsights } from "@/lib/customer-insights";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 
 export const metadata = { title: "Insights" };
@@ -14,6 +15,8 @@ const TABS = [
   { id: "dead", label: "Dead stock" },
   { id: "mix", label: "Sizes & colours" },
   { id: "search", label: "What shoppers search" },
+  { id: "customers", label: "Customers" },
+  { id: "funnel", label: "Shop funnel" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -43,6 +46,8 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
       {tab === "dead" && <Dead showCost={showCost} />}
       {tab === "mix" && <Mix showCost={showCost} days={[30, 90, 365].includes(Number(sp.days)) ? Number(sp.days) : 90} category={sp.category} href={href} />}
       {tab === "search" && <Searches />}
+      {tab === "customers" && <Customers />}
+      {tab === "funnel" && <Funnel />}
     </>
   );
 }
@@ -199,6 +204,88 @@ async function Searches() {
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+async function Customers() {
+  const c = await customerInsights();
+  const tile = (l: string, v: string, sub: string) => <div className="rounded-lg border border-line bg-white p-4"><p className="text-[12px] uppercase tracking-wider text-muted">{l}</p><p className="mt-1 text-[22px] font-semibold">{v}</p><p className="text-[12.5px] text-muted">{sub}</p></div>;
+  const heat = (v: number | null) => (v == null ? "" : v >= 30 ? "bg-ink text-white" : v >= 15 ? "bg-ink/60 text-white" : v >= 5 ? "bg-ink/25" : v > 0 ? "bg-ink/10" : "");
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tile("Repeat customers", `${c.repeatRate}%`, `of ${c.customers.toLocaleString("en-IN")} customers bought 2+ times`)}
+        {tile("Revenue from repeaters", `${c.repeatRevenueShare}%`, "of goods revenue")}
+        {tile("Lifetime value", formatPrice(c.lifetimeValue), `${c.ordersPerCustomer} orders per customer`)}
+        {tile("Comes back after", c.daysBetweenOrders == null ? "—" : `${c.daysBetweenOrders} days`, `on average · ${c.omnichannel} buy both online and in store`)}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Segments">
+          <table className="w-full text-[13.5px]">
+            <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>Segment</th><th className={cn(th, "text-right")}>Customers</th><th className={cn(th, "text-right")}>Revenue</th></tr></thead>
+            <tbody className="divide-y divide-line">
+              {c.segments.map((x) => <tr key={x.key}><td className="px-3 py-2"><span className="font-medium">{x.label}</span><span className="block text-[12px] text-muted">{x.hint}</span></td><td className={num}>{x.customers}</td><td className={num}>{formatPrice(x.revenue)}</td></tr>)}
+            </tbody>
+          </table>
+        </Card>
+        <Card title="Top customers">
+          <table className="w-full text-[13.5px]">
+            <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>Customer</th><th className={cn(th, "text-right")}>Orders</th><th className={cn(th, "text-right")}>Spent</th><th className={th}>Last order</th></tr></thead>
+            <tbody className="divide-y divide-line">
+              {c.top.map((t, i) => <tr key={i}><td className="px-3 py-2"><span className="font-medium">{t.name}</span> <span className="text-[12px] text-muted">{t.phone}</span></td><td className={num}>{t.orders}</td><td className={num}>{formatPrice(t.revenue)}</td><td className="px-3 text-muted">{formatDate(t.last)}</td></tr>)}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+      <Card title="Do new customers come back? (share of each month's new customers who bought again N months later)">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>First order</th><th className={cn(th, "text-right")}>New customers</th>{[1, 2, 3, 4, 5, 6].map((k) => <th key={k} className={cn(th, "text-center")}>+{k} mo</th>)}</tr></thead>
+            <tbody className="divide-y divide-line">
+              {c.cohorts.map((r) => (
+                <tr key={r.month}><td className="px-3 py-1.5 font-medium">{r.month}</td><td className={num}>{r.size}</td>{r.retention.map((v, i) => <td key={i} className={cn("px-1 py-1.5 text-center tabular-nums", heat(v))}>{v == null ? "" : `${v}%`}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+async function Funnel() {
+  const f = await funnelInsights(30);
+  const step = (l: string, v: number, rate: number | null, sub: string) => (
+    <div className="rounded-lg border border-line bg-white p-4"><p className="text-[12px] uppercase tracking-wider text-muted">{l}</p><p className="mt-1 text-[22px] font-semibold">{v.toLocaleString("en-IN")}</p><p className="text-[12.5px] text-muted">{rate == null ? "—" : `${rate}% ${sub}`}</p></div>
+  );
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-muted">Online only, from {formatDate(`${f.since}T12:00:00+05:45`)} (last 30 days{f.countingStarted && f.countingStarted === f.since ? ", or since views were first counted" : ""}). Counted per page view, not per person; bots excluded.</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-lg border border-line bg-white p-4"><p className="text-[12px] uppercase tracking-wider text-muted">Product views</p><p className="mt-1 text-[22px] font-semibold">{f.views.toLocaleString("en-IN")}</p><p className="text-[12.5px] text-muted">product pages opened</p></div>
+        {step("Added to bag", f.adds, f.rates.viewToAdd, "of views")}
+        {step("Checkout visits", f.checkouts, f.rates.addToCheckout, "of adds")}
+        {step("Orders", f.orders, f.rates.checkoutToOrder, "of checkout visits")}
+      </div>
+      <Card title="By product">
+        {!f.products.length ? <p className="p-8 text-center text-muted">No product views counted yet.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13.5px]">
+              <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>Product</th><th className={cn(th, "text-right")}>Views</th><th className={cn(th, "text-right")}>To bag</th><th className={cn(th, "text-right")}>Bag rate</th><th className={cn(th, "text-right")}>Units sold</th><th className={cn(th, "text-right")}>Sold per 100 views</th></tr></thead>
+              <tbody className="divide-y divide-line">
+                {f.products.map((p) => (
+                  <tr key={p.productId}>
+                    <td className="px-3 py-2"><Link href={`/admin/products/${p.productId}`} className="font-medium hover:underline">{p.name}</Link>{p.weak && <span className="ml-2"><Pill tone="warn">few add it to bag</Pill></span>}</td>
+                    <td className={num}>{p.views}</td><td className={num}>{p.adds}</td><td className={num}>{p.addRate == null ? "—" : `${p.addRate}%`}</td><td className={num}>{p.sold}</td><td className={num}>{p.orderRate == null ? "—" : p.orderRate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="border-t border-line px-5 py-3 text-[12.5px] text-muted">“Few add it to bag” = 50+ views but under half the shop&apos;s average bag rate: check the photos, price, size availability and description.</p>
+      </Card>
     </div>
   );
 }

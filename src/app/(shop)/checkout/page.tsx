@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { after } from "next/server";
+import { isBot, recordFunnel } from "@/lib/funnel";
 import { getCart } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -14,6 +17,7 @@ export const metadata: Metadata = { title: "Checkout", robots: { index: false } 
 export default async function CheckoutPage() {
   const [cart, user, rates] = await Promise.all([getCart(), getCurrentUser(), getDeliveryRates()]);
   if (cart.lines.length === 0) redirect("/cart");
+  if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("checkout"));
   // click-and-collect points, and whether this whole bag is already on that shop's shelf
   const [shops, here] = await Promise.all([
     db.store.findMany({ where: { active: true, pickup: true, kind: "SHOP" }, select: { id: true, name: true, address: true, hours: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] }),

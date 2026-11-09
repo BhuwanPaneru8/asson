@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { after } from "next/server";
+import { isBot, recordFunnel } from "@/lib/funnel";
 import { ChevronRight } from "lucide-react";
 import { getLiveStock, getLook, getProduct, getRelated, getReviews } from "@/lib/catalog";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
@@ -31,6 +34,8 @@ export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
   const product = await getProduct(slug);
   if (!product) notFound();
+  // funnel: a real product view (bots and link previews aren't counted)
+  if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
 
   const [stock, related, reviews, user, rates, look] = await Promise.all([
     getLiveStock(product.id),
