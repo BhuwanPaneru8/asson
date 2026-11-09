@@ -152,16 +152,30 @@ curl -fsS -m 50 -H "Authorization: Bearer $secret" "http://127.0.0.1:$port$p" >/
 EOF
 cat > /usr/local/bin/asson-backup <<'EOF'
 #!/usr/bin/env bash
-# Nightly compressed dumps of every Asson database; keeps 14 days locally.
+# Nightly compressed dumps of every Asson database: 14 days kept locally, and each dump is
+# copied off the server through a write-only Oracle Object Storage link (BACKUP_UPLOAD_URL in
+# /etc/asson/backup.env, root-only). The link can add files but not list, read or delete them.
 set -euo pipefail
-d=/var/backups/asson; ts=$(date +%Y%m%d-%H%M)
+d=/var/backups/asson; ts=$(date +%Y%m%d-%H%M); host=$(hostname -s)
+[ -f /etc/asson/backup.env ] && . /etc/asson/backup.env
+failed=0
 for e in staging production; do
   db=asson_$e
   sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw "$db" || continue
-  sudo -u postgres pg_dump -Fc "$db" > "$d/$db-$ts.dump"
+  f="$d/$db-$ts.dump"
+  sudo -u postgres pg_dump -Fc "$db" > "$f"
+  if [ -n "${BACKUP_UPLOAD_URL:-}" ]; then
+    if curl -fsS -m 300 --retry 3 -T "$f" "${BACKUP_UPLOAD_URL}$host/$db/$db-$ts.dump" >/dev/null; then
+      logger -t asson-backup "uploaded $db-$ts.dump"
+    else
+      logger -p user.err -t asson-backup "UPLOAD FAILED $db-$ts.dump"; failed=1
+    fi
+  fi
 done
 chown asson:asson "$d"/*.dump 2>/dev/null || true
 find "$d" -name '*.dump' -mtime +14 -delete
+if [ "$failed" = 0 ] && [ -n "${BACKUP_UPLOAD_URL:-}" ]; then date -Is > "$d/.last-offsite-ok"; fi
+exit "$failed"
 EOF
 chmod 755 /usr/local/bin/asson-cron /usr/local/bin/asson-backup
 cat > /etc/cron.d/asson <<'EOF'
