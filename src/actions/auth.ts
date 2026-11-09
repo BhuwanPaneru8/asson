@@ -11,6 +11,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { phoneSchema } from "@/lib/validators";
 import { homeFor, isStaffRole } from "@/lib/permissions";
 import { clientIp } from "@/lib/client-ip";
+import { audit } from "@/lib/audit";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -32,13 +33,19 @@ export async function login(_: AuthState, form: FormData): Promise<AuthState> {
   if (!parsed.success) return { error: "Enter a valid email and password." };
   const { email, password } = parsed.data;
 
-  if (!rateLimit(await clientKey("login", email), 8, 15 * 60_000))
+  if (!rateLimit(await clientKey("login", email), 8, 15 * 60_000)) {
+    const target = await db.user.findUnique({ where: { email }, select: { id: true, name: true, role: true } });
+    if (target && isStaffRole(target.role)) await audit(db, null, { action: "auth.login_blocked", entity: ["User", target.id], summary: `Too many sign-in attempts for staff account ${email} — blocked for 15 minutes` });
     return { error: "Too many attempts. Please wait a few minutes and try again." };
+  }
 
   const user = await db.user.findUnique({ where: { email } });
   // constant-ish time: always run bcrypt
   const ok = await verifyPassword(password, user?.passwordHash ?? "$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
+  // staff accounts are the keys to the business: record every failed and successful sign-in
+  if (user && !ok && isStaffRole(user.role)) await audit(db, null, { action: "auth.login_failed", entity: ["User", user.id], summary: `Wrong password for staff account ${email}` });
   if (!user || !ok) return { error: "That email and password don't match our records." };
+  if (isStaffRole(user.role)) await audit(db, user, { action: "auth.login", entity: ["User", user.id], summary: `${user.name} signed in (${user.role.toLowerCase()})` });
 
   await createSession(user);
   await mergeGuestCart(user.id);
@@ -96,5 +103,6 @@ export async function changePassword(_: AuthState, form: FormData): Promise<Auth
   // bumping tokenVersion signs out every other device
   const updated = await db.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(parsed.data.next), tokenVersion: { increment: 1 } } });
   await createSession(updated);
+  if (isStaffRole(me.role)) await audit(db, me, { action: "auth.password_changed", entity: ["User", me.id], summary: `${me.name} changed their password (other devices signed out)` });
   return { ok: true };
 }

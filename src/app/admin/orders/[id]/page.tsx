@@ -1,3 +1,4 @@
+import { EntityHistory } from "@/components/admin/entity-history";
 import Image from "next/image";
 import { requirePermission } from "@/lib/auth";
 import Link from "next/link";
@@ -92,6 +93,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
             {a && <p className="px-5 py-4 text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
             {order.customerNote && <p className="border-t border-line px-5 py-3 text-[13.5px]"><span className="font-medium">Note:</span> {order.customerNote}</p>}
           </Card>
+          <EntityHistory type="Order" id={order.id} />
         </div>
       </div>
     </>

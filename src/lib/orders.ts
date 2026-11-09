@@ -4,6 +4,8 @@ import type { OrderStatus, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { NOTICE_FOR_STATUS, queueOrderNotice } from "./notifications";
 import { earnForOrder, refundRedeemed, reverseForReturn } from "./loyalty";
+import { audit } from "./audit";
+import { formatOrderNumber, formatPrice } from "./utils";
 
 export { STATUS_LABEL, TRANSITIONS, CUSTOMER_CANCELLABLE } from "./order-status";
 import { STATUS_LABEL, TRANSITIONS } from "./order-status";
@@ -52,6 +54,11 @@ export async function transitionOrder(opts: {
 
     const shipNote = to === "SHIPPED" && (data.carrier || data.trackingNumber) ? ` via ${data.carrier ?? "courier"}${data.trackingNumber ? ` (${data.trackingNumber})` : ""}` : "";
     await tx.orderEvent.create({ data: { orderId, status: to, actor, message: opts.message || `${STATUS_LABEL[to]}${shipNote}` } });
+    // staff changes go to the audit trail too (customers' own cancellations are on the order timeline)
+    if (actorId) {
+      const who = await tx.user.findUnique({ where: { id: actorId }, select: { id: true, name: true, role: true } });
+      await audit(tx, who, { action: "order.status", entity: ["Order", orderId], summary: `${formatOrderNumber(order.number)} (${formatPrice(order.total)}): ${STATUS_LABEL[order.status]} → ${STATUS_LABEL[to]}${shipNote}${opts.message ? ` — ${opts.message.slice(0, 120)}` : ""}`, changes: { status: [order.status, to] } });
+    }
     // loyalty: earn on delivery, give back spent points on cancel, take back earned points on return
     if (to === "DELIVERED") await earnForOrder(tx, orderId);
     if (to === "CANCELLED") await refundRedeemed(tx, orderId);

@@ -802,3 +802,28 @@ model Review {
   @@unique([productId, userId])
   @@index([productId, status, createdAt])
 }
+
+/// Who changed what, when, from where. APPEND-ONLY: a database trigger rejects UPDATE and DELETE
+/// (see migration 20261110120000_audit_log). No foreign key to User, so history survives account removal.
+model AuditLog {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  actorId    String?
+  /// snapshot at the time (names and roles change)
+  actorName  String   @default("")
+  actorRole  String   @default("")
+  /// dotted verb, e.g. "product.update", "user.role", "auth.login_failed"
+  action     String
+  entityType String
+  entityId   String?
+  /// one human-readable line, e.g. "Price Rs. 2,499 → Rs. 2,299"
+  summary    String
+  /// { field: [before, after] } or other structured detail
+  changes    Json?
+  ip         String?
+
+  @@index([at])
+  @@index([entityType, entityId, at])
+  @@index([actorId, at])
+  @@index([action, at])
+}

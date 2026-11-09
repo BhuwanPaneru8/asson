@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission, verifyPassword, getCurrentUser } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 import { can, discountLimitPercent, type Role } from "@/lib/permissions";
 import { buildDaySummary, expectedCashForShift, getDefaultStore, getOpenShift, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
 import { findApproverByPin } from "@/lib/approvals";
@@ -35,7 +36,10 @@ export async function openShift(openingFloatRupees: number): Promise<R> {
   if (await getOpenShift(me.id)) return { ok: false, error: "You already have an open shift." };
   const store = await getDefaultStore();
   if (await isDayLocked(store.id, ktmDate())) return { ok: false, error: "Today has already been closed and locked. Ask the owner to reopen tomorrow." };
-  await db.shift.create({ data: { storeId: store.id, cashierId: me.id, openingFloat: float } });
+  await db.$transaction(async (tx) => {
+    const s = await tx.shift.create({ data: { storeId: store.id, cashierId: me.id, openingFloat: float } });
+    await audit(tx, me, { action: "shift.open", entity: ["Shift", s.id], summary: `${me.name} opened a shift with ${formatPrice(float)} in the drawer` });
+  });
   refresh();
   return { ok: true };
 }
@@ -54,6 +58,7 @@ export async function closeShift(countedCashRupees: number, note?: string): Prom
     data: { status: "CLOSED", closedAt: new Date(), expectedCash: expected, countedCash: counted, difference, closeNote: note?.trim().slice(0, 300) || null, closedById: me.id },
   });
   if (!res.count) return { ok: false, error: "This shift was already closed." };
+  await audit(db, me, { action: "shift.close", entity: ["Shift", shift.id], summary: `${me.name} closed the shift: counted ${formatPrice(counted)}, expected ${formatPrice(expected)}${difference ? ` — ${difference > 0 ? "over" : "SHORT"} ${formatPrice(Math.abs(difference))}: ${note?.trim().slice(0, 120)}` : " — balanced"}`, changes: { expected, counted, difference } });
   refresh();
   return { ok: true, expected, counted, difference };
 }
@@ -192,6 +197,10 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
       await tx.inventoryLog.createMany({ data: variants.map((v) => ({ variantId: v.id, delta: -qty.get(v.id)!, reason: "SALE", note: "Store sale", orderId: o.id, actorId: me.id })) });
       for (const v of variants) await tx.product.update({ where: { id: v.product.id }, data: { soldCount: { increment: qty.get(v.id)! } } });
       if (customer) await earnForOrder(tx, o.id); // a store sale is delivered on the spot
+      if (discount) {
+        const approver = approverId ? await tx.user.findUnique({ where: { id: approverId }, select: { name: true } }) : null;
+        await audit(tx, me, { action: "pos.discount", entity: ["Order", o.id], summary: `${formatOrderNumber(o.number)}: ${formatPrice(discount)} discount (${((discount / subtotal) * 100).toFixed(1)}%) on ${formatPrice(subtotal)} — ${d.discount!.reason}${approver ? ` · approved by ${approver.name}` : ""}`, changes: { subtotal, discount, approverId } });
+      }
       return o;
     });
     revalidateTag("products", { expire: 60 });
@@ -217,7 +226,10 @@ export async function lockDay(date: string, note?: string): Promise<R> {
   const summary = await buildDaySummary(store.id, date);
   if (!summary.allShiftsClosed) return { ok: false, error: "Close every shift before locking the day." };
   if (summary.cash.difference !== 0 && !note?.trim()) return { ok: false, error: "There is a cash difference. Add a closing note before locking." };
-  await db.dayClose.create({ data: { storeId: store.id, date, summary: summary as unknown as Prisma.InputJsonValue, note: note?.trim().slice(0, 500) || null, lockedById: me.id } });
+  await db.$transaction(async (tx) => {
+    const dc = await tx.dayClose.create({ data: { storeId: store.id, date, summary: summary as unknown as Prisma.InputJsonValue, note: note?.trim().slice(0, 500) || null, lockedById: me.id } });
+    await audit(tx, me, { action: "day.lock", entity: ["DayClose", dc.id], summary: `Locked ${date} at ${store.name}${summary.cash.difference ? ` with cash difference ${formatPrice(summary.cash.difference)}: ${note?.trim().slice(0, 120)}` : " (cash balanced)"}` });
+  });
   refresh();
   return { ok: true };
 }
@@ -235,5 +247,6 @@ export async function setApprovalPin(password: string, pin: string): Promise<R> 
   const others = await db.user.findMany({ where: { id: { not: me.id }, approvalPinHash: { not: null } }, select: { approvalPinHash: true } });
   for (const o of others) if (await bcrypt.compare(pin, o.approvalPinHash!)) return { ok: false, error: "Choose a different PIN." };
   await db.user.update({ where: { id: me.id }, data: { approvalPinHash: await bcrypt.hash(pin, 10) } });
+  await audit(db, me, { action: "auth.pin_set", entity: ["User", me.id], summary: `${me.name} set a new approval PIN` });
   return { ok: true };
 }

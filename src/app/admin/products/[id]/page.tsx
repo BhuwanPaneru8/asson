@@ -1,3 +1,4 @@
+import { EntityHistory } from "@/components/admin/entity-history";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -36,6 +37,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
       }}
     />
     <div className="mt-4"><LookPicker productId={p.id} initial={look} readOnly={!can(user.role, "catalog.edit")} /></div>
+    <div className="mt-4 pb-24"><EntityHistory type="Product" id={p.id} /></div>
     </>
   );
 }

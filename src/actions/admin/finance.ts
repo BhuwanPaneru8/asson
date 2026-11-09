@@ -1,5 +1,7 @@
 "use server";
 
+import { audit } from "@/lib/audit";
+import { formatPrice } from "@/lib/utils";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -18,7 +20,10 @@ export async function addExpense(input: z.input<typeof schema>): Promise<{ ok: b
   const me = await requirePermission("finance");
   const p = schema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
-  await db.expense.create({ data: { ...p.data, amount: Math.round(p.data.amount), paidVia: p.data.paidVia || null, createdById: me.id } });
+  await db.$transaction(async (tx) => {
+    const e = await tx.expense.create({ data: { ...p.data, amount: Math.round(p.data.amount), paidVia: p.data.paidVia || null, createdById: me.id } });
+    await audit(tx, me, { action: "expense.add", entity: ["Expense", e.id], summary: `${e.amount < 0 ? "Correction" : "Expense"} ${formatPrice(e.amount)} · ${e.category.toLowerCase()} · ${e.description}`, changes: { amount: e.amount, category: e.category, date: p.data.date } });
+  });
   refresh();
   return { ok: true };
 }

@@ -25,13 +25,14 @@ export type Permission =
   | "approve.discount"
   | "approve.return"
   | "purchasing"
-  | "finance";
+  | "finance"
+  | "audit";
 
 const MAP: Record<StaffRole, Permission[]> = {
   CASHIER: ["pos.sell", "catalog.view"],
   STAFF: ["dashboard", "orders", "catalog.view", "reviews"],
   MANAGER: ["dashboard", "orders", "catalog.view", "inventory.adjust", "customers", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing"],
-  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance"],
+  ADMIN: ["dashboard", "orders", "catalog.view", "catalog.edit", "inventory.adjust", "customers", "team.manage", "coupons", "delivery", "reviews", "pos.sell", "closing", "approve.discount", "approve.return", "purchasing", "finance", "audit"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { CUSTOMER: "Customer", CASHIER: "Cashier", STAFF: "Fulfilment staff", MANAGER: "Manager", ADMIN: "Owner" };

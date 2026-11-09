@@ -1,5 +1,7 @@
 "use server";
 
+import { audit, diff } from "@/lib/audit";
+import { formatPrice } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import { queueBackInStock } from "@/lib/stock-alerts";
 import { dispatchNotifications } from "@/lib/notifications";
@@ -30,11 +32,18 @@ const supplierSchema = z.object({
 });
 
 export async function saveSupplier(input: unknown, id?: string): Promise<R<{ id: string }>> {
-  await requirePermission("purchasing");
+  const me = await requirePermission("purchasing");
   const p = supplierSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Check the highlighted fields.", fieldErrors: fieldErrors(p.error) };
   const data = Object.fromEntries(Object.entries(p.data).map(([k, v]) => [k, v === "" ? null : v])) as typeof p.data;
-  const s = id ? await db.supplier.update({ where: { id }, data }) : await db.supplier.create({ data });
+  const s = await db.$transaction(async (tx) => {
+    const before = id ? await tx.supplier.findUnique({ where: { id } }) : null;
+    const saved = id ? await tx.supplier.update({ where: { id }, data }) : await tx.supplier.create({ data });
+    const d = before ? diff(before as Record<string, unknown>, data as Record<string, unknown>, Object.keys(data)) : null;
+    if (!before) await audit(tx, me, { action: "supplier.create", entity: ["Supplier", saved.id], summary: `Added supplier ${saved.name}` });
+    else if (d && Object.keys(d.changes).length) await audit(tx, me, { action: "supplier.update", entity: ["Supplier", saved.id], summary: `${saved.name}: ${d.text}`, changes: d.changes });
+    return saved;
+  });
   refresh();
   return { ok: true, id: s.id };
 }
@@ -58,6 +67,7 @@ export async function createPurchaseOrder(supplierId: string, variants: { varian
       items: { create: variants.filter((v) => v.quantity > 0).map((v) => ({ variantId: v.variantId, quantityOrdered: v.quantity, unitCost: v.unitCost ?? costs.find((c) => c.id === v.variantId)?.costPrice ?? 0 })) },
     },
   });
+  await audit(db, me, { action: "po.create", entity: ["PurchaseOrder", po.id], summary: `Draft PO-${String(po.number).padStart(5, "0")} for ${supplier.name}` });
   redirect(`/admin/purchasing/${po.id}`);
 }
 
@@ -70,7 +80,7 @@ const draftSchema = z.object({
 });
 
 export async function savePurchaseOrder(input: z.input<typeof draftSchema>): Promise<R> {
-  await requirePermission("purchasing");
+  const me = await requirePermission("purchasing");
   const p = draftSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Check quantities and costs." };
   const d = p.data;
@@ -97,14 +107,19 @@ export async function savePurchaseOrder(input: z.input<typeof draftSchema>): Pro
         create: { purchaseOrderId: po.id, variantId: i.variantId, quantityOrdered: i.quantityOrdered, unitCost: i.unitCost },
       });
     }
+    const value = (items: { quantityOrdered: number; unitCost: number }[]) => items.reduce((s, i) => s + i.quantityOrdered * i.unitCost, 0);
+    const before = value(po.items), after = value(d.items);
+    if (before !== after || po.landedCost !== Math.round(d.landedCost) || po.items.length !== d.items.length) {
+      await audit(tx, me, { action: "po.update", entity: ["PurchaseOrder", po.id], summary: `PO-${String(po.number).padStart(5, "0")} edited: ${d.items.length} lines, goods ${formatPrice(before)} → ${formatPrice(after)}${po.landedCost !== Math.round(d.landedCost) ? `, landed cost ${formatPrice(po.landedCost)} → ${formatPrice(Math.round(d.landedCost))}` : ""}`, changes: { lines: [po.items.length, d.items.length], goodsValue: [before, after], landedCost: [po.landedCost, Math.round(d.landedCost)] } });
+    }
   });
   refresh();
   return { ok: true };
 }
 
 export async function setPurchaseOrderStatus(poId: string, to: "ORDERED" | "CANCELLED"): Promise<R> {
-  await requirePermission("purchasing");
-  const po = await db.purchaseOrder.findUnique({ where: { id: poId }, include: { items: true } });
+  const me = await requirePermission("purchasing");
+  const po = await db.purchaseOrder.findUnique({ where: { id: poId }, include: { items: true, supplier: { select: { name: true } } } });
   if (!po) return { ok: false, error: "Not found." };
   if (to === "ORDERED") {
     if (po.status !== "DRAFT") return { ok: false, error: "Only drafts can be placed." };
@@ -115,6 +130,8 @@ export async function setPurchaseOrderStatus(poId: string, to: "ORDERED" | "CANC
     if (po.items.some((i) => i.quantityReceived + i.quantityDamaged > 0)) return { ok: false, error: "Goods have been received — this order can't be cancelled." };
     await db.purchaseOrder.update({ where: { id: poId }, data: { status: "CANCELLED" } });
   }
+  const goods = po.items.reduce((s, i) => s + i.quantityOrdered * i.unitCost, 0);
+  await audit(db, me, { action: to === "ORDERED" ? "po.order" : "po.cancel", entity: ["PurchaseOrder", poId], summary: `PO-${String(po.number).padStart(5, "0")} (${po.supplier.name}, ${formatPrice(goods)}) ${to === "ORDERED" ? "placed" : "cancelled"}`, changes: { status: [po.status, to] } });
   refresh();
   return { ok: true };
 }
@@ -172,6 +189,8 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
       const complete = fresh.every((i) => i.quantityReceived + i.quantityDamaged >= i.quantityOrdered);
       await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED" } });
       await queueBackInStock(tx, lines.filter((l) => l.quantity > 0).flatMap((l) => po.items.filter((i) => i.id === l.poItemId).map((i) => i.variantId)));
+      const good = lines.reduce((s, l) => s + l.quantity, 0), bad = lines.reduce((s, l) => s + l.damaged, 0);
+      await audit(tx, me, { action: "po.receive", entity: ["PurchaseOrder", po.id], summary: `GRN-${receipt.number} on PO-${String(po.number).padStart(5, "0")}: ${good} good unit${good === 1 ? "" : "s"} into stock${bad ? `, ${bad} damaged` : ""}${complete ? " — order complete" : ""}`, changes: { receiptId: receipt.id, good, damaged: bad } });
       return receipt;
     }, { timeout: 30_000 });
     revalidateTag("products", { expire: 0 });
