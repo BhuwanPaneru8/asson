@@ -4,6 +4,8 @@ import { Truck, RotateCcw, ShieldCheck, Banknote } from "lucide-react";
 import { getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
 import { ProductRail } from "@/components/product/product-rail";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
+import { LookCard } from "@/components/lookbook/look-card";
+import { getLookbook } from "@/lib/looks";
 import { buttonClass } from "@/components/ui/button";
 import { store } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
@@ -13,13 +15,14 @@ import { evaluateCoupon } from "@/lib/pricing";
 const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
 export default async function HomePage() {
-  const [tree, collections, best, fresh, sale, featuredCoupon] = await Promise.all([
+  const [tree, collections, best, fresh, sale, featuredCoupon, looks] = await Promise.all([
     getCategoryTree(),
     getCollections(),
     getProductRail("best", 8),
     getProductRail("new", 8),
     getProductRail("sale", 8),
     db.coupon.findFirst({ where: { showOnHome: true, active: true, isCredit: false }, orderBy: { createdAt: "desc" } }),
+    getLookbook(3),
   ]);
   // the coupon the owner featured (Admin → Coupons → Show on home), only while a shopper could use it
   const offer =
@@ -107,6 +110,22 @@ export default async function HomePage() {
       </section>
 
       <ProductRail eyebrow="Most loved" title="Best sellers" href="/shop?sort=best" products={best} />
+
+      {/* Lookbook: styled outfits from our own pieces (only once the owner has published some) */}
+      {looks.length > 0 && (
+        <section className="container-page py-12">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent">Styled by Asson</p>
+              <h2 className="mt-2 font-display text-3xl md:text-4xl">The Lookbook</h2>
+            </div>
+            <Link href="/lookbook" className="shrink-0 text-[14px] font-medium underline underline-offset-4">See all looks</Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
+            {looks.map((l) => <LookCard key={l.slug} look={l} />)}
+          </div>
+        </section>
+      )}
 
       {/* Featured collections */}
       <section className="container-page py-8">

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { isBot, recordFunnel } from "@/lib/funnel";
+import { getLookbookForProduct } from "@/lib/looks";
 import { ChevronRight } from "lucide-react";
 import { getLiveStock, getLook, getProduct, getRelated, getReviews } from "@/lib/catalog";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
@@ -36,6 +37,7 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound();
   // funnel: a real product view (bots and link previews aren't counted)
   if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
+  const inLooks = await getLookbookForProduct(product.id);
 
   const [stock, related, reviews, user, rates, look] = await Promise.all([
     getLiveStock(product.id),
@@ -85,6 +87,11 @@ export default async function ProductPage({ params }: Props) {
         />
       </div>
       {look.length > 0 && <div className="mt-16"><ProductRail eyebrow="Styled by Asson" title="Complete the look" products={look} /></div>}
+      {inLooks.length > 0 && (
+        <p className="mt-6 text-[14px] text-ink-soft">
+          Seen in the Lookbook: {inLooks.map((l, i) => <span key={l.slug}>{i > 0 && " · "}<Link href={`/lookbook/${l.slug}`} className="font-medium underline underline-offset-4">{l.title}</Link></span>)}
+        </p>
+      )}
       <div className={look.length ? "" : "mt-16"}><ProductRail title="You may also like" products={related.filter((r) => !lookIds.has(r.id))} /></div>
       <RecentlyViewed currentId={product.id} />
       <Reviews productId={product.id} avg={product.ratingAvg} count={product.ratingCount} data={reviews} canReview={!!user} />

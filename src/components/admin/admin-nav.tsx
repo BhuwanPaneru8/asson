@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/cod", label: "COD remittance", icon: Banknote, perm: "closing" },
   { href: "/admin/notifications", label: "Notifications", icon: MessageCircle, perm: "orders" },
   { href: "/admin/products", label: "Products", icon: Shirt, perm: "catalog.view" },
+  { href: "/admin/lookbook", label: "Lookbook", icon: Sparkles, perm: "catalog.edit" },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, perm: "catalog.view", badgeKey: "stock" },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers" },
   { href: "/admin/counts", label: "Stock counts", icon: ClipboardCheck, perm: "stock.count" },

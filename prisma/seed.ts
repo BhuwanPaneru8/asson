@@ -167,7 +167,7 @@ async function main() {
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
     db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(),
-    db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
+    db.look.deleteMany(), db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
     db.inventoryLog.deleteMany(), db.cartItem.deleteMany(), db.cart.deleteMany(),
     db.wishlistItem.deleteMany(), db.review.deleteMany(), db.productImage.deleteMany(),
     db.variant.deleteMany(), db.store.deleteMany(), db.product.deleteMany(), db.collection.deleteMany(),
@@ -316,6 +316,20 @@ async function main() {
       const picks = [...new Set([pool[k % pool.length], pool[(k + 1) % pool.length], pool[(k + 3) % pool.length]].filter(Boolean).map((x) => x.id))];
       await db.product.update({ where: { id: p.id }, data: { pairsWith: { connect: picks.map((id) => ({ id })) } } });
     }
+  }
+
+  console.log("Lookbook…");
+  // demo looks from seeded products (their own photos as heroes); the owner curates real ones in Admin → Lookbook
+  const LOOKBOOK: { title: string; subtitle: string; story: string; cats: string[] }[] = [
+    { title: "Weekend in Pokhara", subtitle: "Soft cotton, broken-in denim and a light layer for the lakeside breeze", story: "Easy pieces for a slow Saturday: a tee you can live in, jeans that only get better, and a jacket for when the evening turns cool by Phewa.", cats: ["men-t-shirts", "men-jeans", "men-jackets"] },
+    { title: "Monday, sorted", subtitle: "A crisp shirt, sharp trousers and a blazer that works with both", story: "The office uniform, done properly. Iron the shirt once, roll the sleeves after lunch, keep the blazer on the chair for the meeting that runs late.", cats: ["men-shirts", "men-trousers", "men-blazers"] },
+    { title: "City errands", subtitle: "Relaxed denim, a soft top and a jacket with pockets that matter", story: "From Jhamsikhel coffee to New Road shopping: comfortable enough to walk all day, put-together enough for lunch.", cats: ["women-tops", "women-jeans", "women-jackets"] },
+    { title: "Winter in the valley", subtitle: "Warm knits over a swishy skirt", story: "Kathmandu mornings ask for wool. Layer a knit over a skirt with boots and you are ready from the first cup of tea to the last.", cats: ["women-knitwear", "women-skirts"] },
+  ];
+  for (const [i, l] of LOOKBOOK.entries()) {
+    const picks = l.cats.map((c) => productIds.find((p) => p.cat === c)).filter((p): p is (typeof productIds)[number] => !!p);
+    if (picks.length < 2) continue;
+    await db.look.create({ data: { title: l.title, slug: slugify(l.title), subtitle: l.subtitle, story: l.story, published: true, position: i, items: { create: picks.map((p, n) => ({ productId: p.id, position: n })) } } });
   }
 
   console.log("Delivery rates…");

@@ -30,7 +30,7 @@ export function HeaderActions() {
   );
 }
 
-export function MobileNavButton({ nav, collections, hasSale = true }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean }) {
+export function MobileNavButton({ nav, collections, hasSale = true, hasLooks = false }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean; hasLooks?: boolean }) {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<string | null>(null);
   const { user } = useShop();
@@ -51,6 +51,7 @@ export function MobileNavButton({ nav, collections, hasSale = true }: { nav: Nav
               </button>
             ))}
             <Link onClick={close} href="/shop?sort=new" className="border-b border-line px-5 py-4 text-[17px] font-medium">New In</Link>
+            {hasLooks && <Link onClick={close} href="/lookbook" className="border-b border-line px-5 py-4 text-[17px] font-medium">Lookbook</Link>}
             {hasSale && <Link onClick={close} href="/shop?sale=1" className="border-b border-line px-5 py-4 text-[17px] font-medium text-accent">Sale</Link>}
             <div className="px-5 py-6">
               <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Collections</p>
