@@ -997,3 +997,15 @@ model ErrorEvent {
 
   @@index([resolvedAt, lastSeen])
 }
+
+/// Storefront searches, one row per Nepal day and normalised term (no per-visitor data).
+model SearchStat {
+  day         String // YYYY-MM-DD in Asia/Kathmandu
+  term        String
+  searches    Int    @default(0)
+  zeroResults Int    @default(0)
+  lastResults Int    @default(0)
+
+  @@id([day, term])
+  @@index([term])
+}

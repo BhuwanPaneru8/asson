@@ -15,6 +15,7 @@ import { fieldErrors } from "@/lib/validators";
 import { landedUnitCost, weightedAverageCost } from "@/lib/costing";
 import { lookupVariants, type VariantHit } from "@/lib/pos";
 import { activeLocation, moveStock } from "@/lib/stock";
+import { reorderPlan } from "@/lib/insights";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -212,27 +213,11 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
 
 export type ReorderSuggestion = { variantId: string; sku: string; name: string; color: string; size: string; stock: number; sold30: number; suggested: number; cost: number | null; supplierId: string | null; supplierName: string | null };
 
-/** Low-stock variants with recent demand → how many to order to cover ~45 days. */
+/** What to reorder, by sales speed (same rule as Admin → Insights): runs out within lead time + 2 weeks. */
 export async function getReorderSuggestions(): Promise<ReorderSuggestion[]> {
   await requirePermission("purchasing");
-  const since = new Date(Date.now() - 30 * 86_400_000);
-  const low = await db.variant.findMany({
-    where: { product: { status: "ACTIVE" }, stock: { lte: 5 } },
-    include: { product: { select: { name: true } }, purchaseItems: { orderBy: { purchaseOrder: { createdAt: "desc" } }, take: 1, include: { purchaseOrder: { select: { supplierId: true, supplier: { select: { name: true } } } } } } },
-    take: 300,
-  });
-  const sold = await db.orderItem.groupBy({ by: ["variantId"], where: { variantId: { in: low.map((v) => v.id) }, order: { createdAt: { gte: since }, status: { notIn: ["CANCELLED"] } } }, _sum: { quantity: true } });
-  // units already on open POs shouldn't be ordered twice
-  const onOrder = await db.purchaseOrderItem.findMany({ where: { variantId: { in: low.map((v) => v.id) }, purchaseOrder: { status: { in: ["DRAFT", "ORDERED", "PARTIALLY_RECEIVED"] } } }, select: { variantId: true, quantityOrdered: true, quantityReceived: true, quantityDamaged: true } });
-  return low
-    .map((v) => {
-      const sold30 = sold.find((s) => s.variantId === v.id)?._sum.quantity ?? 0;
-      const incoming = onOrder.filter((o) => o.variantId === v.id).reduce((s, o) => s + o.quantityOrdered - o.quantityReceived - o.quantityDamaged, 0);
-      const target = Math.ceil((sold30 / 30) * 45) + v.lowStockThreshold;
-      const last = v.purchaseItems[0]?.purchaseOrder;
-      return { variantId: v.id, sku: v.sku, name: v.product.name, color: v.color, size: v.size, stock: v.stock, sold30, suggested: Math.max(0, target - v.stock - incoming), cost: v.costPrice, supplierId: last?.supplierId ?? null, supplierName: last?.supplier.name ?? null };
-    })
-    .filter((s) => s.suggested > 0)
-    .sort((a, b) => b.sold30 - a.sold30)
-    .slice(0, 60);
+  return (await reorderPlan()).slice(0, 60).map((r) => ({
+    variantId: r.variantId, sku: r.sku, name: r.name, color: r.color, size: r.size, stock: r.stock, sold30: r.sold30,
+    suggested: r.suggested, cost: r.cost, supplierId: r.supplierId, supplierName: r.supplierName,
+  }));
 }

@@ -20,7 +20,7 @@ export function NewPurchaseOrder({ suppliers, suggestions }: { suppliers: { id: 
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} aria-label="Supplier" className="h-10 w-full rounded-md border border-line bg-white px-2 text-[14px]">{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         )}
         <div>
-          <p className="mb-1.5 text-[13px] font-medium">Reorder suggestions <span className="font-normal text-muted">— low stock with recent sales, sized for ~45 days</span></p>
+          <p className="mb-1.5 text-[13px] font-medium">Reorder suggestions <span className="font-normal text-muted">— running out within your lead time by sales speed, sized for lead time + 45 days</span></p>
           <div className="max-h-[420px] divide-y divide-line overflow-y-auto rounded-md border border-line">
             {suggestions.length === 0 && <p className="p-4 text-[13px] text-muted">Nothing needs reordering right now.</p>}
             {suggestions.map((s) => (

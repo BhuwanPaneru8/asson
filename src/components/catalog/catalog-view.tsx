@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { isPlainSearch, recordSearch } from "@/lib/search-stats";
 import { ChevronRight, SearchX } from "lucide-react";
 import { getFacets, listProducts, SORTS, type ProductFilters, type CategoryNode } from "@/lib/catalog";
 import { ProductGrid } from "@/components/product/product-card";
@@ -23,6 +25,8 @@ export async function CatalogView({
   basePath: string;
 }) {
   const [result, facets] = await Promise.all([listProducts(filters), getFacets(filters)]);
+  // what shoppers look for (and don't find) — written after the response, never slows the page
+  if (isPlainSearch(filters)) after(() => recordSearch(filters.q!, result.total));
   const sorts = filters.q ? [{ id: "relevance", label: "Most relevant" }, ...SORTS] : [...SORTS];
 
   return (
