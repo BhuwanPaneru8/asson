@@ -7,6 +7,7 @@ Server: Oracle Always Free, Ubuntu 24.04, Hyderabad. Current host: `asson-micro`
 | `server-setup.sh` | One-time, re-runnable server setup: swap, updates, Node 24, PostgreSQL (localhost), user `asson`, `/srv/asson/<env>`, `/etc/asson/<env>.env` (secrets generated on the server), `asson@<env>` systemd unit, cron, nightly backups, cloudflared. |
 | `tunnel-setup.sh` | Creates the `asson` tunnel, DNS records and ingress after `cloudflared tunnel login`. |
 | `build-bundle.sh` | Builds a standalone bundle for one environment (used by CI). |
+| `owner-login.sh` | From the Mac: `deploy/owner-login.sh <staging\|production>` opens a DB tunnel and runs `scripts/create-owner.ts` (hidden password prompt). Run it in a real Terminal tab, not a non-interactive shell. |
 | `release.sh` | Runs on the server: migrate → switch `current` → restart → health check → roll back on failure. |
 
 ## Layout on the server
