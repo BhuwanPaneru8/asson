@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { audit, diff } from "@/lib/audit";
 import { fieldErrors } from "@/lib/validators";
+import { DISTRICTS } from "@/lib/config";
 import { dispatchNotifications } from "@/lib/notifications";
 import { lookupVariants } from "@/lib/pos";
 import { StockError, stockByLocation } from "@/lib/stock";
@@ -29,6 +30,8 @@ const locationSchema = z.object({
   hours: z.string().trim().max(80).optional().or(z.literal("")),
   priority: z.coerce.number().int().min(0).max(999),
   pickup: z.boolean(),
+  district: z.string().refine((d) => !d || DISTRICTS.includes(d), "Choose a district").optional().or(z.literal("")),
+  shipsOnline: z.boolean().default(true),
   active: z.boolean(),
 });
 export type LocationInput = z.input<typeof locationSchema>;
@@ -37,7 +40,7 @@ export async function saveLocation(input: LocationInput, id?: string): Promise<R
   const me = await requirePermission("locations");
   const p = locationSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "Please fix the highlighted fields.", fieldErrors: fieldErrors(p.error) };
-  const d = { ...p.data, phone: p.data.phone || null, hours: p.data.hours || null, pickup: p.data.kind === "SHOP" && p.data.pickup };
+  const d = { ...p.data, phone: p.data.phone || null, hours: p.data.hours || null, district: p.data.district || null, pickup: p.data.kind === "SHOP" && p.data.pickup };
   const clash = await db.store.findFirst({ where: { code: d.code, ...(id ? { NOT: { id } } : {}) }, select: { id: true } });
   if (clash) return { ok: false, fieldErrors: { code: "Another location uses this code" }, error: "Please fix the highlighted fields." };
 
@@ -61,11 +64,11 @@ export async function saveLocation(input: LocationInput, id?: string): Promise<R
   }
 
   await db.$transaction(async (tx) => {
-    const before = id ? await tx.store.findUniqueOrThrow({ where: { id }, select: { code: true, name: true, kind: true, address: true, phone: true, hours: true, priority: true, pickup: true, active: true } }) : null;
+    const before = id ? await tx.store.findUniqueOrThrow({ where: { id }, select: { code: true, name: true, kind: true, address: true, district: true, phone: true, hours: true, priority: true, pickup: true, shipsOnline: true, active: true } }) : null;
     const s = id ? await tx.store.update({ where: { id }, data: d }) : await tx.store.create({ data: d });
     if (!before) await audit(tx, me, { action: "location.create", entity: ["Store", s.id], summary: `Added ${d.kind === "SHOP" ? "shop" : "warehouse"} ${d.name} (${d.code})` });
     else {
-      const { changes, text } = diff(before, d, ["code", "name", "kind", "address", "phone", "hours", "priority", "pickup", "active"]);
+      const { changes, text } = diff(before, d, ["code", "name", "kind", "address", "district", "phone", "hours", "priority", "pickup", "shipsOnline", "active"]);
       if (Object.keys(changes).length) await audit(tx, me, { action: "location.update", entity: ["Store", s.id], summary: `${d.name}: ${text}`, changes });
     }
   });

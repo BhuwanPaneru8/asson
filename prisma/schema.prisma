@@ -491,6 +491,10 @@ model Store {
   phone         String?
   /// online orders are filled from the lowest number first (ties: most lines in stock)
   priority      Int               @default(100)
+  /// one of the 77 districts (province follows): online orders are filled from the nearest location first
+  district      String?
+  /// sends online (courier) orders; off = in-store sales and pickup only
+  shipsOnline   Boolean           @default(true)
   /// click-and-collect point (shops only)
   pickup        Boolean           @default(false)
   /// opening hours shown to pickup customers, e.g. "10am – 7pm, Sun–Fri"
