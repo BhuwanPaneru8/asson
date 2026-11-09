@@ -7,12 +7,19 @@ import { onlinePaymentsEnabled } from "@/lib/payments";
 import { getDeliveryRates } from "@/lib/delivery";
 import { store } from "@/lib/config";
 import { CheckoutForm } from "@/components/cart/checkout-form";
+import { stockByLocation } from "@/lib/stock";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
 export default async function CheckoutPage() {
   const [cart, user, rates] = await Promise.all([getCart(), getCurrentUser(), getDeliveryRates()]);
   if (cart.lines.length === 0) redirect("/cart");
+  // click-and-collect points, and whether this whole bag is already on that shop's shelf
+  const [shops, here] = await Promise.all([
+    db.store.findMany({ where: { active: true, pickup: true, kind: "SHOP" }, select: { id: true, name: true, address: true, hours: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] }),
+    stockByLocation(cart.lines.map((l) => l.variantId)),
+  ]);
+  const pickupPoints = shops.map((s) => ({ ...s, readyNow: cart.lines.every((l) => (here.get(l.variantId)?.get(s.id) ?? 0) >= l.quantity) }));
   const addresses = user ? await db.address.findMany({ where: { userId: user.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] }) : [];
   return (
     <CheckoutForm
@@ -21,6 +28,7 @@ export default async function CheckoutPage() {
       addresses={addresses.map((a) => ({ id: a.id, fullName: a.fullName, phone: a.phone, line1: a.line1, line2: a.line2, city: a.city, district: a.district, state: a.state, postalCode: a.postalCode, isDefault: a.isDefault }))}
       onlineEnabled={store.onlinePaymentsLive && onlinePaymentsEnabled()}
       rates={rates}
+      pickupPoints={pickupPoints}
     />
   );
 }

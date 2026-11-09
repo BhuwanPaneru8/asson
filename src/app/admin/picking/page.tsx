@@ -58,6 +58,7 @@ export default async function PickingPage({ searchParams }: { searchParams: Prom
                   <div className="min-w-0 text-[13.5px]">
                     <Link href={`/admin/orders/${o.id}`} className="font-medium underline">{formatOrderNumber(o.number)}</Link>
                     <span className="ml-2 text-[12px] text-muted">{formatDateTime(o.createdAt)}{o.district ? ` · ${o.district}` : ""}{o.shippingMethod === "express" ? " · EXPRESS" : ""}</span>
+                    {o.pickup && <p className={cn("mt-0.5 text-[12.5px] font-medium", o.pickup.id === here.id ? "text-success" : "text-warn")}>{o.pickup.id === here.id ? "Click-and-collect here: keep at the counter" : `Click-and-collect: send to ${o.pickup.name}`}</p>}
                     <ul className="mt-1 text-[13px]">{o.lines.map((l, i) => <li key={i}>{l.quantity} × {l.name} · {l.color} {l.size} <span className="font-mono text-[11.5px] text-muted">{l.sku}</span></li>)}</ul>
                   </div>
                   <PickButton orderId={o.id} storeId={here.id} />

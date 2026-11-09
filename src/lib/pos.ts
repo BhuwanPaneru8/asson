@@ -68,7 +68,7 @@ export async function buildDaySummary(storeId: string, date: string) {
   const { start, end } = dayBounds(date);
   const storeSales = { channel: "STORE" as const, shift: { storeId }, createdAt: { gte: start, lt: end } };
 
-  const [sales, units, tenders, discounted, shifts, online, cancelled, adjustments, staff, returns, soldItems] = await Promise.all([
+  const [sales, units, tenders, discounted, shifts, online, cancelled, adjustments, staff, returns, soldItems, pickups] = await Promise.all([
     db.order.aggregate({ where: storeSales, _count: { _all: true }, _sum: { subtotal: true, discount: true, total: true } }),
     db.orderItem.aggregate({ where: { order: storeSales }, _sum: { quantity: true } }),
     db.tender.groupBy({ by: ["method"], where: { order: storeSales }, _sum: { amount: true }, _count: { _all: true } }),
@@ -89,6 +89,8 @@ export async function buildDaySummary(storeId: string, date: string) {
     db.user.findMany({ where: { role: { not: "CUSTOMER" } }, select: { id: true, name: true } }),
     db.return.findMany({ where: { createdAt: { gte: start, lt: end } }, select: { id: true, number: true, refundAmount: true, refundMethod: true, reason: true, processedById: true, approvedById: true, voucherCode: true, items: { select: { quantity: true, condition: true } } }, orderBy: { createdAt: "asc" } }),
     db.orderItem.findMany({ where: { order: storeSales }, select: { unitPrice: true, unitCost: true, quantity: true, order: { select: { subtotal: true, discount: true } } } }),
+    // click-and-collect orders paid at this shop's counter (online orders, so not in store sales)
+    db.tender.findMany({ where: { createdAt: { gte: start, lt: end }, order: { channel: "ONLINE", shift: { storeId } } }, select: { method: true, amount: true } }),
   ]);
 
   const name = (id: string | null | undefined) => staff.find((s) => s.id === id)?.name ?? (id ? "Unknown" : "—");
@@ -144,6 +146,7 @@ export async function buildDaySummary(storeId: string, date: string) {
     cash: {
       floats: shiftRows.reduce((s, r) => s + r.openingFloat, 0),
       sales: tenders.find((t) => t.method === "CASH")?._sum.amount ?? 0,
+      pickups: pickups.filter((t) => t.method === "CASH").reduce((s, t) => s + t.amount, 0),
       refunds: returns.filter((r) => r.refundMethod === "CASH").reduce((s, r) => s + r.refundAmount, 0),
       expected: shiftRows.reduce((s, r) => s + r.expectedCash, 0),
       counted: shiftRows.every((r) => r.countedCash != null) ? shiftRows.reduce((s, r) => s + (r.countedCash ?? 0), 0) : null,
@@ -152,6 +155,7 @@ export async function buildDaySummary(storeId: string, date: string) {
     returns: returns.map((r) => ({ id: r.id, number: r.number, amount: r.refundAmount, method: r.refundMethod, reason: r.reason, voucher: r.voucherCode, by: name(r.processedById), approver: name(r.approvedById), units: r.items.reduce((s, i) => s + i.quantity, 0) })),
     refunds: { total: returns.reduce((s, r) => s + r.refundAmount, 0), cash: returns.filter((r) => r.refundMethod === "CASH").reduce((s, r) => s + r.refundAmount, 0), credit: returns.filter((r) => r.refundMethod === "STORE_CREDIT").reduce((s, r) => s + r.refundAmount, 0), damagedUnits },
     profit: { revenue: storeRevenue, cogs: storeCogs, gross: storeRevenue - storeCogs, uncosted: soldItems.filter((i) => i.unitCost == null).reduce((s, i) => s + i.quantity, 0) },
+    pickups: { count: pickups.length, total: pickups.reduce((s, t) => s + t.amount, 0) },
     alerts,
     allShiftsClosed: shiftRows.every((r) => r.status === "CLOSED"),
   };

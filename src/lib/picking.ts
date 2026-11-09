@@ -12,7 +12,7 @@ export async function getPickList(storeId: string) {
     where: { storeId, pickedAt: null, order: { status: "CONFIRMED" } },
     select: {
       id: true, quantity: true,
-      order: { select: { id: true, number: true, createdAt: true, shippingMethod: true, shippingAddress: true } },
+      order: { select: { id: true, number: true, createdAt: true, shippingMethod: true, shippingAddress: true, pickupStore: { select: { id: true, name: true } } } },
       orderItem: { select: { name: true, sku: true, color: true, size: true, image: true } },
     },
     orderBy: [{ order: { createdAt: "asc" } }],
@@ -27,10 +27,10 @@ export async function getPickList(storeId: string) {
     if (!cur.orders.includes(r.order.number)) cur.orders.push(r.order.number);
     bySku.set(k, cur);
   }
-  const byOrder = new Map<string, { id: string; number: number; createdAt: Date; shippingMethod: string; district: string | null; lines: { sku: string; name: string; color: string; size: string; quantity: number }[] }>();
+  const byOrder = new Map<string, { id: string; number: number; createdAt: Date; shippingMethod: string; district: string | null; pickup: { id: string; name: string } | null; lines: { sku: string; name: string; color: string; size: string; quantity: number }[] }>();
   for (const r of rows) {
     const addr = r.order.shippingAddress as { district?: string } | null;
-    const cur = byOrder.get(r.order.id) ?? { id: r.order.id, number: r.order.number, createdAt: r.order.createdAt, shippingMethod: r.order.shippingMethod, district: addr?.district ?? null, lines: [] };
+    const cur = byOrder.get(r.order.id) ?? { id: r.order.id, number: r.order.number, createdAt: r.order.createdAt, shippingMethod: r.order.shippingMethod, district: addr?.district ?? null, pickup: r.order.pickupStore, lines: [] };
     cur.lines.push({ sku: r.orderItem.sku, name: r.orderItem.name, color: r.orderItem.color, size: r.orderItem.size, quantity: r.quantity });
     byOrder.set(r.order.id, cur);
   }

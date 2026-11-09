@@ -174,6 +174,7 @@ erDiagram
 
 | `Store` / `StoreStock` | Locations (shops with tills, warehouses) and units per location. `Variant.stock` = Σ `StoreStock.quantity`, maintained by trigger `store_stock_sync`; `variant_stock_guard` rejects direct writes; `quantity >= 0` check. All changes go through `lib/stock.ts` (conditional decrement + `InventoryLog` row with `storeId`) |
 | `OrderAllocation` | Where each sold unit came from (location, quantity, picked at/by). Online checkout ranks locations: preferred (pickup shop) → the one that can fill the most lines → priority, splitting a line when needed. Till sales are allocated and picked at the till's shop. Cancels/returns restock to the same locations |
+| `Order.pickupStoreId` | Click-and-collect shop. Same status column, pickup meaning (PACKED = ready at shop, DELIVERED = collected at the till with a `Tender` on the cashier's shift); see `PICKUP_TRANSITIONS` |
 | `StockTransfer` / `StockTransferItem` | DRAFT → SENT (TRANSFER_OUT at source) → RECEIVED (TRANSFER_IN of counted units; TRANSFER_LOSS row for any shortfall, note required) or CANCELLED (a recall puts sent units back). Status moves are conditional updates |
 
 **Planned tables:** `SupplierBill` / `SupplierPayment`, `StockCount`, `Shipment` (NCM).

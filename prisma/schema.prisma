@@ -439,6 +439,9 @@ model Order {
   /// courier has paid us the COD collected for this order
   codRemittanceId      String?
   codRemittance        CodRemittance?   @relation(fields: [codRemittanceId], references: [id])
+  /// click-and-collect: the shop the customer collects from (null = delivered by courier)
+  pickupStoreId        String?
+  pickupStore          Store?           @relation("PickupOrders", fields: [pickupStoreId], references: [id])
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -457,6 +460,7 @@ model Order {
   @@index([paymentStatus, paymentDueAt])
   @@index([channel, createdAt])
   @@index([shiftId])
+  @@index([pickupStoreId, status])
 }
 
 /// A physical shop. One today (flagship); more later.
@@ -485,6 +489,7 @@ model Store {
   receipts      GoodsReceipt[]
   transfersOut  StockTransfer[]   @relation("TransferFrom")
   transfersIn   StockTransfer[]   @relation("TransferTo")
+  pickupOrders  Order[]           @relation("PickupOrders")
 
   @@index([active, priority])
 }

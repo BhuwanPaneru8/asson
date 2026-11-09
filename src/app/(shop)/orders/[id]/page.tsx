@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Package, Truck } from "lucide-react";
+import { CheckCircle2, Package, Store, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewOrder } from "@/lib/order-access";
-import { CUSTOMER_CANCELLABLE, STATUS_LABEL } from "@/lib/orders";
+import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
+import { statusLabel } from "@/lib/order-status";
 import { store } from "@/lib/config";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
 import { OrderProgress } from "@/components/account/order-timeline";
@@ -16,7 +17,7 @@ import { buttonClass } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Order details", robots: { index: false } };
 
-type Addr = { fullName: string; phone: string; line1: string; line2?: string | null; city: string; district?: string; state: string; postalCode?: string | null; zone?: string; etaMaxDays?: number };
+type Addr = { pickup?: boolean; store?: string; storeAddress?: string; hours?: string | null; storePhone?: string | null; fullName: string; phone: string; line1: string; line2?: string | null; city: string; district?: string; state: string; postalCode?: string | null; zone?: string; etaMaxDays?: number };
 
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ placed?: string }> }) {
   const [{ id }, { placed }, user] = await Promise.all([params, searchParams, getCurrentUser()]);
@@ -25,6 +26,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   if (!order || !canViewOrder(order, user)) notFound();
 
   const a = order.shippingAddress as Addr;
+  const pickup = !!order.pickupStoreId;
   const deliveredAt = order.events.find((e) => e.status === "DELIVERED")?.createdAt;
   const canReturn = order.status === "DELIVERED" && !!deliveredAt && now() - deliveredAt.getTime() < store.returnWindowDays * 86400000;
   const etaDays = a?.etaMaxDays ?? (order.shippingMethod === "express" ? 1 : a?.zone === "VALLEY" ? 2 : a?.zone === "REMOTE" ? 10 : 5);
@@ -47,14 +49,20 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <p className="mt-1 text-[14px] text-muted">Placed on {formatDate(order.createdAt)} · {order.items.reduce((s, i) => s + i.quantity, 0)} items</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "success" : "neutral"}>{STATUS_LABEL[order.status]}</Badge>
-          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? "Cash on delivery" : "Prepaid"} · {order.paymentStatus.toLowerCase()}</Badge>
+          <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "success" : "neutral"}>{statusLabel(order.status, pickup)}</Badge>
+          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? (pickup ? "Pay at the shop" : "Cash on delivery") : "Prepaid"} · {order.paymentStatus.toLowerCase()}</Badge>
         </div>
       </div>
 
       <div className="mt-8 border border-line bg-white p-5 md:p-8">
-        <OrderProgress status={order.status} events={order.events} />
-        {!["DELIVERED", "CANCELLED", "RETURNED", "RETURN_REQUESTED"].includes(order.status) && (
+        <OrderProgress status={order.status} events={order.events} pickup={pickup} />
+        {pickup && order.status === "PACKED" && (
+          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>Ready at <b>{a.store}</b>. Show your order number at the counter{order.paymentStatus !== "PAID" ? ` and pay ${formatPrice(order.total)}` : ""}.</span></p>
+        )}
+        {pickup && ["PENDING", "CONFIRMED"].includes(order.status) && (
+          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>We&apos;ll text you when it&apos;s ready to collect at <b>{a.store}</b>.</span></p>
+        )}
+        {!pickup && !["DELIVERED", "CANCELLED", "RETURNED", "RETURN_REQUESTED"].includes(order.status) && (
           <p className="mt-6 flex items-center gap-2 text-[14px]"><Truck className="h-4 w-4" /> Estimated delivery by <b>{formatDate(eta)}</b></p>
         )}
         {order.trackingNumber && <p className="mt-2 flex items-center gap-2 text-[14px] text-muted"><Package className="h-4 w-4" /> {order.carrier} · AWB {order.trackingNumber}</p>}
@@ -80,8 +88,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </div>
         <div className="space-y-6 md:col-span-5">
           <div className="border border-line bg-white p-5">
-            <h3 className="mb-2 text-[14px] font-semibold">Delivery address</h3>
-            {a && <p className="text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
+            <h3 className="mb-2 text-[14px] font-semibold">{pickup ? "Pickup at" : "Delivery address"}</h3>
+            {pickup && <p className="text-[14px] leading-relaxed text-ink-soft"><b className="text-ink">{a.store}</b><br />{a.storeAddress}{a.hours && <><br />{a.hours}</>}{a.storePhone && <><br />{a.storePhone}</>}<br /><span className="text-muted">Collecting: {a.fullName}</span></p>}
+            {!pickup && a && <p className="text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
           </div>
           <div className="border border-line bg-white p-5">
             <h3 className="mb-3 text-[14px] font-semibold">Payment summary</h3>
@@ -89,7 +98,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatPrice(order.subtotal)}</dd></div>
               {order.discount > 0 && <div className="flex justify-between text-success"><dt>Discount {order.couponCode && `(${order.couponCode})`}</dt><dd>−{formatPrice(order.discount)}</dd></div>}
               {order.pointsDiscount > 0 && <div className="flex justify-between text-success"><dt>Asson points ({order.pointsRedeemed})</dt><dd>−{formatPrice(order.pointsDiscount)}</dd></div>}
-              <div className="flex justify-between"><dt>Delivery</dt><dd>{order.shippingFee ? formatPrice(order.shippingFee) : "Free"}</dd></div>
+              <div className="flex justify-between"><dt>{pickup ? "Pickup" : "Delivery"}</dt><dd>{order.shippingFee ? formatPrice(order.shippingFee) : "Free"}</dd></div>
               <div className="flex justify-between border-t border-line pt-2 text-[15px] font-semibold"><dt>Total</dt><dd>{formatPrice(order.total)}</dd></div>
             </dl>
           </div>

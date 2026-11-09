@@ -16,11 +16,11 @@ import { formatOrderNumber, formatPrice } from "./utils";
  *   merchant account and API keys exist — implement them against the provider's official docs.
  */
 
-export type OrderNotice = "placed" | "confirmed" | "shipped" | "out_for_delivery" | "delivered" | "cancelled" | "return_requested" | "returned" | "refund";
+export type OrderNotice = "placed" | "confirmed" | "ready_for_pickup" | "collected" | "shipped" | "out_for_delivery" | "delivered" | "cancelled" | "return_requested" | "returned" | "refund";
 
 const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-type OrderForMessage = { id: string; number: number; phone: string; total: number; paymentMethod: string; carrier: string | null; trackingNumber: string | null; shippingAddress: unknown };
+type OrderForMessage = { id: string; number: number; phone: string; total: number; paymentMethod: string; paymentStatus?: string; carrier: string | null; trackingNumber: string | null; shippingAddress: unknown };
 
 /** SMS copy: short (aim for one 160-char segment), specific, with the order link. */
 export function renderSms(notice: OrderNotice, o: OrderForMessage, extra: { amount?: number } = {}) {
@@ -31,6 +31,12 @@ export function renderSms(notice: OrderNotice, o: OrderForMessage, extra: { amou
   const cod = o.paymentMethod === "COD" ? ` Please keep ${formatPrice(o.total)} ready.` : "";
   switch (notice) {
     case "placed": return `${hi}thanks for shopping with ${store.name}! Order ${n} (${formatPrice(o.total)}) is placed. We'll call to confirm shortly. ${link}`;
+    case "ready_for_pickup": {
+      const p = o.shippingAddress as { store?: string; storeAddress?: string; hours?: string | null };
+      const due = o.paymentStatus === "PAID" ? "" : ` Pay ${formatPrice(o.total)} at the counter.`;
+      return `${store.name}: order ${n} is ready for pickup at ${p.store}, ${p.storeAddress}${p.hours ? ` (${p.hours})` : ""}.${due} Show this SMS. We hold it ${store.pickup.holdDays} days.`;
+    }
+    case "collected": return `${store.name}: thanks for collecting ${n}! Love it? Leave a review: ${link} Size swap? Bring it back within ${store.returnWindowDays} days.`;
     case "confirmed": return `${store.name}: order ${n} is confirmed and being packed. Track: ${link}`;
     case "shipped": return `${store.name}: order ${n} is on its way${o.carrier ? ` with ${o.carrier}` : ""}${o.trackingNumber ? ` (${o.trackingNumber})` : ""}.${cod} ${link}`;
     case "out_for_delivery": return `${store.name}: order ${n} is out for delivery today.${cod} Rider will call you.`;
@@ -47,11 +53,14 @@ export const NOTICE_FOR_STATUS: Partial<Record<OrderStatus, OrderNotice>> = {
   CANCELLED: "cancelled", RETURN_REQUESTED: "return_requested", RETURNED: "returned",
 };
 
+/** Click-and-collect orders: "packed" means waiting at the shop; "delivered" means handed over. */
+export const PICKUP_NOTICE_FOR_STATUS: Partial<Record<OrderStatus, OrderNotice>> = { PACKED: "ready_for_pickup", DELIVERED: "collected" };
+
 type Tx = Prisma.TransactionClient | PrismaClient;
 
 /** Write the message to the outbox (inside the caller's transaction when given). Store sales are skipped. */
 export async function queueOrderNotice(tx: Tx, orderId: string, notice: OrderNotice, extra: { amount?: number } = {}) {
-  const o = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, phone: true, total: true, paymentMethod: true, carrier: true, trackingNumber: true, shippingAddress: true, channel: true } });
+  const o = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, phone: true, total: true, paymentMethod: true, paymentStatus: true, carrier: true, trackingNumber: true, shippingAddress: true, channel: true } });
   if (!o || (o.channel === "STORE" && notice !== "refund")) return;
   const valid = /^9[678]\d{8}$/.test(o.phone);
   await tx.notification.create({

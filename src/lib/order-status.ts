@@ -26,5 +26,18 @@ export const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   RETURNED: [],
 };
 
+/** Click-and-collect: packed means it's waiting at the shop; handing it over is the "delivery". */
+export const PICKUP_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  ...TRANSITIONS,
+  PACKED: ["DELIVERED", "CANCELLED"],
+  SHIPPED: [],
+  OUT_FOR_DELIVERY: [],
+};
+
+export const PICKUP_LABEL: Partial<Record<OrderStatus, string>> = { PACKED: "Ready for pickup", DELIVERED: "Collected" };
+
+export const transitionsFor = (status: OrderStatus, pickup: boolean) => (pickup ? PICKUP_TRANSITIONS : TRANSITIONS)[status];
+export const statusLabel = (status: OrderStatus, pickup: boolean) => (pickup && PICKUP_LABEL[status]) || STATUS_LABEL[status];
+
 export const CUSTOMER_CANCELLABLE: OrderStatus[] = ["PENDING", "CONFIRMED"];
 

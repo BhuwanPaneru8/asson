@@ -2,7 +2,7 @@ import type { OrderStatus } from "@prisma/client";
 import { Check } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 
-const STEPS: { status: OrderStatus; label: string }[] = [
+const DELIVERY_STEPS: { status: OrderStatus; label: string }[] = [
   { status: "PENDING", label: "Placed" },
   { status: "CONFIRMED", label: "Confirmed" },
   { status: "PACKED", label: "Packed" },
@@ -11,11 +11,19 @@ const STEPS: { status: OrderStatus; label: string }[] = [
   { status: "DELIVERED", label: "Delivered" },
 ];
 
-export function OrderProgress({ status, events }: { status: OrderStatus; events: { status: OrderStatus | null; createdAt: Date | string }[] }) {
+const PICKUP_STEPS: { status: OrderStatus; label: string }[] = [
+  { status: "PENDING", label: "Placed" },
+  { status: "CONFIRMED", label: "Confirmed" },
+  { status: "PACKED", label: "Ready for pickup" },
+  { status: "DELIVERED", label: "Collected" },
+];
+
+export function OrderProgress({ status, events, pickup = false }: { status: OrderStatus; events: { status: OrderStatus | null; createdAt: Date | string }[]; pickup?: boolean }) {
+  const STEPS = pickup ? PICKUP_STEPS : DELIVERY_STEPS;
   if (status === "CANCELLED") return <p className="bg-[#fbe9e7] p-4 text-[14.5px] text-danger">This order was cancelled. Any payment made will be refunded to the original method within 5–7 business days.</p>;
   const idx = ["RETURN_REQUESTED", "RETURNED"].includes(status) ? STEPS.length - 1 : STEPS.findIndex((s) => s.status === status);
   return (
-    <ol className="grid grid-cols-6 gap-1">
+    <ol className={cn("grid gap-1", pickup ? "grid-cols-4" : "grid-cols-6")}>
       {STEPS.map((s, i) => {
         const done = i <= idx;
         const at = events.find((e) => e.status === s.status)?.createdAt;

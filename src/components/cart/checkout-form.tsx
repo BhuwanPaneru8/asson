@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { Lock, Tag, X, Check, Plus, Sparkles } from "lucide-react";
+import { Lock, Tag, X, Check, Plus, Sparkles, Store, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { placeOrder, quoteCheckout, type Quote } from "@/actions/checkout";
 import type { CartView } from "@/lib/cart";
@@ -14,9 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
 import { addressLines, cn, formatPrice } from "@/lib/utils";
 
+type PickupPoint = { id: string; name: string; address: string; hours: string | null; readyNow: boolean };
 type Addr = { id: string; fullName: string; phone: string; line1: string; line2: string | null; city: string; district: string; state: string; postalCode: string | null; isDefault: boolean };
 
-export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { cart: CartView; user: { name: string; email: string; phone: string | null } | null; addresses: Addr[]; onlineEnabled: boolean; rates: RateMap }) {
+export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pickupPoints }: { cart: CartView; user: { name: string; email: string; phone: string | null } | null; addresses: Addr[]; onlineEnabled: boolean; rates: RateMap; pickupPoints: PickupPoint[] }) {
+  const [fulfil, setFulfil] = useState<"delivery" | "pickup">("delivery");
+  const [pickupId, setPickupId] = useState(pickupPoints.find((p) => p.readyNow)?.id ?? pickupPoints[0]?.id ?? "");
+  const [pickupName, setPickupName] = useState(user?.name ?? "");
+  const pickup = fulfil === "pickup";
   const [email, setEmail] = useState(user?.email ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [addressId, setAddressId] = useState<string | "new">(addresses[0]?.id ?? "new");
@@ -39,23 +44,24 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { try { const d = localStorage.getItem("asson_district"); if (d) setAddr((x) => (x.district ? x : { ...x, district: d })); } catch {} }, []);
 
-  const district = addressId === "new" ? addr.district : addresses.find((a) => a.id === addressId)?.district ?? "";
-  const rate = rateFor(rates, district);
+  const district = pickup ? "" : addressId === "new" ? addr.district : addresses.find((a) => a.id === addressId)?.district ?? "";
+  const rate = pickup ? null : rateFor(rates, district);
   const expressOk = !!rate?.expressAvailable;
   const effectiveMethod = method === "express" && !expressOk ? "standard" : method;
 
   useEffect(() => {
     startQuote(async () => {
-      const q = await quoteCheckout({ couponCode: coupon, shippingMethod: effectiveMethod, district, usePoints });
+      const q = await quoteCheckout({ couponCode: coupon, shippingMethod: effectiveMethod, district, usePoints, pickup });
       setQuote(q);
       if (!q.ok && coupon) { toast.error(q.error); setCoupon(undefined); }
     });
-  }, [coupon, effectiveMethod, district, usePoints]);
+  }, [coupon, effectiveMethod, district, usePoints, pickup]);
 
   const totals = quote?.totals;
   const codOverLimit = (totals?.total ?? 0) > store.codMaxOrder;
   const codBlocked = codOverLimit || (rate ? !rate.codAvailable : false);
   const notServiceable = rate ? !rate.serviceable : false;
+  const ready = pickup ? !!pickupId : !!rate; // the total is final
   const itemsAfterDiscount = totals ? totals.subtotal - totals.discount : cart.subtotal;
 
   const submit = (e: React.FormEvent) => {
@@ -64,9 +70,9 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
     startPlacing(async () => {
       const res = await placeOrder({
         email, phone,
-        addressId: addressId !== "new" ? addressId : undefined,
-        address: addressId === "new" ? addr : undefined,
-        saveAddress: !!user && saveAddress,
+        ...(pickup
+          ? { pickupStoreId: pickupId, pickupName }
+          : { addressId: addressId !== "new" ? addressId : undefined, address: addressId === "new" ? addr : undefined, saveAddress: !!user && saveAddress }),
         shippingMethod: effectiveMethod as "standard",
         paymentMethod: payment,
         couponCode: coupon,
@@ -98,13 +104,38 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
             {!user && <p className="mb-4 text-[14px] text-muted">Have an account? <Link href="/login?next=/checkout" className="font-medium text-ink underline underline-offset-4">Sign in</Link> for faster checkout.</p>}
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Email" error={errors.email}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required aria-invalid={!!errors.email} /></Field>
-              <Field label="Mobile number" error={errors.phone} hint="Our rider will call this number on delivery">
+              <Field label="Mobile number" error={errors.phone} hint={pickup ? "We'll text you when it's ready to collect" : "Our rider will call this number on delivery"}>
                 <div className="flex"><span className="flex h-11 items-center border border-r-0 border-line bg-cloud px-3 text-[14px] text-muted">{store.phonePrefix}</span><Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" autoComplete="tel-national" required aria-invalid={!!errors.phone} /></div>
               </Field>
             </div>
           </Step>
 
-          <Step n={2} title="Delivery address">
+          <Step n={2} title={pickupPoints.length ? "Delivery or pickup" : "Delivery address"}>
+            {pickupPoints.length > 0 && (
+              <div className="mb-5 grid grid-cols-2 gap-2" role="radiogroup" aria-label="How you get your order">
+                {([["delivery", "Deliver to me", Truck], ["pickup", "Pick up in store · Free", Store]] as const).map(([id, label, Icon]) => (
+                  <button type="button" role="radio" aria-checked={fulfil === id} key={id} onClick={() => setFulfil(id)} className={cn("flex items-center justify-center gap-2 border p-3 text-[14px] font-medium", fulfil === id ? "border-ink bg-white" : "border-line bg-white/50 hover:border-ink-soft")}>
+                    <Icon className="h-4 w-4" aria-hidden /> {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {pickup ? (
+              <div className="space-y-3">
+                {pickupPoints.map((p) => (
+                  <label key={p.id} className={cn("flex cursor-pointer items-start gap-3 border p-4", pickupId === p.id ? "border-ink bg-white" : "border-line")}>
+                    <input type="radio" name="pickup" checked={pickupId === p.id} onChange={() => setPickupId(p.id)} className="mt-1 h-4 w-4 accent-ink" />
+                    <div className="flex-1 text-[14px]">
+                      <p className="font-medium">{p.name}</p>
+                      <p className="text-ink-soft">{p.address}{p.hours ? ` · ${p.hours}` : ""}</p>
+                      <p className={cn("mt-1 text-[13px]", p.readyNow ? "text-success" : "text-muted")}>{p.readyNow ? store.pickup.readyNow : store.pickup.readyLater}</p>
+                    </div>
+                  </label>
+                ))}
+                <Field label="Name of the person collecting" error={errors.pickupName}><Input value={pickupName} onChange={(e) => setPickupName(e.target.value)} autoComplete="name" aria-invalid={!!errors.pickupName} /></Field>
+                <p className="text-[13px] text-muted">We&apos;ll text you when it&apos;s ready. Show the SMS at the counter; we hold orders for {store.pickup.holdDays} days.</p>
+              </div>
+            ) : (<>
             {addresses.length > 0 && (
               <div className="mb-4 grid gap-3 sm:grid-cols-2">
                 {addresses.map((a) => (
@@ -134,9 +165,10 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
                 {user && <label className="flex items-center gap-2 text-[14px] sm:col-span-2"><input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} className="h-4 w-4 accent-ink" /> Save this address for next time</label>}
               </div>
             )}
+            </>)}
           </Step>
 
-          <Step n={3} title="Delivery method">
+          {!pickup && <Step n={3} title="Delivery method">
             <div className="space-y-2">
               {!rate ? (
                 <p className="border border-dashed border-line p-4 text-[14px] text-muted">Choose your district above — we&apos;ll show the exact delivery fee and time for your location.</p>
@@ -161,9 +193,9 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
                 <p className="text-[13px] text-muted">Add {formatPrice(store.shipping.freeThreshold - itemsAfterDiscount)} more for free standard delivery.</p>
               )}
             </div>
-          </Step>
+          </Step>}
 
-          <Step n={4} title="Payment">
+          <Step n={pickup ? 3 : 4} title="Payment">
             <div className="space-y-2">
               {onlineEnabled && (
                 <label className={cn("flex cursor-pointer items-center gap-3 border p-4", payment === "ONLINE" ? "border-ink bg-white" : "border-line")}>
@@ -173,12 +205,12 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
               )}
               <label className={cn("flex items-center gap-3 border p-4", codBlocked ? "cursor-not-allowed opacity-50" : "cursor-pointer", payment === "COD" ? "border-ink bg-white" : "border-line")}>
                 <input type="radio" disabled={codBlocked} checked={payment === "COD"} onChange={() => setPayment("COD")} className="h-4 w-4 accent-ink" />
-                <div className="flex-1"><p className="text-[14.5px] font-medium">Cash on delivery</p><p className="text-[13px] text-muted">{codOverLimit ? `Available for orders up to ${formatPrice(store.codMaxOrder)}` : codBlocked ? `Not available in ${district} yet` : "Pay in cash or by eSewa/Khalti QR to the rider when your order arrives"}</p></div>
+                <div className="flex-1"><p className="text-[14.5px] font-medium">{pickup ? "Pay at the shop" : "Cash on delivery"}</p><p className="text-[13px] text-muted">{codOverLimit ? `Available for orders up to ${formatPrice(store.codMaxOrder)}` : codBlocked ? `Not available in ${district} yet` : pickup ? "Cash, card or eSewa/Khalti/Fonepay QR when you collect" : "Pay in cash or by eSewa/Khalti QR to the rider when your order arrives"}</p></div>
               </label>
             </div>
             <div className="mt-4">
-              {!showNote ? <button type="button" onClick={() => setShowNote(true)} className="text-[14px] underline underline-offset-4">Add delivery instructions</button>
-                : <Field label="Delivery instructions (optional)"><Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} placeholder="e.g. Call before arriving, leave at the shop downstairs" /></Field>}
+              {!showNote ? <button type="button" onClick={() => setShowNote(true)} className="text-[14px] underline underline-offset-4">{pickup ? "Add a note for the shop" : "Add delivery instructions"}</button>
+                : <Field label={pickup ? "Note for the shop (optional)" : "Delivery instructions (optional)"}><Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} rows={2} placeholder="e.g. Call before arriving, leave at the shop downstairs" /></Field>}
             </div>
           </Step>
         </div>
@@ -231,17 +263,19 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates }: { 
               <div className="flex justify-between"><dt>Subtotal</dt><dd>{totals ? formatPrice(totals.subtotal) : "—"}</dd></div>
               {totals && totals.discount > 0 && <div className="flex justify-between text-success"><dt>Discount</dt><dd>−{formatPrice(totals.discount)}</dd></div>}
               {totals && totals.pointsDiscount > 0 && <div className="flex justify-between text-success"><dt>Points</dt><dd>−{formatPrice(totals.pointsDiscount)}</dd></div>}
-              <div className="flex justify-between"><dt>Delivery{rate && <span className="text-muted"> · {district}</span>}</dt><dd>{!rate ? <span className="text-muted">Choose district</span> : totals ? (totals.shippingFee === 0 ? "Free" : formatPrice(totals.shippingFee)) : "—"}</dd></div>
+              {pickup
+                ? <div className="flex justify-between"><dt>Pickup<span className="text-muted"> · {pickupPoints.find((p) => p.id === pickupId)?.name}</span></dt><dd>Free</dd></div>
+                : <div className="flex justify-between"><dt>Delivery{rate && <span className="text-muted"> · {district}</span>}</dt><dd>{!rate ? <span className="text-muted">Choose district</span> : totals ? (totals.shippingFee === 0 ? "Free" : formatPrice(totals.shippingFee)) : "—"}</dd></div>}
             </dl>
             <div className="mt-4 flex items-baseline justify-between border-t border-line pt-4">
-              <span className="text-[16px] font-semibold">{rate ? "Total" : "Total before delivery"}</span>
+              <span className="text-[16px] font-semibold">{ready ? "Total" : "Total before delivery"}</span>
               <span className="text-[22px] font-semibold">{totals ? formatPrice(totals.total) : "—"}</span>
             </div>
             <p className="text-[12.5px] text-muted">{store.vatLabel}</p>
             {totals && totals.total - totals.shippingFee >= store.loyalty.earnPer && (
-              <p className="mt-1 text-[12.5px] text-muted">{user ? "You'll earn" : "Sign in to earn"} {Math.floor((totals.total - totals.shippingFee) / store.loyalty.earnPer)}+ Asson points on delivery.</p>
+              <p className="mt-1 text-[12.5px] text-muted">{user ? "You'll earn" : "Sign in to earn"} {Math.floor((totals.total - totals.shippingFee) / store.loyalty.earnPer)}+ Asson points on {pickup ? "collection" : "delivery"}.</p>
             )}
-            <Button type="submit" size="lg" className="mt-5 w-full" loading={placing} disabled={!totals || notServiceable || (payment === "COD" && codBlocked)}>
+            <Button type="submit" size="lg" className="mt-5 w-full" loading={placing} disabled={!totals || (pickup ? !pickupId : notServiceable) || (payment === "COD" && codBlocked)}>
               {payment === "COD" ? "Place order" : "Continue to payment"}
             </Button>
             <p className="mt-3 text-center text-[12px] text-muted">By placing your order you agree to our <Link href="/help#terms" className="underline">terms</Link> and <Link href="/help#privacy" className="underline">privacy policy</Link>.</p>
