@@ -177,6 +177,9 @@ erDiagram
 | `Order.pickupStoreId` | Click-and-collect shop. Same status column, pickup meaning (PACKED = ready at shop, DELIVERED = collected at the till with a `Tender` on the cashier's shift); see `PICKUP_TRANSITIONS` |
 | `StockTransfer` / `StockTransferItem` | DRAFT → SENT (TRANSFER_OUT at source) → RECEIVED (TRANSFER_IN of counted units; TRANSFER_LOSS row for any shortfall, note required) or CANCELLED (a recall puts sent units back). Status moves are conditional updates |
 
+| `Job` | Background work queue: type, payload, idempotency `key`, status QUEUED/RUNNING/DONE/DEAD, `runAt`, attempts/maxAttempts, lock, last error, result. Claimed with `FOR UPDATE SKIP LOCKED` by the in-process worker (`instrumentation.ts`) or `/api/cron/jobs` |
+| `ErrorEvent` | Errors grouped by fingerprint (source + where + normalised message) with count, first/last seen, stack, digest; resolve reopens on recurrence. Fed by `onRequestError`, `reportError()`, job failures and `/api/errors` |
+
 **Planned tables:** `SupplierBill` / `SupplierPayment`, `StockCount`, `Shipment` (NCM).
 
 ## 7. Key flows
@@ -333,7 +336,7 @@ Cloudflare (DNS, WAF, CDN)  →  App: Vercel or 2+ Node containers (region: Mumb
 | DB CPU > 60% at peak | Read replica for listings and reports; check `pg_stat_statements` |
 | > 100k variants or richer search needs | Sync products to Meilisearch or Typesense; keep Postgres as truth |
 | POS + multiple stores | Add `Store` and `Register`; stock per location (`VariantStock(storeId, variantId)`) |
-| Heavy background work (SMS, NCM, feeds) | Job queue (e.g. a Postgres-backed queue) with idempotent workers |
+| Heavy background work (SMS, NCM, feeds) | ✅ Postgres job queue in place (`lib/jobs.ts`); add handlers. If it outgrows the app process, run the same `runDueJobs()` in a separate worker with `JOBS_WORKER=off` on the web process |
 | Native app | Expose the same domain logic through route handlers; no business logic in clients |
 
 ## 11. Architecture decision records

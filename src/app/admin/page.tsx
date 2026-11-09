@@ -38,6 +38,11 @@ export default async function Dashboard() {
     db.orderItem.groupBy({ by: ["productId", "name"], where: { order: { ...live, createdAt: { gte: since30 } } }, _sum: { quantity: true }, orderBy: { _sum: { quantity: "desc" } }, take: 5 }),
     db.user.count({ where: { role: "CUSTOMER", createdAt: { gte: since30 } } }),
   ]);
+  // owner-only: something broke recently, or background work gave up
+  const [freshErrors, deadJobs] = can(me.role, "system")
+    ? await Promise.all([db.errorEvent.count({ where: { resolvedAt: null, lastSeen: { gte: new Date(now - DAY) } } }), db.job.count({ where: { status: "DEAD" } })])
+    : [0, 0];
+  const systemAlert = [freshErrors && `${freshErrors} error${freshErrors > 1 ? "s" : ""} in the last 24 h.`, deadJobs && `${deadJobs} background job${deadJobs > 1 ? "s" : ""} failed.`].filter(Boolean).join(" ");
 
   const rev = cur._sum.total ?? 0, prevRev = prev._sum.total ?? 0;
   const aov = cur._count._all ? Math.round(rev / cur._count._all) : 0;
@@ -60,6 +65,11 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Dashboard" description={`${newCustomers} new customers in the last 30 days`} />
+      {systemAlert && (
+        <Link href="/admin/system" className="mb-4 flex items-center gap-2 rounded-md bg-[#fbe9e7] px-4 py-3 text-[14px] text-danger hover:underline">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> {systemAlert} Open System →
+        </Link>
+      )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
           <Card key={k.label} className="p-5">

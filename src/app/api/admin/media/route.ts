@@ -1,3 +1,4 @@
+import { reportError } from "@/lib/errors";
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (r.ok && !r.reused) await audit(db, user, { action: "media.upload", entity: ["MediaAsset"], summary: `Uploaded photo ${typeof name === "string" ? name.slice(0, 80) : ""} (${r.width}×${r.height})`, changes: { url: r.url } });
     return json(r, r.ok ? 200 : 422);
   } catch (e) {
-    console.error("[media] upload failed", e);
+    void reportError("[media] upload failed", e);
     return json({ ok: false, error: "Could not save the photo — try again" }, 500);
   }
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError, reportErrorSoon } from "@/lib/errors";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -200,12 +201,12 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
     }, { timeout: 15_000 });
   } catch (e) {
     if (e instanceof CheckoutError || e instanceof StockError) return { error: e.message };
-    console.error("placeOrder failed", e);
+    void reportError("placeOrder failed", e);
     return { error: "We couldn't place your order. You have not been charged — please try again." };
   }
 
   revalidateTag("products", { expire: 60 });
   revalidatePath("/", "layout"); // header bag count + any cached stock views
-  after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+  after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
   redirect(`/orders/${orderId}?placed=1`);
 }

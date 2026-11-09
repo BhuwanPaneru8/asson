@@ -1,5 +1,6 @@
 "use server";
 
+import { reportErrorSoon } from "@/lib/errors";
 import { audit, diff } from "@/lib/audit";
 import { formatPrice } from "@/lib/utils";
 import { redirect } from "next/navigation";
@@ -199,7 +200,7 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
       return receipt;
     }, { timeout: 30_000 });
     revalidateTag("products", { expire: 0 });
-    after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
+    after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
     refresh();
     return { ok: true, receiptNumber: result.number };
   } catch (e) {

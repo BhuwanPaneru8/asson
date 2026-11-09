@@ -1,5 +1,6 @@
 "use server";
 
+import { reportError } from "@/lib/errors";
 import { refresh, revalidateTag } from "next/cache";
 import { earnForOrder } from "@/lib/loyalty";
 import { z } from "zod";
@@ -218,7 +219,7 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     // a concurrent duplicate submit hit the unique clientRef — return the sale that won
     const dup = await db.order.findUnique({ where: { clientRef: d.clientRef }, select: { id: true, number: true } });
     if (dup) return { ok: true, orderId: dup.id, number: formatOrderNumber(dup.number), change };
-    console.error("createPosSale", e);
+    void reportError("createPosSale", e);
     return { ok: false, error: "The sale didn't go through and no stock was taken. Please try again." };
   }
 }
@@ -295,7 +296,7 @@ export async function collectPickup(input: z.input<typeof collectSchema>): Promi
     });
   } catch (e) {
     if (e instanceof TransitionError) return { ok: false, error: e.message };
-    console.error("collectPickup", e);
+    void reportError("collectPickup", e);
     return { ok: false, error: "Couldn't record the hand-over. Nothing was saved — please try again." };
   }
   refresh();
