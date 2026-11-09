@@ -5,5 +5,5 @@
 # bcrypt hash is stored.
 set -euo pipefail
 ENV_NAME=${1:?usage: deploy/owner-login.sh <staging|production>}
-echo "Creating the owner login for $ENV_NAME…"
+echo "Creating the owner login for ${ENV_NAME}..."
 exec "$(dirname "$0")/with-db.sh" "$ENV_NAME" npx tsx scripts/create-owner.ts
