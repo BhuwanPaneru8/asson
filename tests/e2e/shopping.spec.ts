@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test";
+import { signIn } from "./helpers";
+
+test.describe.configure({ mode: "serial" });
+
+test("search understands typos and colours", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("combobox", { name: "Search products" }).fill("olive hodie");
+  await expect(page.getByRole("link", { name: /Classic Pullover Hoodie/ }).first()).toBeVisible();
+});
+
+let orderNumber = "";
+
+test("guest buys a shirt with COD and the district's delivery fee", async ({ page }) => {
+  await page.goto("/p/oxford-button-down-shirt");
+  await page.getByLabel("Your district").selectOption("Chitwan");
+  await expect(page.getByText(/Rs\. 150 · arrives in 3–5 days/)).toBeVisible();
+  await page.getByRole("button", { name: /Add to bag/ }).first().click();
+  await expect(page.getByText(/Please select a size/)).toBeVisible(); // size is required
+  await page.getByRole("button", { name: /^Size M/ }).click();
+  await page.getByRole("button", { name: /Add to bag/ }).first().click();
+  await expect(page.getByRole("dialog", { name: /Your bag/ })).toBeVisible();
+
+  await page.goto("/checkout");
+  await page.getByLabel("Email", { exact: true }).fill("e2e.shopper@example.com");
+  await page.getByLabel("Mobile number").fill("9841234567");
+  await page.getByLabel("Full name").fill("E2E Shopper");
+  await page.getByLabel("Phone", { exact: true }).fill("9841234567");
+  await expect(page.getByLabel("District")).toHaveValue("Chitwan"); // remembered from the product page
+  await page.getByLabel("City / municipality").fill("Bharatpur");
+  await page.getByLabel("Tole / street, house no.").fill("Narayangadh-3, House 7");
+  await expect(page.getByText("Delivery · Chitwan")).toBeVisible();
+  await expect(page.getByRole("radio", { name: /^eSewa or Khalti/ })).toHaveCount(0); // online payments on hold
+  await page.getByRole("button", { name: "Place order" }).click();
+
+  await expect(page.getByRole("heading", { name: /Thank you/ })).toBeVisible();
+  orderNumber = (await page.locator("b", { hasText: /^AS\d{6}$/ }).first().textContent()) ?? "";
+  expect(orderNumber).toMatch(/^AS\d{6}$/);
+});
+
+test("ops staff confirm the new order", async ({ page }) => {
+  await signIn(page, "owner", "/admin/orders?status=PENDING");
+  await page.getByPlaceholder(/Search order/).fill(orderNumber);
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("link", { name: orderNumber }).click();
+  await page.getByRole("button", { name: "Confirm order" }).click();
+  await expect(page.getByText(/Order updated/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark as packed" })).toBeVisible();
+});

@@ -1,0 +1,18 @@
+"use client";
+
+/**
+ * Offload resizing to the image CDN instead of the Next.js server — this keeps app
+ * servers free for page rendering at high traffic. Unsplash (and imgix-style CDNs like
+ * Cloudinary/ImageKit via similar params) resize at the edge. Other URLs pass through as-is.
+ */
+export default function imageLoader({ src, width, quality }: { src: string; width: number; quality?: number }) {
+  if (src.startsWith("https://images.unsplash.com/")) {
+    const u = new URL(src);
+    u.searchParams.set("w", String(width));
+    u.searchParams.set("q", String(quality ?? 70));
+    u.searchParams.set("auto", "format");
+    u.searchParams.set("fit", "crop");
+    return u.toString();
+  }
+  return src;
+}
