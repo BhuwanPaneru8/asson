@@ -253,7 +253,8 @@ Transitions are defined once in `lib/order-status.ts` and applied by `transition
   - `delivery`: per-district delivery rates (1 h, busted on save in Admin → Delivery rates)
 - Live stock on the product page is always read fresh (`getLiveStock`).
 - Mutations call `refresh()` (Next 16) or `revalidatePath` so the header bag and pages update.
-- Images use a custom loader (`lib/image-loader.ts`), so the CDN resizes them, not our servers.
+- Images use a custom loader (`lib/image-loader.ts`), so our servers never resize photos at request time.
+- **Uploaded photos** (admin product editor): the browser resizes each photo to 480/960/1600 px WebP (JPEG where WebP encoding is unavailable) and posts them to `POST /api/admin/media` (owner only, same-origin). The server verifies format and dimensions from the bytes (`lib/image-probe.ts`; never SVG/HTML), stores them content-addressed and immutable under `MEDIA_DIR/p/<hash>-<w>.<ext>` with a `MediaAsset` row, and serves them from `/media/…` with a one-year immutable cache so Cloudflare serves repeat views. Products store `/media/p/<hash>.webp`; the loader picks the smallest stored width that covers the request; feeds, JSON-LD and OG use `absoluteImageUrl` (1600 px). Storage is local disk plus nightly off-site copy; moving to object storage means re-implementing `lib/media.ts` only.
 
 ### 8.2 Auth and authorisation
 

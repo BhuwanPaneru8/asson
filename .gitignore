@@ -48,3 +48,4 @@ next-env.d.ts
 /.next-bundle/
 *.tgz
 /.next-*/
+/.media/

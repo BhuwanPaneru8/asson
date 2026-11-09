@@ -286,6 +286,21 @@ model ProductImage {
   @@index([productId, position])
 }
 
+/// An uploaded photo. Stored content-addressed (key = hash of the bytes) in several widths, so the same
+/// photo uploaded twice is stored once and its files never change (cached forever at the CDN).
+model MediaAsset {
+  id           String   @id @default(cuid())
+  /// "p/<32 hex>" — files live at <MEDIA_DIR>/<key>-<width>.<ext>
+  key          String   @unique
+  ext          String   // "webp" or "jpg"
+  width        Int      // largest stored width
+  height       Int
+  bytes        Int      // total bytes across all widths
+  originalName String   @default("")
+  uploadedById String?
+  createdAt    DateTime @default(now())
+}
+
 model Variant {
   id                String   @id @default(cuid())
   productId         String

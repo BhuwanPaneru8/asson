@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { requireAdmin, requirePermission } from "@/lib/auth";
 import { fieldErrors } from "@/lib/validators";
 import { slugify } from "@/lib/utils";
+import { isMediaUrl } from "@/lib/media-url";
 
 type R = { ok: boolean; error?: string; id?: string; fieldErrors?: Record<string, string> };
 
@@ -31,7 +32,7 @@ const productSchema = z.object({
   tags: z.array(z.string().trim().toLowerCase().max(40)).max(30),
   featured: z.boolean(),
   collectionIds: z.array(z.string()).max(20),
-  images: z.array(z.object({ url: z.string().url("Image URLs must be valid https links").startsWith("https://"), alt: z.string().max(200).default(""), color: z.string().max(40).nullable().optional() })).max(20),
+  images: z.array(z.object({ url: z.string().trim().refine((u) => isMediaUrl(u) || /^https:\/\/[^\s]+$/.test(u), "Upload a photo or use an https:// image link"), alt: z.string().max(200).default(""), color: z.string().max(40).nullable().optional() })).max(20),
   variants: z.array(z.object({
     id: z.string().optional(),
     sku: z.string().trim().min(1).max(40),

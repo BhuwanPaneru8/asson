@@ -5,6 +5,8 @@
  * servers free for page rendering at high traffic. Unsplash (and imgix-style CDNs like
  * Cloudinary/ImageKit via similar params) resize at the edge. Other URLs pass through as-is.
  */
+import { isMediaUrl, mediaVariantUrl } from "./media-url";
+
 export default function imageLoader({ src, width, quality }: { src: string; width: number; quality?: number }) {
   if (src.startsWith("https://images.unsplash.com/")) {
     const u = new URL(src);
@@ -14,5 +16,7 @@ export default function imageLoader({ src, width, quality }: { src: string; widt
     u.searchParams.set("fit", "crop");
     return u.toString();
   }
+  // our own uploads: pick the smallest pre-resized width that covers the request
+  if (isMediaUrl(src)) return mediaVariantUrl(src, width);
   return src;
 }

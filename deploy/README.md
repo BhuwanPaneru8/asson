@@ -78,7 +78,9 @@ oci os object list -bn asson-backups --prefix asson-micro/asson_production/ --qu
 oci os object get -bn asson-backups --name <name> --file latest.dump
 scp -i ~/.ssh/asson_deploy latest.dump ubuntu@HOST:/tmp/   # then pg_restore as above
 ```
+**Product photos** (uploaded in the admin) live in `/srv/asson/<env>/media` (`MEDIA_DIR` in the env file; the app refuses to start without it). The same nightly job copies each new photo file off-site once, to `<host>/media/<env>/p/…` in the bucket (`/var/backups/asson/.media-offsite-<env>` lists what was copied). Restore: download the `<host>/media/<env>/` prefix (`oci os object bulk-download -bn asson-backups --prefix asson-micro/media/production/ --download-dir restore`) and copy its `p/` folder into `/srv/asson/<env>/media/` (owner `asson`). Moving servers: copy the media folders along with the database dumps.
+
 Restore drill done 9 Nov 2026: the staging dump downloaded from the bucket restored into a scratch DB with identical row counts (57 products, 901 variants, 161 orders, 47 users, 11 migrations).
 
 ## Moving to the bigger Ampere server later
-Create it, run `server-setup.sh` + `tunnel-setup.sh` on it (`cloudflared tunnel login` again or copy `/etc/cloudflared`), restore the latest dumps, update `DEPLOY_HOST`/`DEPLOY_KNOWN_HOSTS`, and run the Deploy workflow. The bundle already contains the arm64 Prisma engine.
+Create it, run `server-setup.sh` + `tunnel-setup.sh` on it (`cloudflared tunnel login` again or copy `/etc/cloudflared`), restore the latest dumps and copy `/srv/asson/*/media`, update `DEPLOY_HOST`/`DEPLOY_KNOWN_HOSTS`, and run the Deploy workflow. The bundle already contains the arm64 Prisma engine.
