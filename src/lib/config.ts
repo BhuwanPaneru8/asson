@@ -56,6 +56,12 @@ export const store = {
     ],
   },
   maxQtyPerItem: 10,
+  /** Planning numbers for reorder and dead-stock insights (Admin → Insights). */
+  insights: {
+    leadTimeDays: 14, // typical days from placing a purchase order to counting it in
+    coverDays: 45, // how long a reorder should last once it arrives (same as the old reorder rule)
+    deadStockDays: 90, // in stock this long with no sale = dead stock
+  },
   /** Click-and-collect at shops marked as pickup points (Admin → Locations). Free; pay at the counter. */
   pickup: {
     holdDays: 7, // ready orders are kept this long before staff may cancel and restock them

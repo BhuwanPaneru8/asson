@@ -165,7 +165,8 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ⬜ Meta pixel and conversions API, TikTok pixel (need the ad accounts)
 - ⬜ Birthday offers, referral codes
 - Nepali language (नेपाली) interface
-- Analytics: funnel, cohort, top search terms and zero-result searches
+- ✅ Top search terms and zero-result searches; reorder by sales speed, dead stock, size/colour sell-through and margin (Admin → Insights)
+- Analytics: funnel, cohort
 
 ## Phase 10: Scale ⬜
 
