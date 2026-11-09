@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/bhuwan/Projects/Ecommerce_Website/src/app/(shop)/p/[slug]/loading.tsx"],"sourcesContent":["import { ProductSkeleton } from \"@/components/ui/skeletons\";\n\nexport default function Loading() {\n  return <ProductSkeleton />;\n}\n"],"names":["Loading"],"mappings":";;;;;AAAA;;;AAEe,SAASA;IACtB,qBAAO,8OAAC,wJAAe;;;;;AACzB"}}]
+}

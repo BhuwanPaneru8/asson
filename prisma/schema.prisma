@@ -762,6 +762,8 @@ model Coupon {
   startsAt    DateTime?
   endsAt      DateTime?
   active      Boolean    @default(true)
+  /// featured in the home-page offer banner (at most one at a time)
+  showOnHome  Boolean    @default(false)
   createdAt   DateTime   @default(now())
 }
 

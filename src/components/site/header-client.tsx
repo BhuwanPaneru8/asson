@@ -30,7 +30,7 @@ export function HeaderActions() {
   );
 }
 
-export function MobileNavButton({ nav, collections }: { nav: NavItem[]; collections: NavCollection[] }) {
+export function MobileNavButton({ nav, collections, hasSale = true }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean }) {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<string | null>(null);
   const { user } = useShop();
@@ -51,7 +51,7 @@ export function MobileNavButton({ nav, collections }: { nav: NavItem[]; collecti
               </button>
             ))}
             <Link onClick={close} href="/shop?sort=new" className="border-b border-line px-5 py-4 text-[17px] font-medium">New In</Link>
-            <Link onClick={close} href="/shop?sale=1" className="border-b border-line px-5 py-4 text-[17px] font-medium text-accent">Sale</Link>
+            {hasSale && <Link onClick={close} href="/shop?sale=1" className="border-b border-line px-5 py-4 text-[17px] font-medium text-accent">Sale</Link>}
             <div className="px-5 py-6">
               <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Collections</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
@@ -72,7 +72,7 @@ export function MobileNavButton({ nav, collections }: { nav: NavItem[]; collecti
               <Link key={c.slug} onClick={close} href={`/c/${c.slug}`} className="border-b border-line px-5 py-4 text-[16px]">{c.name}</Link>
             ))}
             <Link onClick={close} href={`/c/${current.slug}?sort=new`} className="border-b border-line px-5 py-4 text-[16px] text-muted">New arrivals</Link>
-            <Link onClick={close} href={`/c/${current.slug}?sale=1`} className="border-b border-line px-5 py-4 text-[16px] text-accent">Sale</Link>
+            {hasSale && <Link onClick={close} href={`/c/${current.slug}?sale=1`} className="border-b border-line px-5 py-4 text-[16px] text-accent">Sale</Link>}
           </div>
         )}
       </Sheet>

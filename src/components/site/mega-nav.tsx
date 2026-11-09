@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export type NavItem = { name: string; slug: string; image: string | null; children: { name: string; slug: string }[] };
 export type NavCollection = { name: string; slug: string; image: string | null };
 
-export function MegaNav({ nav, collections }: { nav: NavItem[]; collections: NavCollection[] }) {
+export function MegaNav({ nav, collections, hasSale = true }: { nav: NavItem[]; collections: NavCollection[]; hasSale?: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pathname = usePathname();
@@ -32,7 +32,7 @@ export function MegaNav({ nav, collections }: { nav: NavItem[]; collections: Nav
         </div>
       ))}
       <Link href="/shop?sort=new" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>New In</Link>
-      <Link href="/shop?sale=1" className="flex items-center px-3.5 text-[14px] font-medium text-accent hover:opacity-80" onMouseEnter={leave}>Sale</Link>
+      {hasSale && <Link href="/shop?sale=1" className="flex items-center px-3.5 text-[14px] font-medium text-accent hover:opacity-80" onMouseEnter={leave}>Sale</Link>}
 
       {active && (
         <div className="absolute inset-x-0 top-full border-b border-line bg-paper shadow-[0_20px_40px_-20px_rgba(0,0,0,0.15)] animate-fade-in" onMouseEnter={() => clearTimeout(timer.current)} onMouseLeave={leave}>

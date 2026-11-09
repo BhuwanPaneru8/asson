@@ -13,20 +13,27 @@ import { evaluateCoupon } from "@/lib/pricing";
 const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
 export default async function HomePage() {
-  const [tree, collections, best, fresh, sale, welcome] = await Promise.all([
+  const [tree, collections, best, fresh, sale, featuredCoupon] = await Promise.all([
     getCategoryTree(),
     getCollections(),
     getProductRail("best", 8),
     getProductRail("new", 8),
     getProductRail("sale", 8),
-    db.coupon.findUnique({ where: { code: store.welcomeCouponCode } }),
+    db.coupon.findFirst({ where: { showOnHome: true, active: true, isCredit: false }, orderBy: { createdAt: "desc" } }),
   ]);
-  // only advertise the welcome code while a shopper could actually use it
-  const welcomeOffer =
-    welcome && !welcome.isCredit && evaluateCoupon(welcome, welcome.minSubtotal).ok
-      ? welcome.type === "PERCENT"
-        ? `${welcome.value}% off your first order`
-        : `${formatPrice(welcome.value)} off your first order`
+  // the coupon the owner featured (Admin → Coupons → Show on home), only while a shopper could use it
+  const offer =
+    featuredCoupon && evaluateCoupon(featuredCoupon, Math.max(featuredCoupon.minSubtotal, 1)).ok
+      ? {
+          code: featuredCoupon.code,
+          headline:
+            featuredCoupon.description ||
+            (featuredCoupon.type === "PERCENT" ? `${featuredCoupon.value}% off your order` : featuredCoupon.type === "FIXED" ? `${formatPrice(featuredCoupon.value)} off your order` : "Free delivery on your order"),
+          eyebrow: featuredCoupon.endsAt
+            ? `Offer ends ${featuredCoupon.endsAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kathmandu" })}`
+            : "Limited time",
+          minimum: featuredCoupon.minSubtotal > 0 ? ` on orders over ${formatPrice(featuredCoupon.minSubtotal)}` : "",
+        }
       : null;
   const shopCats = tree.flatMap((r) => r.children.slice(0, 4).map((c) => ({ ...c, parent: r.name })));
   const featured = collections.filter((c) => c.featured);
@@ -140,13 +147,13 @@ export default async function HomePage() {
 
       <ProductRail eyebrow="Limited time" title="On sale now" href="/shop?sale=1" products={sale} />
 
-      {welcomeOffer && (
+      {offer && (
         <section className="container-page pt-6">
           <div className="bg-ink px-6 py-14 text-center text-white md:py-20">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-white/60">New here?</p>
-            <h2 className="mx-auto mt-3 max-w-2xl font-display text-4xl md:text-5xl">{welcomeOffer}</h2>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-white/60">{offer.eyebrow}</p>
+            <h2 className="mx-auto mt-3 max-w-2xl font-display text-4xl md:text-5xl">{offer.headline}</h2>
             <p className="mx-auto mt-3 max-w-md text-white/75">
-              Use code <span className="font-semibold text-white">{store.welcomeCouponCode}</span> at checkout. Easy {store.returnWindowDays}-day returns.
+              Use code <span className="font-semibold text-white">{offer.code}</span> at checkout{offer.minimum}. Easy {store.returnWindowDays}-day returns.
             </p>
             <Link href="/shop" className={buttonClass("secondary", "lg", "mt-8 border-white")}>Start shopping</Link>
           </div>

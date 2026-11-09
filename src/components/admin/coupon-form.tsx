@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { createCoupon, toggleCoupon } from "@/actions/admin/catalog";
+import { createCoupon, setCouponOnHome, toggleCoupon } from "@/actions/admin/catalog";
 
 const input = "h-10 w-full rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink";
 const lbl = "mb-1 block text-[13px] font-medium text-ink-soft";
@@ -40,4 +40,18 @@ export function CouponForm() {
 export function CouponToggle({ id, active }: { id: string; active: boolean }) {
   const [pending, start] = useTransition();
   return <button disabled={pending} onClick={() => start(async () => { await toggleCoupon(id); })} className="text-[12.5px] underline">{active ? "Pause" : "Activate"}</button>;
+}
+
+export function CouponHomeToggle({ id, on }: { id: string; on: boolean }) {
+  const [pending, start] = useTransition();
+  return (
+    <button
+      disabled={pending}
+      onClick={() => start(async () => { const r = await setCouponOnHome(id, !on); if (r.ok) toast.success(on ? "Removed from the home page" : "Now shown on the home page"); })}
+      className="text-[12.5px] underline"
+      title="Show this offer in the banner on the home page"
+    >
+      {on ? "Remove from home" : "Show on home"}
+    </button>
+  );
 }
