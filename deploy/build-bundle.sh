@@ -13,7 +13,7 @@ B=$(mktemp -d)
 cp -R "$DIST/standalone/." "$B/"
 # standalone keeps the distDir name; server.js reads it from its embedded config
 mkdir -p "$B/$DIST" && cp -R "$DIST/static" "$B/$DIST/static"
-cp -R public "$B/public"
+[ -d public ] && cp -R public "$B/public"
 mkdir -p "$B/prisma" && cp -R prisma/schema.prisma prisma/migrations "$B/prisma/"
 cp -R deploy "$B/deploy"
 echo "$ASSON_RELEASE" > "$B/RELEASE"
