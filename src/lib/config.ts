@@ -56,6 +56,12 @@ export const store = {
     ],
   },
   maxQtyPerItem: 10,
+  /** Click-and-collect at shops marked as pickup points (Admin → Locations). Free; pay at the counter. */
+  pickup: {
+    holdDays: 7, // ready orders are kept this long before staff may cancel and restock them
+    readyNow: "In stock at this shop: usually ready the same day",
+    readyLater: "Comes from our warehouse: usually ready in 2–4 days",
+  },
 } as const;
 
 /** Opens a WhatsApp chat with the support number (wa.me needs the country code, digits only). */

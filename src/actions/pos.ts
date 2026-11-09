@@ -12,6 +12,7 @@ import { can, discountLimitPercent, type Role } from "@/lib/permissions";
 import { buildDaySummary, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
 import { allocateOrder, StockError, stockByLocation } from "@/lib/stock";
 import { findApproverByPin } from "@/lib/approvals";
+import { transitionOrder, TransitionError } from "@/lib/orders";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -220,6 +221,85 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     console.error("createPosSale", e);
     return { ok: false, error: "The sale didn't go through and no stock was taken. Please try again." };
   }
+}
+
+// ---------- Click-and-collect hand-over ----------
+
+export type PickupRow = { orderId: string; number: string; name: string; phone: string; units: number; due: number; readyAt: string | null };
+
+/** Orders waiting at this till's shop. Search by order number (AS001234 / 1234) or phone. */
+export async function listPickups(query = ""): Promise<{ ok: true; rows: PickupRow[] } | { ok: false; error: string }> {
+  const me = await requirePermission("pos.sell");
+  const shift = await getOpenShift(me.id);
+  if (!shift) return { ok: false, error: "Open your shift first." };
+  const q = query.trim();
+  const num = Number(q.replace(/^AS0*/i, ""));
+  const rows = await db.order.findMany({
+    where: {
+      pickupStoreId: shift.storeId, status: "PACKED",
+      ...(q ? { OR: [...(Number.isInteger(num) && num > 0 ? [{ number: num }] : []), { phone: { contains: q.replace(/\D/g, "") || q } }] } : {}),
+    },
+    select: { id: true, number: true, phone: true, total: true, paymentStatus: true, shippingAddress: true, items: { select: { quantity: true } }, events: { where: { status: "PACKED" }, select: { createdAt: true }, take: 1 } },
+    orderBy: { updatedAt: "asc" },
+    take: 50,
+  });
+  return {
+    ok: true,
+    rows: rows.map((o) => ({
+      orderId: o.id, number: formatOrderNumber(o.number), name: (o.shippingAddress as { fullName?: string }).fullName ?? "", phone: o.phone,
+      units: o.items.reduce((s, i) => s + i.quantity, 0), due: o.paymentStatus === "PAID" ? 0 : o.total, readyAt: o.events[0]?.createdAt.toISOString() ?? null,
+    })),
+  };
+}
+
+const collectSchema = z.object({
+  orderId: z.string(),
+  method: z.enum(["CASH", "ESEWA_QR", "KHALTI_QR", "FONEPAY_QR", "CARD", "BANK"]).optional(),
+  tendered: z.number().int().positive().optional(),
+  reference: z.string().trim().max(60).optional(),
+});
+
+/**
+ * Hand a ready pickup order to the customer. Anything still due is taken here and recorded as a
+ * tender on this cashier's shift, so it's in the drawer count and the day's closing.
+ */
+export async function collectPickup(input: z.input<typeof collectSchema>): Promise<R<{ change: number }>> {
+  const me = await requirePermission("pos.sell");
+  const p = collectSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Check the payment details." };
+  const d = p.data;
+  const shift = await getOpenShift(me.id);
+  if (!shift) return { ok: false, error: "Open your shift before handing over orders." };
+  const order = await db.order.findUnique({ where: { id: d.orderId }, select: { number: true, status: true, total: true, paymentStatus: true, pickupStoreId: true, pickupStore: { select: { name: true } } } });
+  if (!order?.pickupStoreId) return { ok: false, error: "This isn't a pickup order." };
+  if (order.pickupStoreId !== shift.storeId) return { ok: false, error: `This order is for pickup at ${order.pickupStore?.name}, not this shop.` };
+  if (order.status !== "PACKED") return { ok: false, error: "This order isn't ready for pickup." };
+  const due = order.paymentStatus === "PAID" ? 0 : order.total;
+  let change = 0;
+  if (due > 0) {
+    if (!d.method) return { ok: false, error: `Take ${formatPrice(due)} before handing it over.` };
+    if (d.method === "CASH") {
+      const given = d.tendered ?? due;
+      if (given < due) return { ok: false, error: "Cash received is less than the amount due." };
+      change = given - due;
+    } else if (!d.reference) return { ok: false, error: "Enter the payment reference." };
+  }
+  try {
+    await transitionOrder({
+      orderId: d.orderId, to: "DELIVERED", actor: me.email, actorId: me.id, handover: true,
+      message: `Collected at ${order.pickupStore?.name}${due ? ` · paid ${formatPrice(due)} at the counter` : ""}`,
+      within: async (tx) => {
+        await tx.order.update({ where: { id: d.orderId }, data: { shiftId: shift.id, cashierId: me.id } });
+        if (due > 0) await tx.tender.create({ data: { orderId: d.orderId, method: d.method!, amount: due, tendered: d.method === "CASH" ? d.tendered ?? due : null, reference: d.reference || null } });
+      },
+    });
+  } catch (e) {
+    if (e instanceof TransitionError) return { ok: false, error: e.message };
+    console.error("collectPickup", e);
+    return { ok: false, error: "Couldn't record the hand-over. Nothing was saved — please try again." };
+  }
+  refresh();
+  return { ok: true, change };
 }
 
 // ---------- Daily closing ----------

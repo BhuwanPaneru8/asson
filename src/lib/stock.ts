@@ -195,6 +195,8 @@ export async function restockOrder(tx: Tx, opts: {
   reason: "CANCEL_RESTOCK" | "RETURN_RESTOCK";
   actorId?: string | null;
   note?: string;
+  /** put everything here instead (e.g. a pickup order already moved to the pickup shop) */
+  to?: string;
 }) {
   const allocations = await tx.orderAllocation.findMany({ where: { orderId: opts.orderId }, orderBy: { createdAt: "desc" }, select: { orderItemId: true, storeId: true, quantity: true } });
   let fallback: string | undefined;
@@ -202,13 +204,13 @@ export async function restockOrder(tx: Tx, opts: {
     if (!it.variantId || it.quantity <= 0) continue;
     let remaining = it.quantity;
     const back = new Map<string, number>();
-    for (const a of allocations.filter((x) => x.orderItemId === it.id)) {
+    for (const a of opts.to ? [] : allocations.filter((x) => x.orderItemId === it.id)) {
       const n = Math.min(remaining, a.quantity);
       if (n > 0) back.set(a.storeId, (back.get(a.storeId) ?? 0) + n);
       remaining -= n;
     }
     if (remaining > 0) {
-      fallback ??= (await defaultReceivingLocation(tx)).id;
+      fallback ??= opts.to ?? (await defaultReceivingLocation(tx)).id;
       back.set(fallback, (back.get(fallback) ?? 0) + remaining);
     }
     for (const [storeId, n] of back) await moveStock(tx, { variantId: it.variantId, storeId, delta: n, reason: opts.reason, orderId: opts.orderId, actorId: opts.actorId, note: opts.note });

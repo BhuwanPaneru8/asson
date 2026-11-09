@@ -57,7 +57,7 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
           ["Store sales", formatPrice(s.store.net), `${s.store.transactions} transactions · ${s.store.units} units`],
           ["Discounts", formatPrice(s.store.discounts), `${s.discounts.length} discounted sales`],
           ["Online orders", formatPrice(s.online.total), `${s.online.orders} orders placed`],
-          ["Cash expected", formatPrice(s.cash.expected), `float ${formatPrice(s.cash.floats)} + sales ${formatPrice(s.cash.sales)} − refunds ${formatPrice(s.cash.refunds ?? 0)}`],
+          ["Cash expected", formatPrice(s.cash.expected), `float ${formatPrice(s.cash.floats)} + sales ${formatPrice(s.cash.sales)}${s.cash.pickups ? ` + pickups ${formatPrice(s.cash.pickups)}` : ""} − refunds ${formatPrice(s.cash.refunds ?? 0)}`],
           ["Cash difference", s.cash.counted == null ? "—" : formatPrice(s.cash.difference), s.cash.counted == null ? "count pending" : s.cash.difference === 0 ? "Balanced" : s.cash.difference > 0 ? "Over" : "Short"],
         ].map(([l, v, sub]) => (
           <Card key={l} className="p-4"><p className="text-[13px] text-muted">{l}</p><p className="mt-1 whitespace-nowrap text-[20px] font-semibold tabular-nums">{v}</p><p className="text-[12.5px] text-muted">{sub}</p></Card>

@@ -40,9 +40,10 @@ async function pointsFor(userId: string | undefined, bagAfterCoupon: number, wan
 }
 
 /** Live price quote for the checkout summary. Always recomputed on the server. */
-export async function quoteCheckout(input: { couponCode?: string; shippingMethod: string; district?: string; usePoints?: boolean }): Promise<Quote> {
+export async function quoteCheckout(input: { couponCode?: string; shippingMethod: string; district?: string; usePoints?: boolean; pickup?: boolean }): Promise<Quote> {
   const [cart, user] = await Promise.all([getCart(), getCurrentUser()]);
-  const rate = rateFor(await getDeliveryRates(), input.district);
+  // click-and-collect has no delivery fee
+  const rate = input.pickup ? null : rateFor(await getDeliveryRates(), input.district);
   const wanted = (methodIds as string[]).includes(input.shippingMethod) ? (input.shippingMethod as ShippingMethodId) : "standard";
   const method = wanted === "express" && !rate?.expressAvailable ? "standard" : wanted;
   const delivery: Delivery = rate
@@ -70,6 +71,9 @@ const orderSchema = z.object({
   couponCode: z.string().trim().toUpperCase().max(40).optional(),
   note: z.string().trim().max(500).optional(),
   usePoints: z.boolean().default(false),
+  /** click-and-collect instead of courier delivery */
+  pickupStoreId: z.string().optional(),
+  pickupName: z.string().trim().min(2, "Enter the name of the person collecting").max(80).optional(),
 });
 
 export type PlaceOrderState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
@@ -86,33 +90,44 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
   const ip = clientIp(h);
   if (!rateLimit(`order:${ip}`, 20, 60 * 60_000)) return { error: "Too many orders from this network. Please try again later." };
 
-  // Resolve shipping address
-  let address: AddressInput | undefined = data.address;
-  if (data.addressId) {
-    if (!user) return { error: "Please sign in to use a saved address." };
-    const saved = await db.address.findFirst({ where: { id: data.addressId, userId: user.id } });
-    if (!saved) return { error: "That address is no longer available." };
-    address = { fullName: saved.fullName, phone: saved.phone, line1: saved.line1, line2: saved.line2 ?? "", city: saved.city, district: saved.district, state: saved.state, postalCode: saved.postalCode ?? "" };
-  }
-  if (!address) return { error: "Add a delivery address.", fieldErrors: { "address.line1": "Required" } };
-  const rate = rateFor(await getDeliveryRates(), address.district)!;
-  if (!rate.serviceable) return { error: `Sorry, we don't deliver to ${address.district} yet. Call us and we'll arrange it.` };
-  if (data.shippingMethod === "express" && !rate.expressAvailable) return { error: `Express delivery isn't available in ${address.district}. Please choose standard delivery.` };
-  if (data.paymentMethod === "COD" && !rate.codAvailable) return { error: `Cash on delivery isn't available in ${address.district} yet.` };
-
   const cart = await getCart();
   if (!cart.id || cart.lines.length === 0) return { error: "Your bag is empty." };
   const unavailable = cart.lines.find((l) => !l.available);
   if (unavailable) return { error: `${unavailable.name} (${unavailable.size}) ${unavailable.stock > 0 ? `has only ${unavailable.stock} left` : "is sold out"}. Please update your bag.` };
-
   if (data.paymentMethod === "ONLINE" && !(store.onlinePaymentsLive && onlinePaymentsEnabled())) return { error: "Online payment isn't available right now. Please choose Cash on Delivery." };
+
+  // Where it goes: a shop counter (click-and-collect, free) or an address (courier)
+  let address: AddressInput | undefined;
+  let rate: ReturnType<typeof rateFor> = null;
+  let shop: { id: string; name: string; address: string; hours: string | null; phone: string | null } | null = null;
+  if (data.pickupStoreId) {
+    shop = await db.store.findFirst({ where: { id: data.pickupStoreId, active: true, pickup: true, kind: "SHOP" }, select: { id: true, name: true, address: true, hours: true, phone: true } });
+    if (!shop) return { error: "That shop isn't taking pickup orders right now. Please choose another one." };
+    if (!data.pickupName) return { error: "Tell us who will collect the order.", fieldErrors: { pickupName: "Enter the name of the person collecting" } };
+  } else {
+    address = data.address;
+    if (data.addressId) {
+      if (!user) return { error: "Please sign in to use a saved address." };
+      const saved = await db.address.findFirst({ where: { id: data.addressId, userId: user.id } });
+      if (!saved) return { error: "That address is no longer available." };
+      address = { fullName: saved.fullName, phone: saved.phone, line1: saved.line1, line2: saved.line2 ?? "", city: saved.city, district: saved.district, state: saved.state, postalCode: saved.postalCode ?? "" };
+    }
+    if (!address) return { error: "Add a delivery address.", fieldErrors: { "address.line1": "Required" } };
+    rate = rateFor(await getDeliveryRates(), address.district)!;
+    if (!rate.serviceable) return { error: `Sorry, we don't deliver to ${address.district} yet. Call us and we'll arrange it.` };
+    if (data.shippingMethod === "express" && !rate.expressAvailable) return { error: `Express delivery isn't available in ${address.district}. Please choose standard delivery.` };
+    if (data.paymentMethod === "COD" && !rate.codAvailable) return { error: `Cash on delivery isn't available in ${address.district} yet.` };
+  }
 
   const coupon = data.couponCode ? await db.coupon.findUnique({ where: { code: data.couponCode } }) : null;
   const couponCheck = data.couponCode ? evaluateCoupon(coupon, cart.subtotal) : null;
   if (couponCheck && !couponCheck.ok) return { error: couponCheck.reason };
   const points = await pointsFor(user?.id, cart.subtotal - (couponCheck?.ok ? couponCheck.discount : 0), data.usePoints);
   const totals = computeTotals(cart.lines, { method: data.shippingMethod, rate, coupon: couponCheck, pointsDiscount: pointsValue(points.used) });
-  if (data.paymentMethod === "COD" && totals.total > store.codMaxOrder) return { error: `Cash on Delivery is available for orders up to ${formatPrice(store.codMaxOrder)}.` };
+  if (data.paymentMethod === "COD" && totals.total > store.codMaxOrder) return { error: `${shop ? "Paying at the shop" : "Cash on Delivery"} is available for orders up to ${formatPrice(store.codMaxOrder)}.` };
+  const shippingAddress = shop
+    ? { pickup: true, storeId: shop.id, store: shop.name, storeAddress: shop.address, hours: shop.hours, storePhone: shop.phone, fullName: data.pickupName!, phone: data.phone, country: store.country }
+    : { ...address!, line2: address!.line2 || null, postalCode: address!.postalCode || null, country: store.country, zone: rate!.zone, etaMaxDays: data.shippingMethod === "express" ? 1 : rate!.etaMaxDays };
 
   let orderId: string;
   try {
@@ -147,8 +162,9 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
           shippingFee: totals.shippingFee,
           total: totals.total,
           couponCode: couponCheck?.ok ? couponCheck.coupon.code : null,
-          shippingMethod: data.shippingMethod,
-          shippingAddress: { ...address, line2: address.line2 || null, postalCode: address.postalCode || null, country: store.country, zone: rate.zone, etaMaxDays: data.shippingMethod === "express" ? 1 : rate.etaMaxDays },
+          shippingMethod: shop ? "pickup" : data.shippingMethod,
+          shippingAddress,
+          pickupStoreId: shop?.id ?? null,
           customerNote: data.note || null,
           items: {
             create: cart.lines.map((l) => ({
@@ -166,13 +182,14 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
         orderId: order.id,
         lines: order.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: `${i.name} (${i.size})` })),
         actorId: user?.id,
+        prefer: shop?.id, // click-and-collect: take it off the pickup shop's shelf when it's there
       });
       // fill SKU snapshot
       const variants = await tx.variant.findMany({ where: { id: { in: cart.lines.map((l) => l.variantId) } }, select: { id: true, sku: true, costPrice: true } });
       for (const v of variants) await tx.orderItem.updateMany({ where: { orderId: order.id, variantId: v.id }, data: { sku: v.sku, unitCost: v.costPrice } });
       for (const l of cart.lines) await tx.product.update({ where: { id: l.productId }, data: { soldCount: { increment: l.quantity } } });
       await tx.cartItem.deleteMany({ where: { cartId: cart.id! } });
-      if (user && data.saveAddress && !data.addressId) {
+      if (user && address && data.saveAddress && !data.addressId) {
         const count = await tx.address.count({ where: { userId: user.id } });
         await tx.address.create({ data: { ...address, line2: address.line2 || null, postalCode: address.postalCode || null, userId: user.id, isDefault: count === 0 } });
       }

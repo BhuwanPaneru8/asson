@@ -12,7 +12,7 @@ export default async function PosPage() {
   const shops = shift ? [] : await getShops();
   const store = shift ? await db.store.findUnique({ where: { id: shift.storeId }, select: { name: true } }) : null;
   const stats = shift
-    ? await db.order.aggregate({ where: { shiftId: shift.id }, _count: { _all: true }, _sum: { total: true } })
+    ? await db.order.aggregate({ where: { shiftId: shift.id, channel: "STORE" }, _count: { _all: true }, _sum: { total: true } })
     : null;
   return (
     <PosTerminal

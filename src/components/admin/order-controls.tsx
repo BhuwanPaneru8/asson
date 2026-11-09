@@ -12,7 +12,9 @@ const LABEL: Partial<Record<OrderStatus, string>> = {
 };
 const CARRIERS = ["Own rider", "Pathao Parcel", "Nepal Can Move (NCM)", "Upaya City Cargo", "Aramex Nepal", "Nepal Post"];
 
-export function OrderControls({ orderId, status, next, paymentPending, carrier, tracking }: { orderId: string; status: OrderStatus; next: OrderStatus[]; paymentPending: boolean; carrier: string | null; tracking: string | null }) {
+export function OrderControls({ orderId, status, next: allowed, paymentPending, carrier, tracking, pickupAt }: { orderId: string; status: OrderStatus; next: OrderStatus[]; paymentPending: boolean; carrier: string | null; tracking: string | null; pickupAt?: string | null }) {
+  // pickup orders are handed over (and paid) at the shop's till, not from here
+  const next = pickupAt ? allowed.filter((s) => s !== "DELIVERED") : allowed;
   const [pending, start] = useTransition();
   const [c, setC] = useState(carrier ?? CARRIERS[0]);
   const [awb, setAwb] = useState(tracking ?? "");
@@ -38,10 +40,11 @@ export function OrderControls({ orderId, status, next, paymentPending, carrier, 
           </div>
         )}
         {forward.map((s, i) => (
-          <button key={s} disabled={pending} onClick={() => go(s)} className={`h-10 w-full rounded-md text-[14px] font-medium disabled:opacity-50 ${i === 0 ? "bg-ink text-white hover:bg-ink-soft" : "border border-line bg-white hover:border-ink"}`}>{LABEL[s] ?? s}</button>
+          <button key={s} disabled={pending} onClick={() => go(s)} className={`h-10 w-full rounded-md text-[14px] font-medium disabled:opacity-50 ${i === 0 ? "bg-ink text-white hover:bg-ink-soft" : "border border-line bg-white hover:border-ink"}`}>{pickupAt && s === "PACKED" ? `Ready for pickup at ${pickupAt} (texts customer)` : LABEL[s] ?? s}</button>
         ))}
+        {pickupAt && status === "PACKED" && <p className="text-[13.5px] text-muted">Waiting at {pickupAt}. Hand it over at that shop&apos;s till: Point of sale → Pickups.</p>}
         {next.includes("CANCELLED") && <button disabled={pending} onClick={() => go("CANCELLED")} className="h-10 w-full rounded-md text-[14px] text-danger hover:bg-[#fbe9e7] disabled:opacity-50">Cancel order</button>}
-        {next.length === 0 && <p className="text-[13.5px] text-muted">This order is {status.toLowerCase().replace(/_/g, " ")}. No further steps.</p>}
+        {next.length === 0 && !(pickupAt && status === "PACKED") && <p className="text-[13.5px] text-muted">This order is {status.toLowerCase().replace(/_/g, " ")}. No further steps.</p>}
         {paymentPending && <button disabled={pending} onClick={() => start(async () => { const r = await markPaid(orderId); if (r.ok) toast.success("Marked paid"); else toast.error(r.error); })} className="h-10 w-full rounded-md border border-line bg-white text-[14px] hover:border-ink">Mark payment received</button>}
       </div>
       <form className="border-t border-line px-5 py-4" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await addOrderNote(orderId, note); if (r.ok) { setNote(""); toast.success("Note added"); } else toast.error(r.error); }); }}>

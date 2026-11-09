@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Printer } from "lucide-react";
 import { db } from "@/lib/db";
-import { TRANSITIONS } from "@/lib/orders";
+import { transitionsFor } from "@/lib/order-status";
 import { store } from "@/lib/config";
 import { TENDER_LABEL } from "@/lib/pos";
 import { addressLines, formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
@@ -18,7 +18,7 @@ type Addr = { fullName: string; phone: string; line1: string; line2?: string | n
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("orders");
   const { id } = await params;
-  const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
+  const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, pickupStore: { select: { name: true, address: true } }, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
   if (!order) notFound();
   const a = order.shippingAddress as Addr;
 
@@ -85,7 +85,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
 
         <div className="space-y-4">
           {order.status === "PENDING" && order.paymentMethod === "COD" && order.channel === "ONLINE" && <CallPanel orderId={order.id} phone={order.phone} attempts={order.callAttempts} outcome={order.callOutcome} />}
-          <OrderControls orderId={order.id} status={order.status} next={TRANSITIONS[order.status]} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
+          <OrderControls orderId={order.id} status={order.status} next={transitionsFor(order.status, !!order.pickupStoreId)} pickupAt={order.pickupStore?.name} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
           <Card title="Customer">
             <div className="space-y-1 px-5 py-4 text-[14px]">
               {order.user ? <Link href={`/admin/customers?q=${encodeURIComponent(order.email)}`} className="font-medium hover:underline">{order.user.name}</Link> : <p className="font-medium">Guest checkout</p>}
@@ -94,8 +94,10 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
               {order.user && <p className="text-[12.5px] text-muted">{order.user._count.orders} orders total</p>}
             </div>
           </Card>
-          <Card title={order.channel === "STORE" ? "Store sale" : "Ship to"}>
-            {a && <p className="px-5 py-4 text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
+          <Card title={order.channel === "STORE" ? "Store sale" : order.pickupStore ? `Pickup at ${order.pickupStore.name}` : "Ship to"}>
+            {order.pickupStore && a && <p className="px-5 pt-4 text-[14px] leading-relaxed text-ink-soft">Collected by <b>{a.fullName}</b> · {a.phone}<br /><span className="text-muted">{order.pickupStore.address}</span></p>}
+            {order.pickupStore && <div className="h-4" />}
+            {a && !order.pickupStore && <p className="px-5 py-4 text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
             {order.customerNote && <p className="border-t border-line px-5 py-3 text-[13.5px]"><span className="font-medium">Note:</span> {order.customerNote}</p>}
           </Card>
           <EntityHistory type="Order" id={order.id} />
