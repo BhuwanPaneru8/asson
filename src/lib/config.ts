@@ -5,9 +5,9 @@
 export const store = {
   name: "Asson",
   tagline: "Classic clothing. Quality fabric. Fair prices.",
-  supportEmail: "support@asson.example",
-  supportPhone: "01-5900000",
-  supportWhatsApp: "9800000000",
+  supportEmail: "support.asson@gmail.com",
+  supportPhone: "9761452270",
+  supportWhatsApp: "9761452270",
   /** Flagship shop address — printed on POS receipts. */
   storeAddress: "Kathmandu, Nepal",
   vatNumber: "",
@@ -57,6 +57,11 @@ export const store = {
   },
   maxQtyPerItem: 10,
 } as const;
+
+/** Opens a WhatsApp chat with the support number (wa.me needs the country code, digits only). */
+export function whatsappUrl() {
+  return `https://wa.me/${(store.phonePrefix + store.supportWhatsApp).replace(/\D/g, "")}`;
+}
 
 export type ShippingMethodId = "standard" | "express";
 export type Zone = "VALLEY" | "OUTSIDE" | "REMOTE";
