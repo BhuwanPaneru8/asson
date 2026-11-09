@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Permission; badgeKey?: "orders" | "stock" }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard" },
+  { href: "/admin/network", label: "Network", icon: Network, perm: "insights" },
   { href: "/admin/pos", label: "Point of sale", icon: ScanBarcode, perm: "pos.sell" },
   { href: "/admin/orders", label: "Orders", icon: Package, perm: "orders", badgeKey: "orders" },
   { href: "/admin/picking", label: "Pick lists", icon: PackageCheck, perm: "orders" },
