@@ -4,6 +4,7 @@ import { db } from "./db";
 import { store as storeConfig } from "./config";
 import { formatPrice } from "./utils";
 import { ensureFlagship } from "./stock";
+import { storeFilter, type Scope } from "./scope";
 
 export const TENDER_LABEL: Record<TenderMethod, string> = {
   CASH: "Cash",
@@ -32,14 +33,15 @@ export function dayBounds(date: string) {
 }
 
 /** Active shops (locations with a till), in priority order. */
-export async function getShops() {
-  const shops = await db.store.findMany({ where: { active: true, kind: "SHOP" }, select: { id: true, code: true, name: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
-  return shops.length ? shops : [await ensureFlagship()];
+export async function getShops(scope?: Scope) {
+  const shops = await db.store.findMany({ where: { active: true, kind: "SHOP", ...(scope ? storeFilter(scope) : {}) }, select: { id: true, code: true, name: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
+  if (shops.length || (scope && !scope.all)) return shops; // a staff member with no shops gets none, never a default
+  return [await ensureFlagship()];
 }
 
-/** A shop by id, or the first shop. Used by the till and daily closing. */
-export async function getShop(id?: string | null) {
-  const shops = await getShops();
+/** A shop by id, or the first shop (within the user's locations when a scope is given). Undefined if they have none. */
+export async function getShop(id?: string | null, scope?: Scope) {
+  const shops = await getShops(scope);
   return shops.find((s) => s.id === id) ?? shops[0];
 }
 

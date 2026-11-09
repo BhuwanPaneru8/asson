@@ -13,6 +13,7 @@ import { dispatchNotifications } from "@/lib/notifications";
 import { lookupVariants } from "@/lib/pos";
 import { StockError, stockByLocation } from "@/lib/stock";
 import { markPicked } from "@/lib/picking";
+import { requireStoreAccess, ScopeError } from "@/lib/scope";
 import { cancelTransfer, createTransfer, receiveTransfer, sendTransfer, TransferError } from "@/lib/transfers";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string; fieldErrors?: Record<string, string> };
@@ -93,7 +94,7 @@ const newTransferSchema = z.object({
 });
 
 function failure(e: unknown, where: string): { ok: false; error: string } {
-  if (e instanceof TransferError || e instanceof StockError) return { ok: false, error: e.message };
+  if (e instanceof TransferError || e instanceof StockError || e instanceof ScopeError) return { ok: false, error: e.message };
   void reportError(where, e);
   return { ok: false, error: "Couldn't update the transfer. Nothing was moved — please try again." };
 }
@@ -163,6 +164,12 @@ export async function cancelStockTransfer(id: string, reason: string): Promise<R
 
 export async function pickOrder(orderId: string, storeId: string): Promise<R<{ remaining: number }>> {
   const me = await requirePermission("orders");
+  try {
+    await requireStoreAccess(me, storeId);
+  } catch (e) {
+    if (e instanceof ScopeError) return { ok: false, error: e.message };
+    throw e;
+  }
   const r = await db.$transaction((tx) => markPicked(tx, me, orderId, storeId));
   if (r.ok) refresh();
   return r;

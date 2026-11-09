@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { scopeFor, canActAt } from "@/lib/scope";
 import { formatDateTime } from "@/lib/utils";
 import { landedUnitCost } from "@/lib/costing";
 import { defaultReceivingLocation, getLocations } from "@/lib/stock";
@@ -12,7 +13,7 @@ import { PurchaseOrderEditor } from "@/components/admin/purchase-order-editor";
 export const metadata = { title: "Purchase order" };
 
 export default async function PurchaseOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("purchasing");
+  const me = await requirePermission("purchasing");
   const po = await db.purchaseOrder.findUnique({
     where: { id: (await params).id },
     include: {
@@ -24,8 +25,9 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
   if (!po) notFound();
   const people = await db.user.findMany({ where: { id: { in: [po.createdById, ...po.receipts.map((r) => r.receivedById)] } }, select: { id: true, name: true } });
   const who = (id: string) => people.find((p) => p.id === id)?.name ?? "—";
-  const [main, locations] = await Promise.all([defaultReceivingLocation(), getLocations()]);
-  const receiving = [main, ...locations.filter((l) => l.id !== main.id)].map((l) => ({ id: l.id, name: l.name }));
+  const [main, locations, scope] = await Promise.all([defaultReceivingLocation(), getLocations(), scopeFor(me)]);
+  // goods can be counted in only where the receiver works
+  const receiving = [main, ...locations.filter((l) => l.id !== main.id)].filter((l) => canActAt(scope, l.id)).map((l) => ({ id: l.id, name: l.name }));
   const goodsValue = po.items.reduce((s, i) => s + i.unitCost * i.quantityOrdered, 0);
 
   return (

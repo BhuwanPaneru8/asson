@@ -5,6 +5,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { AdminPager, Card, PageHeader, Pill, Td, Th } from "@/components/admin/ui";
 import { RoleSelect } from "@/components/admin/role-select";
+import { StaffLocations } from "@/components/admin/staff-locations";
+import { getLocations } from "@/lib/stock";
 import { can, ROLE_LABEL } from "@/lib/permissions";
 
 export const metadata = { title: "Customers" };
@@ -19,9 +21,10 @@ export default async function Customers({ searchParams }: { searchParams: Promis
   if (sp.q) where.OR = [{ email: { contains: sp.q, mode: "insensitive" } }, { name: { contains: sp.q, mode: "insensitive" } }, { phone: { contains: sp.q } }];
   if (sp.role === "staff") where.role = { in: ["CASHIER", "STAFF", "MANAGER", "ADMIN"] };
   const [users, total] = await Promise.all([
-    db.user.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * TAKE, take: TAKE, select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true, _count: { select: { orders: true } } } }),
+    db.user.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * TAKE, take: TAKE, select: { id: true, name: true, email: true, phone: true, role: true, createdAt: true, allLocations: true, locations: { select: { storeId: true } }, _count: { select: { orders: true } } } }),
     db.user.count({ where }),
   ]);
+  const locations = users.some((u) => u.role !== "CUSTOMER") ? await getLocations({ includeInactive: true }) : [];
   const spend = await db.order.groupBy({ by: ["userId"], where: { userId: { in: users.map((u) => u.id) }, status: { notIn: ["CANCELLED", "RETURNED"] } }, _sum: { total: true }, _max: { createdAt: true } });
   return (
     <>
@@ -34,7 +37,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-[14px]">
-            <thead className="border-b border-line bg-cloud/40"><tr><Th>Customer</Th><Th>Joined</Th><Th className="text-right">Orders</Th><Th className="text-right">Lifetime spend</Th><Th>Last order</Th><Th>Role</Th></tr></thead>
+            <thead className="border-b border-line bg-cloud/40"><tr><Th>Customer</Th><Th>Joined</Th><Th className="text-right">Orders</Th><Th className="text-right">Lifetime spend</Th><Th>Last order</Th><Th>Role</Th><Th>Works at</Th></tr></thead>
             <tbody className="divide-y divide-line">
               {users.map((u) => {
                 const s = spend.find((x) => x.userId === u.id);
@@ -46,6 +49,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
                     <Td className="text-right tabular-nums">{formatPrice(s?._sum.total ?? 0)}</Td>
                     <Td className="whitespace-nowrap text-muted">{s?._max.createdAt ? formatDate(s._max.createdAt) : "—"}</Td>
                     <Td>{can(me?.role, "team.manage") && me?.id !== u.id ? <RoleSelect userId={u.id} role={u.role} /> : <Pill>{ROLE_LABEL[u.role]}</Pill>}</Td>
+                    <Td>{u.role === "CUSTOMER" ? "" : u.role === "ADMIN" ? <span className="text-[13px] text-muted">Everywhere (owner)</span> : <StaffLocations userId={u.id} all={u.allLocations} assigned={u.locations.map((l) => l.storeId)} locations={locations.map((l) => ({ id: l.id, name: l.name }))} editable={can(me?.role, "team.manage")} />}</Td>
                   </tr>
                 );
               })}

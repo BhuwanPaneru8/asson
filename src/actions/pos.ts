@@ -13,6 +13,7 @@ import { can, discountLimitPercent, type Role } from "@/lib/permissions";
 import { buildDaySummary, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
 import { allocateOrder, StockError, stockByLocation } from "@/lib/stock";
 import { findApproverByPin } from "@/lib/approvals";
+import { scopeFor } from "@/lib/scope";
 import { transitionOrder, TransitionError } from "@/lib/orders";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
 
@@ -39,8 +40,10 @@ export async function openShift(openingFloatRupees: number, storeId?: string): P
   const float = rupeesToPaisa(openingFloatRupees);
   if (!Number.isFinite(float) || float < 0 || float > 50_000_00) return { ok: false, error: "Enter the cash in the drawer (Rs. 0 – 50,000)." };
   if (await getOpenShift(me.id)) return { ok: false, error: "You already have an open shift." };
-  const store = await getShop(storeId);
-  if (storeId && store.id !== storeId) return { ok: false, error: "That shop isn't active." };
+  // only at a shop this cashier works at
+  const store = await getShop(storeId, await scopeFor(me));
+  if (!store) return { ok: false, error: "You're not assigned to a shop yet. Ask the owner to add you under Customers & team." };
+  if (storeId && store.id !== storeId) return { ok: false, error: "You can only open a shift at a shop you work at." };
   if (await isDayLocked(store.id, ktmDate())) return { ok: false, error: `Today has already been closed and locked at ${store.name}. Ask the owner to reopen tomorrow.` };
   await db.$transaction(async (tx) => {
     const s = await tx.shift.create({ data: { storeId: store.id, cashierId: me.id, openingFloat: float } });
@@ -308,7 +311,8 @@ export async function collectPickup(input: z.input<typeof collectSchema>): Promi
 export async function lockDay(date: string, note?: string, storeId?: string): Promise<R> {
   const me = await requirePermission("closing");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > ktmDate()) return { ok: false, error: "Invalid date." };
-  const store = await getShop(storeId);
+  const store = await getShop(storeId, await scopeFor(me));
+  if (!store || (storeId && store.id !== storeId)) return { ok: false, error: "You can only close the day at a shop you manage." };
   if (await isDayLocked(store.id, date)) return { ok: false, error: "This day is already locked." };
   const summary = await buildDaySummary(store.id, date);
   if (!summary.allShiftsClosed) return { ok: false, error: "Close every shift before locking the day." };

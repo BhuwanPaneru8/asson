@@ -11,7 +11,7 @@ type Hit = Awaited<ReturnType<typeof transferLookup>>[number];
 type Line = Hit & { quantity: number };
 const sel = "h-10 w-full rounded-md border border-line bg-white px-2.5 text-[14px] outline-none focus:border-ink";
 
-export function TransferForm({ locations, defaultFrom, defaultTo }: { locations: Loc[]; defaultFrom: string; defaultTo: string }) {
+export function TransferForm({ locations, sources, defaultFrom, defaultTo }: { locations: Loc[]; sources?: Loc[]; defaultFrom: string; defaultTo: string }) {
   const [fromId, setFrom] = useState(defaultFrom);
   const [toId, setTo] = useState(defaultTo);
   const [query, setQuery] = useState("");
@@ -51,7 +51,7 @@ export function TransferForm({ locations, defaultFrom, defaultTo }: { locations:
   return (
     <div className="space-y-4">
       <div className="grid gap-3 rounded-lg border border-line bg-white p-4 sm:grid-cols-2">
-        <label className="text-[13px] font-medium text-ink-soft">From<select className={cn(sel, "mt-1")} value={fromId} onChange={(e) => changeFrom(e.target.value)}>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+        <label className="text-[13px] font-medium text-ink-soft">From<select className={cn(sel, "mt-1")} value={fromId} onChange={(e) => changeFrom(e.target.value)}>{(sources ?? locations).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
         <label className="text-[13px] font-medium text-ink-soft">To<select className={cn(sel, "mt-1")} value={toId} onChange={(e) => setTo(e.target.value)}>{locations.map((l) => <option key={l.id} value={l.id} disabled={l.id === fromId}>{l.name}</option>)}</select></label>
       </div>
 

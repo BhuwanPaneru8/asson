@@ -167,7 +167,7 @@ async function main() {
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
     db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(),
-    db.look.deleteMany(), db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
+    db.staffLocation.deleteMany(), db.look.deleteMany(), db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
     db.inventoryLog.deleteMany(), db.cartItem.deleteMany(), db.cart.deleteMany(),
     db.wishlistItem.deleteMany(), db.review.deleteMany(), db.productImage.deleteMany(),
     db.variant.deleteMany(), db.store.deleteMany(), db.product.deleteMany(), db.collection.deleteMany(),
@@ -194,6 +194,9 @@ async function main() {
     db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: "10am – 7pm, Sun–Fri", pickup: true, priority: 20 } }),
     db.store.create({ data: { code: "PKR", name: "Asson Pokhara", kind: "SHOP", address: "Lakeside, Pokhara", hours: "10am – 8pm, every day", pickup: true, priority: 30 } }),
   ]);
+  // where demo staff work: ops staff and the manager across the business (HQ), the cashier at the Flagship
+  await db.user.updateMany({ where: { email: { in: ["staff@asson.test", "manager@asson.test"] } }, data: { allLocations: true } });
+  await db.staffLocation.create({ data: { user: { connect: { email: "cashier@asson.test" } }, store: { connect: { id: flagship.id } } } });
 
   const FIRST = ["Sita", "Bikash", "Anjali", "Prakash", "Sunita", "Rohan", "Pooja", "Nabin", "Srijana", "Suman", "Kritika", "Bibek", "Asmita", "Ramesh", "Manisha", "Sagar", "Pratiksha", "Aayush", "Sabina", "Dipesh"];
   const LAST = ["Shrestha", "Maharjan", "Thapa", "Gurung", "Adhikari", "Rai", "Karki", "Tamang", "Bhandari", "Poudel", "KC", "Joshi", "Sharma", "Lama", "Yadav", "Magar", "Limbu", "Basnet"];

@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import type { TransferStatus } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { scopeFor } from "@/lib/scope";
 import { cn, formatDateTime } from "@/lib/utils";
 import { TRANSFER_STATUS_LABEL, transferNo } from "@/lib/transfers";
 import { AdminPager, Card, PageHeader, Pill } from "@/components/admin/ui";
@@ -12,11 +13,13 @@ const TAKE = 50;
 const TONE = { DRAFT: "neutral", SENT: "warn", RECEIVED: "success", CANCELLED: "neutral" } as const;
 
 export default async function TransfersPage({ searchParams }: { searchParams: Promise<{ status?: string; page?: string }> }) {
-  await requirePermission("transfers");
+  const me = await requirePermission("transfers");
+  const scope = await scopeFor(me);
   const sp = await searchParams;
   const status = (["DRAFT", "SENT", "RECEIVED", "CANCELLED"] as const).find((s) => s === sp.status) as TransferStatus | undefined;
   const page = Math.max(1, Number(sp.page) || 1);
-  const where = status ? { status } : {};
+  // staff see transfers to or from their locations; HQ sees all
+  const where = { ...(status ? { status } : {}), ...(scope.all ? {} : { OR: [{ fromId: { in: scope.storeIds } }, { toId: { in: scope.storeIds } }] }) };
   const [rows, total, counts] = await Promise.all([
     db.stockTransfer.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * TAKE, take: TAKE,

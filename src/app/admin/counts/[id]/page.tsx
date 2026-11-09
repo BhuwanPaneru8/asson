@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { db } from "@/lib/db";
+import { scopeFor, canActAt } from "@/lib/scope";
 import { countNo, variance } from "@/lib/counts";
 import { cn, formatDateTime, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
@@ -22,6 +23,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
     },
   });
   if (!c) notFound();
+  if (!canActAt(await scopeFor(me), c.storeId)) notFound(); // counts belong to the people who work there
   const people = await db.user.findMany({ where: { id: { in: [c.createdById, c.submittedById, c.approvedById].filter((x): x is string => !!x) } }, select: { id: true, name: true } });
   const who = (id: string | null) => people.find((p) => p.id === id)?.name ?? "—";
   const title = `${countNo(c.number)} · ${c.store.name} · ${c.scopeLabel}`;

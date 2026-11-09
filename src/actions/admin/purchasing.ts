@@ -15,6 +15,7 @@ import { fieldErrors } from "@/lib/validators";
 import { landedUnitCost, weightedAverageCost } from "@/lib/costing";
 import { lookupVariants, type VariantHit } from "@/lib/pos";
 import { activeLocation, moveStock } from "@/lib/stock";
+import { requireStoreAccess } from "@/lib/scope";
 import { reorderPlan } from "@/lib/insights";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string; fieldErrors?: Record<string, string> };
@@ -170,6 +171,7 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
       if (po.status !== "ORDERED" && po.status !== "PARTIALLY_RECEIVED") throw new Error("Place the order before receiving goods.");
       const goodsValue = po.items.reduce((s, i) => s + i.unitCost * i.quantityOrdered, 0);
       const into = await activeLocation(tx, d.storeId);
+      await requireStoreAccess(me, into.id, tx); // goods are counted in by staff at that location
       const receipt = await tx.goodsReceipt.create({ data: { purchaseOrderId: po.id, receivedById: me.id, storeId: into.id, note: d.note || null }, select: { id: true, number: true } });
 
       for (const l of lines) {

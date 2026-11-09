@@ -3,6 +3,7 @@
 import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag, revalidatePath } from "next/cache";
 import { queueBackInStock } from "@/lib/stock-alerts";
+import { requireStoreAccess, ScopeError } from "@/lib/scope";
 import { activeLocation, defaultReceivingLocation, moveStock, moveStockOrThrow, StockError, zeroVariant, type StockReason } from "@/lib/stock";
 import { dispatchNotifications } from "@/lib/notifications";
 import { after } from "next/server";
@@ -170,6 +171,7 @@ export async function adjustStock(variantId: string, delta: number, reason: stri
   try {
     const v = await db.$transaction(async (tx) => {
       const at = await activeLocation(tx, storeId);
+      await requireStoreAccess(staff, at.id, tx); // only at a location this person works at
       // never let a location go negative, even under concurrent sales
       await moveStockOrThrow(tx, { variantId, storeId: at.id, delta, reason: reason as StockReason, note, actorId: staff.id }, `Stock can't go below zero: ${at.name} doesn't have that many.`);
       const v = await tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { sku: true, color: true, size: true, stock: true, productId: true, product: { select: { name: true } }, storeStock: { where: { storeId: at.id }, select: { quantity: true } } } });
@@ -183,7 +185,7 @@ export async function adjustStock(variantId: string, delta: number, reason: stri
     refresh();
     return { ok: true, stock: v.stock, here: v.here };
   } catch (e) {
-    if (e instanceof StockError) return { ok: false, error: e.message };
+    if (e instanceof StockError || e instanceof ScopeError) return { ok: false, error: e.message };
     void reportError("adjustStock", e);
     return { ok: false, error: "Couldn't adjust stock. Please try again." };
   }

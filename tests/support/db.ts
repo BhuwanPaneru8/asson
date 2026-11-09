@@ -12,13 +12,16 @@ export async function resetDb() {
 }
 
 let n = 0;
-export async function makeUser(role: Role, opts: { pin?: string; name?: string } = {}) {
+/** Staff act at every location unless `locations` lists the only store ids they work at. */
+export async function makeUser(role: Role, opts: { pin?: string; name?: string; locations?: string[] } = {}) {
   n++;
   const u = await db.user.create({
     data: {
       email: `${role.toLowerCase()}${n}@test.local`, name: opts.name ?? `${role} ${n}`, role,
       passwordHash: await bcrypt.hash("Password1", 4),
       approvalPinHash: opts.pin ? await bcrypt.hash(opts.pin, 4) : null,
+      allLocations: role !== "CUSTOMER" && !opts.locations,
+      ...(opts.locations ? { locations: { create: opts.locations.map((storeId) => ({ storeId })) } } : {}),
     },
   });
   return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role };
