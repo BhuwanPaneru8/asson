@@ -14,7 +14,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 | 5 | Brand and launch readiness | Real Asson catalogue, quality gates, production deploy | 🟡 Tests + CI done |
 | 6 | Delivery and notifications | NCM shipping, SMS and WhatsApp updates, COD control | 🟡 Built; gateways pending |
 | 7 | Store POS and accountability | Barcode POS, roles, approvals, returns, daily closing | ✅ |
-| 8 | Procurement and profit | Suppliers, POs, goods receipt, cost and profit | ✅ (supplier bills ⬜) |
+| 8 | Procurement and profit | Suppliers, POs, goods receipt, cost and profit | ✅ |
 | 9 | Growth | Phone login, loyalty, marketing pixels, Nepali language | ⬜ |
 | 10 | Scale | Multiple stores and warehouse, accounting, mobile app | ⬜ |
 
@@ -143,7 +143,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 
 **Done:** suppliers (seeded from the owner's sourcing notes) with scorecards; purchase orders (draft → ordered → partial → received, cancel); counted goods receipts with damage and shortfalls; landed cost; weighted-average cost; cost snapshot on every sale; reorder suggestions (45-day cover, minus units already on order); owner-only costs in the product editor with margin preview; Finance page (monthly P&L, product profitability, stock valuation, expenses); profit on the dashboard and closing.
 
-**Remaining:** supplier bills and payments (accounts payable), cycle counts and variance reports, accounting export.
+**Done 11 Nov 2026:** supplier bills and payments (Payables), stock counts with variance approval. **Remaining:** accounting export.
 
 **Goal:** know the true profit of every product and every day.
 

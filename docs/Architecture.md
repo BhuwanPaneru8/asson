@@ -182,7 +182,9 @@ erDiagram
 
 | `StockCount` / `StockCountLine` | Count at one location (whole or one category): COUNTING → SUBMITTED → APPROVED/CANCELLED. Lines hold `counted` and `systemAt` (location stock when counted); approval moves stock by the difference (reason `COUNT`) |
 
-**Planned tables:** `SupplierBill` / `SupplierPayment`, `Shipment` (NCM).
+| `SupplierBill` / `SupplierPayment` / `PaymentAllocation` | Accounts payable. Bills (amount incl. VAT, `paid`, OPEN/PAID/VOID) and payments (`unallocated` = supplier credit) joined by allocations; all money moves in `lib/payables.ts` under row locks and conditional updates, with DB CHECKs on the bounds. Voids, never deletes |
+
+**Planned tables:** `Shipment` (NCM).
 
 ## 7. Key flows
 

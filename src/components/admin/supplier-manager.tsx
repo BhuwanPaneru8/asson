@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { saveSupplier } from "@/actions/admin/purchasing";
 import { Pill } from "./ui";
 
-type Row = { id: string; name: string; contact: string; phone: string; email: string; location: string; country: string; notes: string; active: boolean; orders: number; spend: string; units: number; damageRate: number };
-const blank = { name: "", contact: "", phone: "", email: "", location: "", country: "Nepal", notes: "", active: true };
+type Row = { paymentTermsDays: number; id: string; name: string; contact: string; phone: string; email: string; location: string; country: string; notes: string; active: boolean; orders: number; spend: string; units: number; damageRate: number };
+const blank = { name: "", contact: "", phone: "", email: "", location: "", country: "Nepal", notes: "", active: true, paymentTermsDays: 30 };
 const input = "h-9 w-full rounded-md border border-line bg-white px-2.5 text-[13.5px] outline-none focus:border-ink";
 
 export function SupplierManager({ rows }: { rows: Row[] }) {
@@ -32,6 +32,7 @@ export function SupplierManager({ rows }: { rows: Row[] }) {
           <label className="text-[12.5px] text-muted">Email<input className={input} value={editing.email} onChange={set("email")} />{errors.email && <span className="text-danger">{errors.email}</span>}</label>
           <label className="text-[12.5px] text-muted">Location / market<input className={input} value={editing.location} onChange={set("location")} placeholder="New Road, Kathmandu" /></label>
           <label className="text-[12.5px] text-muted">Country<input className={input} value={editing.country} onChange={set("country")} /></label>
+          <label className="text-[12.5px] text-muted">Payment terms (days)<input className={input} value={editing.paymentTermsDays} onChange={(e) => setEditing({ ...editing, paymentTermsDays: Number(e.target.value.replace(/\D/g, "")) || 0 })} inputMode="numeric" />{errors.paymentTermsDays && <span className="text-danger">{errors.paymentTermsDays}</span>}</label>
           <label className="text-[12.5px] text-muted sm:col-span-3">Notes (specialities, payment terms, MOQ)<textarea className={`${input} h-16 py-1.5`} value={editing.notes} onChange={set("notes")} /></label>
           <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" className="accent-ink" checked={editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} /> Active</label>
           <div className="flex justify-end gap-2 sm:col-span-2"><button onClick={() => setEditing(null)} className="h-9 rounded-md px-3 text-[13.5px] hover:bg-cloud">Cancel</button><button onClick={save} disabled={pending} className="h-9 rounded-md bg-ink px-4 text-[13.5px] text-white disabled:opacity-50">Save</button></div>

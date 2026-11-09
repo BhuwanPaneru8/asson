@@ -43,6 +43,11 @@ export default async function Dashboard() {
     ? await Promise.all([db.errorEvent.count({ where: { resolvedAt: null, lastSeen: { gte: new Date(now - DAY) } } }), db.job.count({ where: { status: "DEAD" } })])
     : [0, 0];
   const systemAlert = [freshErrors && `${freshErrors} error${freshErrors > 1 ? "s" : ""} in the last 24 h.`, deadJobs && `${deadJobs} background job${deadJobs > 1 ? "s" : ""} failed.`].filter(Boolean).join(" ");
+  // owner: supplier bills past their due date
+  const overdueBills = can(me.role, "finance")
+    ? await db.supplierBill.aggregate({ where: { status: "OPEN", dueDate: { lt: new Date(`${ktmDate()}T00:00:00+05:45`) } }, _count: { _all: true }, _sum: { amount: true, paid: true } })
+    : null;
+  const overdueCount = overdueBills?._count._all ?? 0;
 
   const rev = cur._sum.total ?? 0, prevRev = prev._sum.total ?? 0;
   const aov = cur._count._all ? Math.round(rev / cur._count._all) : 0;
@@ -65,6 +70,11 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Dashboard" description={`${newCustomers} new customers in the last 30 days`} />
+      {overdueCount > 0 && (
+        <Link href="/admin/payables" className="mb-4 flex items-center gap-2 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn hover:underline">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> {overdueCount} supplier bill{overdueCount > 1 ? "s" : ""} overdue ({formatPrice((overdueBills?._sum.amount ?? 0) - (overdueBills?._sum.paid ?? 0))}). Open Payables →
+        </Link>
+      )}
       {systemAlert && (
         <Link href="/admin/system" className="mb-4 flex items-center gap-2 rounded-md bg-[#fbe9e7] px-4 py-3 text-[14px] text-danger hover:underline">
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> {systemAlert} Open System →
