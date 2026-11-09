@@ -26,7 +26,7 @@ export default async function LocationsPage() {
   const rows = locations.map((l) => {
     const value = values.find((v) => v.storeId === l.id)?.value;
     return {
-      id: l.id, code: l.code, name: l.name, kind: l.kind, address: l.address, phone: l.phone ?? "", hours: l.hours ?? "", priority: l.priority, pickup: l.pickup, active: l.active,
+      id: l.id, code: l.code, name: l.name, kind: l.kind, district: l.district ?? "", shipsOnline: l.shipsOnline, address: l.address, phone: l.phone ?? "", hours: l.hours ?? "", priority: l.priority, pickup: l.pickup, active: l.active,
       units: sums.find((s) => s.storeId === l.id)?._sum.quantity ?? 0,
       skus: skus.find((s) => s.storeId === l.id)?._count._all ?? 0,
       value: showCost ? formatPrice(Number(value ?? 0)) : null,

@@ -6,10 +6,11 @@ import { Plus, Store, Warehouse } from "lucide-react";
 import { toast } from "sonner";
 import { saveLocation, type LocationInput } from "@/actions/admin/locations";
 import { Pill } from "./ui";
+import { DISTRICTS } from "@/lib/config";
 
-type Row = { id: string; code: string; name: string; kind: "SHOP" | "WAREHOUSE"; address: string; phone: string; hours: string; priority: number; pickup: boolean; active: boolean; units: number; skus: number; value: string | null; toPick: number; inTransit: number };
+type Row = { district: string; shipsOnline: boolean; id: string; code: string; name: string; kind: "SHOP" | "WAREHOUSE"; address: string; phone: string; hours: string; priority: number; pickup: boolean; active: boolean; units: number; skus: number; value: string | null; toPick: number; inTransit: number };
 type Draft = Omit<LocationInput, "priority"> & { priority: string; id?: string };
-const blank: Draft = { code: "", name: "", kind: "SHOP", address: "", phone: "", hours: "", priority: "100", pickup: false, active: true };
+const blank: Draft = { district: "", shipsOnline: true, code: "", name: "", kind: "SHOP", address: "", phone: "", hours: "", priority: "100", pickup: false, active: true };
 const input = "h-9 w-full rounded-md border border-line bg-white px-2.5 text-[13.5px] text-ink outline-none focus:border-ink";
 
 export function LocationManager({ rows }: { rows: Row[] }) {
@@ -34,6 +35,9 @@ export function LocationManager({ rows }: { rows: Row[] }) {
             <select className={input} value={editing.kind} onChange={set("kind")}><option value="SHOP">Shop (has a till)</option><option value="WAREHOUSE">Warehouse</option></select>
           </label>
           <label className="text-[12.5px] text-muted sm:col-span-2">Address<input className={input} value={editing.address} onChange={set("address")} placeholder="Lakeside-6, Pokhara" />{errors.address && <span className="text-danger">{errors.address}</span>}</label>
+          <label className="text-[12.5px] text-muted">District <span className="font-normal">(online orders go out from the nearest location)</span>
+            <select className={input} value={editing.district ?? ""} onChange={set("district")}><option value="">Not set</option>{DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}</select>
+          </label>
           <label className="text-[12.5px] text-muted">Phone<input className={input} value={editing.phone} onChange={set("phone")} inputMode="tel" /></label>
           <label className="text-[12.5px] text-muted">Fulfilment priority
             <input className={input} value={editing.priority} onChange={(e) => setEditing({ ...editing, priority: e.target.value.replace(/\D/g, "") })} inputMode="numeric" />
@@ -41,6 +45,7 @@ export function LocationManager({ rows }: { rows: Row[] }) {
           </label>
           {editing.kind === "SHOP" && <label className="text-[12.5px] text-muted">Opening hours (shown for pickup)<input className={input} value={editing.hours} onChange={set("hours")} placeholder="10am – 7pm, Sun–Fri" /></label>}
           <div className="flex flex-col justify-center gap-2 text-[13px]">
+            <label className="flex items-center gap-2"><input type="checkbox" className="accent-ink" checked={editing.shipsOnline ?? true} onChange={(e) => setEditing({ ...editing, shipsOnline: e.target.checked })} /> Ships online orders</label>
             {editing.kind === "SHOP" && <label className="flex items-center gap-2"><input type="checkbox" className="accent-ink" checked={editing.pickup} onChange={(e) => setEditing({ ...editing, pickup: e.target.checked })} /> Click-and-collect point</label>}
             <label className="flex items-center gap-2"><input type="checkbox" className="accent-ink" checked={editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} /> Active</label>
           </div>
@@ -57,8 +62,8 @@ export function LocationManager({ rows }: { rows: Row[] }) {
                 <tr key={r.id} className={r.active ? "" : "opacity-50"}>
                   <td className="px-4 py-2.5">
                     <p className="flex items-center gap-2 font-medium"><Icon className="h-4 w-4 text-muted" aria-hidden /> {r.name} <span className="font-mono text-[11.5px] text-muted">{r.code}</span></p>
-                    <p className="text-[12px] text-muted">{[r.kind === "SHOP" ? "Shop" : "Warehouse", r.address, r.phone].filter(Boolean).join(" · ")}</p>
-                    <div className="mt-1 flex gap-1.5">{r.pickup && <Pill tone="success">Pickup point</Pill>}{!r.active && <Pill>Inactive</Pill>}</div>
+                    <p className="text-[12px] text-muted">{[r.kind === "SHOP" ? "Shop" : "Warehouse", r.district || "district not set", r.address, r.phone].filter(Boolean).join(" · ")}</p>
+                    <div className="mt-1 flex gap-1.5">{r.pickup && <Pill tone="success">Pickup point</Pill>}{!r.shipsOnline && <Pill>No online orders</Pill>}{!r.active && <Pill>Inactive</Pill>}</div>
                   </td>
                   <td className="px-3 text-right tabular-nums">{r.priority}</td>
                   <td className="px-3 text-right font-semibold tabular-nums">{r.units.toLocaleString("en-IN")}</td>
@@ -71,7 +76,7 @@ export function LocationManager({ rows }: { rows: Row[] }) {
                       {r.inTransit > 0 && <Link href="/admin/transfers?status=SENT" className="underline">{r.inTransit} arriving</Link>}
                     </div>
                   </td>
-                  <td className="px-3 text-right"><button onClick={() => setEditing({ id: r.id, code: r.code, name: r.name, kind: r.kind, address: r.address, phone: r.phone, hours: r.hours, priority: String(r.priority), pickup: r.pickup, active: r.active })} className="text-[13px] underline">Edit</button></td>
+                  <td className="px-3 text-right"><button onClick={() => setEditing({ id: r.id, district: r.district, shipsOnline: r.shipsOnline, code: r.code, name: r.name, kind: r.kind, address: r.address, phone: r.phone, hours: r.hours, priority: String(r.priority), pickup: r.pickup, active: r.active })} className="text-[13px] underline">Edit</button></td>
                 </tr>
               );
             })}

@@ -190,9 +190,9 @@ async function main() {
   await db.user.create({ data: { email: "cashier@asson.test", name: "Ram Cashier", role: "CASHIER", passwordHash: await bcrypt.hash("Cashier@12345", 12) } });
   // Locations: online orders are filled from the warehouse first, then the shops
   const [warehouse, flagship, pokhara] = await Promise.all([
-    db.store.create({ data: { code: "WH-KTM", name: "Main warehouse", kind: "WAREHOUSE", address: "Balaju Industrial Area, Kathmandu", priority: 10 } }),
-    db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: "10am – 7pm, Sun–Fri", pickup: true, priority: 20 } }),
-    db.store.create({ data: { code: "PKR", name: "Asson Pokhara", kind: "SHOP", address: "Lakeside, Pokhara", hours: "10am – 8pm, every day", pickup: true, priority: 30 } }),
+    db.store.create({ data: { code: "WH-KTM", name: "Main warehouse", kind: "WAREHOUSE", district: "Kathmandu", address: "Balaju Industrial Area, Kathmandu", priority: 10 } }),
+    db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP", district: "Kathmandu", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: "10am – 7pm, Sun–Fri", pickup: true, priority: 20 } }),
+    db.store.create({ data: { code: "PKR", name: "Asson Pokhara", kind: "SHOP", district: "Kaski", address: "Lakeside, Pokhara", hours: "10am – 8pm, every day", pickup: true, priority: 30 } }),
   ]);
   // where demo staff work: ops staff and the manager across the business (HQ), the cashier at the Flagship
   await db.user.updateMany({ where: { email: { in: ["staff@asson.test", "manager@asson.test"] } }, data: { allLocations: true } });

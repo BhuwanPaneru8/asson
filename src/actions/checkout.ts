@@ -189,6 +189,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
         lines: order.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: `${i.name} (${i.size})` })),
         actorId: user?.id,
         prefer: shop?.id, // click-and-collect: take it off the pickup shop's shelf when it's there
+        toDistrict: address?.district, // delivery: nearest location that can send the whole order
       });
       // fill SKU snapshot
       const variants = await tx.variant.findMany({ where: { id: { in: cart.lines.map((l) => l.variantId) } }, select: { id: true, sku: true, costPrice: true } });

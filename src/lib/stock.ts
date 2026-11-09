@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { db } from "./db";
 import { store as storeConfig } from "./config";
+import { distanceTier } from "./geo";
 
 // Multi-location stock. Every unit lives at a location (`StoreStock`); `Variant.stock` is the total,
 // kept equal to the sum by a database trigger that also rejects direct writes to it. So the only way
@@ -63,7 +64,7 @@ export async function moveStockOrThrow(tx: Tx, m: StockMove, message: string) {
 
 // ---------- Locations ----------
 
-const locationSelect = { id: true, code: true, name: true, kind: true, address: true, phone: true, hours: true, priority: true, pickup: true, active: true } as const;
+const locationSelect = { id: true, code: true, name: true, kind: true, district: true, shipsOnline: true, address: true, phone: true, hours: true, priority: true, pickup: true, active: true } as const;
 export type Location = Prisma.StoreGetPayload<{ select: typeof locationSelect }>;
 
 /** Active locations, in fulfilment order. */
@@ -126,12 +127,19 @@ export type AllocLine = { orderItemId: string; variantId: string; quantity: numb
  */
 export function rankLocations(
   lines: { variantId: string; quantity: number }[],
-  locations: { id: string; priority: number }[],
+  locations: { id: string; priority: number; district?: string | null }[],
   available: Map<string, Map<string, number>>,
   prefer?: string,
+  toDistrict?: string | null,
 ) {
   const fills = (storeId: string) => lines.filter((l) => (available.get(l.variantId)?.get(storeId) ?? 0) >= l.quantity).length;
-  const ranked = [...locations].sort((a, b) => fills(b.id) - fills(a.id) || a.priority - b.priority);
+  const all = (storeId: string) => (fills(storeId) === lines.length ? 1 : 0);
+  // one parcel beats two; then the nearest to the customer; then the most lines on hand; then the owner's priority
+  const ranked = [...locations].sort((a, b) =>
+    all(b.id) - all(a.id) ||
+    distanceTier(a.district, toDistrict) - distanceTier(b.district, toDistrict) ||
+    fills(b.id) - fills(a.id) ||
+    a.priority - b.priority);
   if (prefer) {
     const i = ranked.findIndex((l) => l.id === prefer);
     if (i > 0) ranked.unshift(...ranked.splice(i, 1));
@@ -149,16 +157,20 @@ export async function allocateOrder(tx: Tx, opts: {
   lines: AllocLine[];
   prefer?: string;
   only?: string;
+  /** delivery district: nearer locations are tried first */
+  toDistrict?: string | null;
   actorId?: string | null;
   note?: string;
   picked?: boolean;
 }) {
+  const select = { id: true, priority: true, district: true } as const;
   const locations = opts.only
-    ? await tx.store.findMany({ where: { id: opts.only, active: true }, select: { id: true, priority: true } })
-    : await tx.store.findMany({ where: { active: true }, select: { id: true, priority: true } });
-  if (!locations.length) throw new StockError("No active location holds stock.");
+    ? await tx.store.findMany({ where: { id: opts.only, active: true }, select })
+    // online orders: locations that ship, plus the chosen pickup shop even if it doesn't ship
+    : await tx.store.findMany({ where: { active: true, OR: [{ shipsOnline: true }, ...(opts.prefer ? [{ id: opts.prefer }] : [])] }, select });
+  if (!locations.length) throw new StockError("No location can send this order right now.");
   const available = await stockByLocation([...new Set(opts.lines.map((l) => l.variantId))], tx);
-  const order = rankLocations(opts.lines, locations, available, opts.prefer ?? opts.only);
+  const order = rankLocations(opts.lines, locations, available, opts.prefer ?? opts.only, opts.toDistrict);
   const now = new Date();
 
   for (const line of opts.lines) {
