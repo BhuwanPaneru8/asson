@@ -707,6 +707,8 @@ model ReturnItem {
 model Supplier {
   id               String            @id @default(cuid())
   name             String
+  /// Permanent Account Number (9 digits): needed on the purchase register for input VAT
+  pan              String?
   contact          String?
   phone            String?
   email            String?

@@ -25,6 +25,7 @@ type R<T = object> = ({ ok: true } & T) | { ok: false; error: string; fieldError
 
 const supplierSchema = z.object({
   name: z.string().trim().min(2, "Enter the supplier name").max(120),
+  pan: z.string().trim().regex(/^\d{9}$/, "PAN is 9 digits").optional().or(z.literal("")),
   contact: z.string().trim().max(80).optional().or(z.literal("")),
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   email: z.string().trim().email("Invalid email").optional().or(z.literal("")),
