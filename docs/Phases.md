@@ -143,7 +143,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 
 **Done:** suppliers (seeded from the owner's sourcing notes) with scorecards; purchase orders (draft → ordered → partial → received, cancel); counted goods receipts with damage and shortfalls; landed cost; weighted-average cost; cost snapshot on every sale; reorder suggestions (45-day cover, minus units already on order); owner-only costs in the product editor with margin preview; Finance page (monthly P&L, product profitability, stock valuation, expenses); profit on the dashboard and closing.
 
-**Done 11 Nov 2026:** supplier bills and payments (Payables), stock counts with variance approval. **Remaining:** accounting export.
+**Done 11 Nov 2026:** supplier bills and payments (Payables), stock counts with variance approval. Accounting export (VAT summary and registers) ✅.
 
 **Goal:** know the true profit of every product and every day.
 
@@ -172,7 +172,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 
 - ✅ Multiple stores and a warehouse: stock per location, transfers, pick lists, per-shop till and closing
 - ✅ Click-and-collect: pickup at a shop, pay at the counter, hand-over at the till
-- Accounting integration (export or sync)
+- ✅ Accounting export (CSV registers + VAT summary); ⬜ direct sync to accounting software
 - Search engine (Meilisearch or Typesense) when the catalogue exceeds about 100k variants
 - Native mobile app on the same domain logic
 - Own garment production: tech packs, fabric inventory, production orders

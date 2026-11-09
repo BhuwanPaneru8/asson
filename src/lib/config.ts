@@ -21,6 +21,8 @@ export const store = {
   /** Order numbers are shown as PREFIX + number, e.g. AS000231 */
   orderPrefix: "AS",
   vatLabel: "Inclusive of 13% VAT",
+  /** VAT included in every price and delivery fee (used to split totals in the accounting registers) */
+  vatPercent: 13,
   shipping: {
     /** Free standard delivery anywhere in Nepal at or above this subtotal (paisa). */
     freeThreshold: 250000,
