@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { transitionOrder } from "@/lib/orders";
-import { dispatchNotifications, queueOrderNotice, renderSms } from "@/lib/notifications";
+import { dispatchNotifications, providers, queueOrderNotice, renderSms } from "@/lib/notifications";
 import { recordCall, recordCodRemittance } from "@/actions/admin/orders";
 import { actAs, makeProduct, makeUser, resetDb } from "../support/db";
 
@@ -45,6 +45,43 @@ describe("customer notifications (outbox)", () => {
     expect(results.reduce((s, r) => s + r.sent, 0)).toBe(2);
     const rows = await db.notification.findMany();
     expect(rows.every((r) => r.status === "SENT" && r.attempts === 1)).toBe(true);
+  });
+
+  it("a dispatcher that reads a message while another is sending it does not send it again", async () => {
+    const o = await onlineOrder();
+    await queueOrderNotice(db, o.id, "placed");
+    const sends: string[] = [];
+    // while the first send is "on the wire", a whole second dispatcher runs (the window the old claim left open)
+    providers.slow = {
+      name: "slow",
+      async send(to) {
+        sends.push(to);
+        if (sends.length === 1) await dispatchNotifications();
+        return { ok: true, ref: `slow-${sends.length}` };
+      },
+    };
+    const before = process.env.NOTIFY_SMS_PROVIDER;
+    process.env.NOTIFY_SMS_PROVIDER = "slow";
+    try {
+      await dispatchNotifications();
+      expect(sends).toHaveLength(1);
+      expect(await db.notification.findFirstOrThrow()).toMatchObject({ status: "SENT", attempts: 1 });
+    } finally {
+      if (before === undefined) delete process.env.NOTIFY_SMS_PROVIDER; else process.env.NOTIFY_SMS_PROVIDER = before;
+      delete providers.slow;
+    }
+  });
+
+  it("retries a message whose dispatcher crashed mid-send, but not a fresh claim", async () => {
+    const o = await onlineOrder();
+    await queueOrderNotice(db, o.id, "placed");
+    await queueOrderNotice(db, o.id, "confirmed");
+    const [stale, fresh] = await db.notification.findMany({ orderBy: { createdAt: "asc" } });
+    await db.notification.update({ where: { id: stale.id }, data: { status: "SENDING", attempts: 1, claimedAt: new Date(Date.now() - 11 * 60_000) } });
+    await db.notification.update({ where: { id: fresh.id }, data: { status: "SENDING", attempts: 1, claimedAt: new Date() } });
+    expect((await dispatchNotifications()).sent).toBe(1);
+    expect(await db.notification.findUniqueOrThrow({ where: { id: stale.id } })).toMatchObject({ status: "SENT", attempts: 2 });
+    expect((await db.notification.findUniqueOrThrow({ where: { id: fresh.id } })).status).toBe("SENDING");
   });
 
   it("keeps SMS copy to roughly one segment", async () => {

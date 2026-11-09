@@ -67,6 +67,7 @@ enum NotificationChannel {
 
 enum NotificationStatus {
   QUEUED
+  SENDING // claimed by one dispatcher; nobody else may send it
   SENT
   FAILED
   SKIPPED // no contact detail, or channel turned off
@@ -655,6 +656,8 @@ model Notification {
   providerRef String?
   error      String?
   attempts   Int                 @default(0)
+  /// when a dispatcher claimed it (SENDING); a stale claim (crash mid-send) becomes retryable
+  claimedAt  DateTime?
   createdAt  DateTime            @default(now())
   sentAt     DateTime?
 

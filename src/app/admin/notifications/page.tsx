@@ -9,7 +9,7 @@ import { NotificationActions, RetryButton } from "@/components/admin/notificatio
 
 export const metadata = { title: "Notifications" };
 
-const TONE: Record<NotificationStatus, "neutral" | "success" | "warn" | "danger"> = { QUEUED: "warn", SENT: "success", FAILED: "danger", SKIPPED: "neutral" };
+const TONE: Record<NotificationStatus, "neutral" | "success" | "warn" | "danger"> = { QUEUED: "warn", SENDING: "warn", SENT: "success", FAILED: "danger", SKIPPED: "neutral" };
 
 export default async function NotificationsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   await requirePermission("orders");
