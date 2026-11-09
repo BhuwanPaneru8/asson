@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 import { requirePermission, verifyPassword, getCurrentUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { can, discountLimitPercent, type Role } from "@/lib/permissions";
-import { buildDaySummary, expectedCashForShift, getDefaultStore, getOpenShift, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
+import { buildDaySummary, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
+import { allocateOrder, StockError, stockByLocation } from "@/lib/stock";
 import { findApproverByPin } from "@/lib/approvals";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
 
@@ -22,23 +23,26 @@ const rupeesToPaisa = (n: number) => Math.round(n * 100);
 export type PosItem = { variantId: string; sku: string; name: string; color: string; size: string; price: number; stock: number; image: string | null };
 
 export async function posLookup(query: string): Promise<PosItem[]> {
-  await requirePermission("pos.sell");
-  // never send purchase cost to the till
-  return (await lookupVariants(query)).map((v) => ({ variantId: v.variantId, sku: v.sku, name: v.name, color: v.color, size: v.size, price: v.price, stock: v.stock, image: v.image }));
+  const me = await requirePermission("pos.sell");
+  // the till sells from its own shop, so show that shop's count (never the purchase cost)
+  const [hits, shift] = await Promise.all([lookupVariants(query), getOpenShift(me.id)]);
+  const here = shift ? await stockByLocation(hits.map((h) => h.variantId)) : null;
+  return hits.map((v) => ({ variantId: v.variantId, sku: v.sku, name: v.name, color: v.color, size: v.size, price: v.price, stock: here ? here.get(v.variantId)?.get(shift!.storeId) ?? 0 : v.stock, image: v.image }));
 }
 
 // ---------- Shifts ----------
 
-export async function openShift(openingFloatRupees: number): Promise<R> {
+export async function openShift(openingFloatRupees: number, storeId?: string): Promise<R> {
   const me = await requirePermission("pos.sell");
   const float = rupeesToPaisa(openingFloatRupees);
   if (!Number.isFinite(float) || float < 0 || float > 50_000_00) return { ok: false, error: "Enter the cash in the drawer (Rs. 0 – 50,000)." };
   if (await getOpenShift(me.id)) return { ok: false, error: "You already have an open shift." };
-  const store = await getDefaultStore();
-  if (await isDayLocked(store.id, ktmDate())) return { ok: false, error: "Today has already been closed and locked. Ask the owner to reopen tomorrow." };
+  const store = await getShop(storeId);
+  if (storeId && store.id !== storeId) return { ok: false, error: "That shop isn't active." };
+  if (await isDayLocked(store.id, ktmDate())) return { ok: false, error: `Today has already been closed and locked at ${store.name}. Ask the owner to reopen tomorrow.` };
   await db.$transaction(async (tx) => {
     const s = await tx.shift.create({ data: { storeId: store.id, cashierId: me.id, openingFloat: float } });
-    await audit(tx, me, { action: "shift.open", entity: ["Shift", s.id], summary: `${me.name} opened a shift with ${formatPrice(float)} in the drawer` });
+    await audit(tx, me, { action: "shift.open", entity: ["Shift", s.id], summary: `${me.name} opened a shift at ${store.name} with ${formatPrice(float)} in the drawer` });
   });
   refresh();
   return { ok: true };
@@ -150,16 +154,12 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
   // Link a known customer by phone (counts toward their history)
   const phone = d.customer?.phone || "";
   const customer = phone ? await db.user.findFirst({ where: { phone, role: "CUSTOMER" }, select: { id: true, email: true } }) : null;
-  const store = await getDefaultStore();
+  const store = await db.store.findUniqueOrThrow({ where: { id: shift.storeId }, select: { id: true, name: true } });
+  const inactive = variants.find((v) => v.product.status !== "ACTIVE");
+  if (inactive) return { ok: false, error: `${inactive.product.name} is not for sale.` };
 
   try {
     const order = await db.$transaction(async (tx) => {
-      for (const v of variants) {
-        const q = qty.get(v.id)!;
-        if (v.product.status !== "ACTIVE") throw new SaleError(`${v.product.name} is not for sale.`);
-        const res = await tx.variant.updateMany({ where: { id: v.id, stock: { gte: q } }, data: { stock: { decrement: q } } });
-        if (!res.count) throw new SaleError(`${v.product.name} (${v.color} ${v.size}) — system shows only ${v.stock} in stock. Recount, or ask a manager to adjust stock.`);
-      }
       for (const t of voucherTenders) {
         const res = await tx.coupon.updateMany({ where: { code: t.reference!, active: true, isCredit: true, value: { gte: t.amount } }, data: { value: { decrement: t.amount }, usedCount: { increment: 1 } } });
         if (!res.count) throw new SaleError(`Voucher ${t.reference} was just used. Check its balance.`);
@@ -192,9 +192,10 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
           tenders: { create: d.tenders.map((t) => ({ method: t.method, amount: t.amount, tendered: t.method === "CASH" ? t.tendered ?? t.amount : null, reference: t.reference || null })) },
           events: { create: { status: "DELIVERED", actor: me.email, message: `Sold in store by ${me.name}${discount ? ` · discount ${formatPrice(discount)} (${d.discount!.reason})` : ""}` } },
         },
-        select: { id: true, number: true },
+        select: { id: true, number: true, items: { select: { id: true, variantId: true, quantity: true } } },
       });
-      await tx.inventoryLog.createMany({ data: variants.map((v) => ({ variantId: v.id, delta: -qty.get(v.id)!, reason: "SALE", note: "Store sale", orderId: o.id, actorId: me.id })) });
+      // stock comes from this shop only, handed over on the spot (picked)
+      await allocateOrder(tx, { orderId: o.id, only: store.id, picked: true, actorId: me.id, note: `Store sale · ${store.name}`, lines: o.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: i.variantId! })) });
       for (const v of variants) await tx.product.update({ where: { id: v.product.id }, data: { soldCount: { increment: qty.get(v.id)! } } });
       if (customer) await earnForOrder(tx, o.id); // a store sale is delivered on the spot
       if (discount) {
@@ -208,6 +209,11 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     return { ok: true, orderId: order.id, number: formatOrderNumber(order.number), change };
   } catch (e) {
     if (e instanceof SaleError) return { ok: false, error: e.message };
+    if (e instanceof StockError) {
+      const v = variants.find((x) => x.id === e.variantId);
+      const here = v ? (await stockByLocation([v.id])).get(v.id)?.get(store.id) ?? 0 : 0;
+      return { ok: false, error: v ? `${v.product.name} (${v.color} ${v.size}): the system shows only ${here} at ${store.name}. Recount, or ask a manager to adjust or transfer stock.` : e.message };
+    }
     // a concurrent duplicate submit hit the unique clientRef — return the sale that won
     const dup = await db.order.findUnique({ where: { clientRef: d.clientRef }, select: { id: true, number: true } });
     if (dup) return { ok: true, orderId: dup.id, number: formatOrderNumber(dup.number), change };
@@ -218,10 +224,10 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
 
 // ---------- Daily closing ----------
 
-export async function lockDay(date: string, note?: string): Promise<R> {
+export async function lockDay(date: string, note?: string, storeId?: string): Promise<R> {
   const me = await requirePermission("closing");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > ktmDate()) return { ok: false, error: "Invalid date." };
-  const store = await getDefaultStore();
+  const store = await getShop(storeId);
   if (await isDayLocked(store.id, date)) return { ok: false, error: "This day is already locked." };
   const summary = await buildDaySummary(store.id, date);
   if (!summary.allShiftsClosed) return { ok: false, error: "Close every shift before locking the day." };

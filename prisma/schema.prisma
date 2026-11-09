@@ -92,6 +92,18 @@ enum ExpenseCategory {
   OTHER
 }
 
+enum StoreKind {
+  SHOP
+  WAREHOUSE
+}
+
+enum TransferStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  CANCELLED
+}
+
 enum ShiftStatus {
   OPEN
   CLOSED
@@ -159,28 +171,28 @@ enum ReviewStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  phone        String?
-  passwordHash String
-  role         Role     @default(CUSTOMER)
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  phone           String?
+  passwordHash    String
+  role            Role     @default(CUSTOMER)
   // bump to invalidate every active session for this user
-  tokenVersion Int      @default(0)
+  tokenVersion    Int      @default(0)
   /// bcrypt hash of a 4–6 digit PIN managers/owners use to approve discounts at the till
   approvalPinHash String?
   /// loyalty points balance (sum of PointsEntry.delta; kept here for atomic redemption)
-  points       Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  points          Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  addresses Address[]
-  orders    Order[]
+  addresses     Address[]
+  orders        Order[]
   pointsEntries PointsEntry[]
   stockAlerts   StockAlert[]
-  reviews   Review[]
-  wishlist  WishlistItem[]
-  cart      Cart?
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  cart          Cart?
 
   @@index([role])
   @@index([createdAt])
@@ -292,10 +304,10 @@ model MediaAsset {
   id           String   @id @default(cuid())
   /// "p/<32 hex>" — files live at <MEDIA_DIR>/<key>-<width>.<ext>
   key          String   @unique
-  ext          String   // "webp" or "jpg"
-  width        Int      // largest stored width
+  ext          String // "webp" or "jpg"
+  width        Int // largest stored width
   height       Int
-  bytes        Int      // total bytes across all widths
+  bytes        Int // total bytes across all widths
   originalName String   @default("")
   uploadedById String?
   createdAt    DateTime @default(now())
@@ -322,6 +334,9 @@ model Variant {
   inventoryLogs InventoryLog[]
   purchaseItems PurchaseOrderItem[]
   stockAlerts   StockAlert[]
+  storeStock    StoreStock[]
+  allocations   OrderAllocation[]
+  transferItems StockTransferItem[]
 
   @@unique([productId, color, size])
   @@index([color])
@@ -334,13 +349,17 @@ model InventoryLog {
   variantId String
   variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   delta     Int
-  reason    String // SALE | CANCEL_RESTOCK | RETURN_RESTOCK | MANUAL_ADJUST | RECEIVED
+  reason    String // SALE | CANCEL_RESTOCK | RETURN_RESTOCK | MANUAL_ADJUST | RECEIVED | DAMAGED | TRANSFER_OUT | TRANSFER_IN | TRANSFER_LOSS
   note      String?
   orderId   String?
   actorId   String?
+  /// location whose stock changed (null on rows from before locations existed)
+  storeId   String?
+  store     Store?   @relation(fields: [storeId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([variantId, createdAt])
+  @@index([storeId, createdAt])
 }
 
 model Cart {
@@ -378,57 +397,58 @@ model WishlistItem {
 }
 
 model Order {
-  id              String        @id @default(cuid())
-  number          Int           @unique @default(autoincrement())
-  userId          String?
-  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  email           String
-  phone           String
-  status          OrderStatus   @default(PENDING)
-  paymentStatus   PaymentStatus @default(PENDING)
-  paymentMethod   PaymentMethod
-  paymentProvider PaymentProvider?
-  paymentRef      String?
+  id                   String           @id @default(cuid())
+  number               Int              @unique @default(autoincrement())
+  userId               String?
+  user                 User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email                String
+  phone                String
+  status               OrderStatus      @default(PENDING)
+  paymentStatus        PaymentStatus    @default(PENDING)
+  paymentMethod        PaymentMethod
+  paymentProvider      PaymentProvider?
+  paymentRef           String?
   /// unpaid online orders are cancelled (and restocked) after this time
-  paymentDueAt    DateTime?
-  subtotal        Int
-  discount        Int           @default(0)
-  shippingFee     Int           @default(0)
-  total           Int
-  couponCode      String?
-  shippingMethod  String
-  shippingAddress Json
-  carrier         String?
-  trackingNumber  String?
-  customerNote    String?
-  channel         SalesChannel  @default(ONLINE)
+  paymentDueAt         DateTime?
+  subtotal             Int
+  discount             Int              @default(0)
+  shippingFee          Int              @default(0)
+  total                Int
+  couponCode           String?
+  shippingMethod       String
+  shippingAddress      Json
+  carrier              String?
+  trackingNumber       String?
+  customerNote         String?
+  channel              SalesChannel     @default(ONLINE)
   /// POS: who rang it up, on which shift, and who approved the discount
-  cashierId       String?
-  shiftId         String?
-  shift           Shift?        @relation(fields: [shiftId], references: [id])
-  discountReason  String?
+  cashierId            String?
+  shiftId              String?
+  shift                Shift?           @relation(fields: [shiftId], references: [id])
+  discountReason       String?
   discountApprovedById String?
   /// idempotency key from the till so a double-tap can't create two sales
-  clientRef       String?       @unique
+  clientRef            String?          @unique
   /// COD verification call before dispatch (fake/impulse COD orders are costly in Nepal)
-  callOutcome     CallOutcome   @default(NONE)
-  callAttempts    Int           @default(0)
+  callOutcome          CallOutcome      @default(NONE)
+  callAttempts         Int              @default(0)
   /// loyalty: points spent on this order (and their value) and points earned once delivered
-  pointsRedeemed  Int           @default(0)
-  pointsDiscount  Int           @default(0)
-  pointsEarned    Int           @default(0)
+  pointsRedeemed       Int              @default(0)
+  pointsDiscount       Int              @default(0)
+  pointsEarned         Int              @default(0)
   /// courier has paid us the COD collected for this order
-  codRemittanceId String?
-  codRemittance   CodRemittance? @relation(fields: [codRemittanceId], references: [id])
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  codRemittanceId      String?
+  codRemittance        CodRemittance?   @relation(fields: [codRemittanceId], references: [id])
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  items    OrderItem[]
-  events   OrderEvent[]
-  payments Payment[]
-  tenders  Tender[]
-  returns  Return[]
+  items         OrderItem[]
+  events        OrderEvent[]
+  payments      Payment[]
+  tenders       Tender[]
+  returns       Return[]
   notifications Notification[]
+  allocations   OrderAllocation[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -440,32 +460,123 @@ model Order {
 }
 
 /// A physical shop. One today (flagship); more later.
+/// A place that holds stock: a shop (has a till, can offer pickup) or a warehouse.
 model Store {
-  id        String     @id @default(cuid())
-  code      String     @unique
-  name      String
-  address   String
-  createdAt DateTime   @default(now())
-  shifts    Shift[]
-  closings  DayClose[]
+  id            String            @id @default(cuid())
+  code          String            @unique
+  name          String
+  address       String
+  kind          StoreKind         @default(SHOP)
+  phone         String?
+  /// online orders are filled from the lowest number first (ties: most lines in stock)
+  priority      Int               @default(100)
+  /// click-and-collect point (shops only)
+  pickup        Boolean           @default(false)
+  /// opening hours shown to pickup customers, e.g. "10am – 7pm, Sun–Fri"
+  hours         String?
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @default(now()) @updatedAt
+  shifts        Shift[]
+  closings      DayClose[]
+  stock         StoreStock[]
+  inventoryLogs InventoryLog[]
+  allocations   OrderAllocation[]
+  receipts      GoodsReceipt[]
+  transfersOut  StockTransfer[]   @relation("TransferFrom")
+  transfersIn   StockTransfer[]   @relation("TransferTo")
+
+  @@index([active, priority])
+}
+
+/// Units of a variant at one location. Variant.stock is kept equal to the sum of these rows by a
+/// database trigger, and direct writes to Variant.stock are rejected (see lib/stock.ts).
+model StoreStock {
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  variantId String
+  variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([storeId, variantId])
+  @@index([variantId])
+}
+
+/// Where each unit of an order was taken from. Drives pick lists and puts cancelled units back
+/// where they came from. Till sales are allocated (and picked) at the till's shop.
+model OrderAllocation {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  variantId   String?
+  variant     Variant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  storeId     String
+  store       Store     @relation(fields: [storeId], references: [id])
+  quantity    Int
+  pickedAt    DateTime?
+  pickedById  String?
+  createdAt   DateTime  @default(now())
+
+  @@index([storeId, pickedAt])
+  @@index([orderId])
+}
+
+/// Moving stock between locations: DRAFT → SENT (leaves the source) → RECEIVED (counted in).
+model StockTransfer {
+  id           String              @id @default(cuid())
+  number       Int                 @unique @default(autoincrement())
+  fromId       String
+  from         Store               @relation("TransferFrom", fields: [fromId], references: [id])
+  toId         String
+  to           Store               @relation("TransferTo", fields: [toId], references: [id])
+  status       TransferStatus      @default(DRAFT)
+  note         String?
+  createdById  String
+  sentAt       DateTime?
+  sentById     String?
+  receivedAt   DateTime?
+  receivedById String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  items        StockTransferItem[]
+
+  @@index([status, createdAt])
+  @@index([fromId, status])
+  @@index([toId, status])
+}
+
+model StockTransferItem {
+  id         String        @id @default(cuid())
+  transferId String
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    Variant       @relation(fields: [variantId], references: [id])
+  quantity   Int
+  /// counted at the destination; quantity − received was lost in transit
+  received   Int?
+
+  @@unique([transferId, variantId])
 }
 
 /// A cashier's session at the till, with the cash float they started with.
 model Shift {
-  id            String      @id @default(cuid())
-  storeId       String
-  store         Store       @relation(fields: [storeId], references: [id])
-  cashierId     String
-  status        ShiftStatus @default(OPEN)
-  openingFloat  Int // paisa
-  openedAt      DateTime    @default(now())
-  closedAt      DateTime?
-  expectedCash  Int?
-  countedCash   Int?
-  difference    Int?
-  closeNote     String?
-  closedById    String?
-  orders        Order[]
+  id           String      @id @default(cuid())
+  storeId      String
+  store        Store       @relation(fields: [storeId], references: [id])
+  cashierId    String
+  status       ShiftStatus @default(OPEN)
+  openingFloat Int // paisa
+  openedAt     DateTime    @default(now())
+  closedAt     DateTime?
+  expectedCash Int?
+  countedCash  Int?
+  difference   Int?
+  closeNote    String?
+  closedById   String?
+  orders       Order[]
 
   @@index([storeId, status])
   @@index([cashierId, status])
@@ -542,6 +653,7 @@ model OrderItem {
   unitCost  Int?
 
   returnItems ReturnItem[]
+  allocations OrderAllocation[]
 
   @@index([orderId])
   @@index([productId])
@@ -600,35 +712,35 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id           String              @id @default(cuid())
-  number       Int                 @unique @default(autoincrement())
-  supplierId   String
-  supplier     Supplier            @relation(fields: [supplierId], references: [id])
-  status       PurchaseOrderStatus @default(DRAFT)
-  expectedAt   DateTime?
+  id          String              @id @default(cuid())
+  number      Int                 @unique @default(autoincrement())
+  supplierId  String
+  supplier    Supplier            @relation(fields: [supplierId], references: [id])
+  status      PurchaseOrderStatus @default(DRAFT)
+  expectedAt  DateTime?
   /// freight, customs, transport — spread over items by value into landed cost
-  landedCost   Int                 @default(0)
-  notes        String?
-  createdById  String
-  orderedAt    DateTime?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
-  items        PurchaseOrderItem[]
-  receipts     GoodsReceipt[]
+  landedCost  Int                 @default(0)
+  notes       String?
+  createdById String
+  orderedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  items       PurchaseOrderItem[]
+  receipts    GoodsReceipt[]
 
   @@index([status, createdAt])
   @@index([supplierId])
 }
 
 model PurchaseOrderItem {
-  id               String   @id @default(cuid())
+  id               String        @id @default(cuid())
   purchaseOrderId  String
   purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   variantId        String
-  variant          Variant  @relation(fields: [variantId], references: [id])
+  variant          Variant       @relation(fields: [variantId], references: [id])
   quantityOrdered  Int
-  quantityReceived Int      @default(0)
-  quantityDamaged  Int      @default(0)
+  quantityReceived Int           @default(0)
+  quantityDamaged  Int           @default(0)
   unitCost         Int // supplier price per unit, paisa
 
   @@unique([purchaseOrderId, variantId])
@@ -641,40 +753,43 @@ model GoodsReceipt {
   purchaseOrderId String
   purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
   receivedById    String
+  /// location the counted units went into
+  storeId         String?
+  store           Store?             @relation(fields: [storeId], references: [id])
   note            String?
   createdAt       DateTime           @default(now())
   items           GoodsReceiptItem[]
 }
 
 model GoodsReceiptItem {
-  id         String       @id @default(cuid())
-  receiptId  String
-  receipt    GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  poItemId   String
-  variantId  String
-  quantity   Int // good units added to stock
-  damaged    Int @default(0) // rejected at the door
+  id             String       @id @default(cuid())
+  receiptId      String
+  receipt        GoodsReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poItemId       String
+  variantId      String
+  quantity       Int // good units added to stock
+  damaged        Int          @default(0) // rejected at the door
   landedUnitCost Int
 }
 
 /// Outbox: every customer message is recorded first, then sent by a provider (retryable, auditable).
 model Notification {
-  id         String              @id @default(cuid())
-  orderId    String?
-  order      Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  channel    NotificationChannel
-  template   String
-  to         String
-  body       String
-  status     NotificationStatus  @default(QUEUED)
-  provider   String?
+  id          String              @id @default(cuid())
+  orderId     String?
+  order       Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  channel     NotificationChannel
+  template    String
+  to          String
+  body        String
+  status      NotificationStatus  @default(QUEUED)
+  provider    String?
   providerRef String?
-  error      String?
-  attempts   Int                 @default(0)
+  error       String?
+  attempts    Int                 @default(0)
   /// when a dispatcher claimed it (SENDING); a stale claim (crash mid-send) becomes retryable
-  claimedAt  DateTime?
-  createdAt  DateTime            @default(now())
-  sentAt     DateTime?
+  claimedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  sentAt      DateTime?
 
   @@index([status, createdAt])
   @@index([orderId])

@@ -29,16 +29,35 @@ export function actAs(user: Awaited<ReturnType<typeof makeUser>> | null) {
 }
 
 /** A sellable product with one variant per size. Price/cost in rupees for readability. */
-export async function makeProduct(opts: { name?: string; price?: number; mrp?: number; cost?: number; stock?: Record<string, number> } = {}) {
+export async function makeProduct(opts: { name?: string; price?: number; mrp?: number; cost?: number; stock?: Record<string, number>; at?: string } = {}) {
   n++;
   const cat = await db.category.upsert({ where: { slug: "test-cat" }, update: {}, create: { name: "Test", slug: "test-cat" } });
   const stock = opts.stock ?? { M: 10 };
-  return db.product.create({
+  const p = await db.product.create({
     data: {
       name: opts.name ?? `Test Shirt ${n}`, slug: `test-shirt-${n}`, brand: "Asson", description: "A test product.", gender: "MEN", status: "ACTIVE",
       price: (opts.price ?? 1000) * 100, compareAtPrice: opts.mrp ? opts.mrp * 100 : null, categoryId: cat.id,
-      variants: { create: Object.entries(stock).map(([size, qty], i) => ({ sku: `T${n}-${size}`, color: "White", colorHex: "#FFFFFF", size, stock: qty, position: i, costPrice: opts.cost != null ? opts.cost * 100 : null })) },
+      variants: { create: Object.entries(stock).map(([size], i) => ({ sku: `T${n}-${size}`, color: "White", colorHex: "#FFFFFF", size, position: i, costPrice: opts.cost != null ? opts.cost * 100 : null })) },
     },
     include: { variants: { orderBy: { position: "asc" } } },
   });
+  // stock lives at a location (opts.at, else the flagship); Variant.stock follows by trigger
+  const at = opts.at ?? (await makeLocation({ code: "FLAGSHIP" })).id;
+  const rows = p.variants.map((v) => ({ storeId: at, variantId: v.id, quantity: stock[v.size] })).filter((r) => r.quantity > 0);
+  if (rows.length) await db.storeStock.createMany({ data: rows });
+  return db.product.findUniqueOrThrow({ where: { id: p.id }, include: { variants: { orderBy: { position: "asc" } } } });
+}
+
+/** A location (shop by default). Re-using a code returns the existing one. */
+export async function makeLocation(opts: { code: string; name?: string; kind?: "SHOP" | "WAREHOUSE"; priority?: number; pickup?: boolean; active?: boolean }) {
+  return db.store.upsert({
+    where: { code: opts.code },
+    update: {},
+    create: { code: opts.code, name: opts.name ?? opts.code, address: "Kathmandu", kind: opts.kind ?? "SHOP", priority: opts.priority ?? 100, pickup: opts.pickup ?? false, active: opts.active ?? true },
+  });
+}
+
+/** Units of a variant at a location. */
+export async function stockAt(storeId: string, variantId: string) {
+  return (await db.storeStock.findUnique({ where: { storeId_variantId: { storeId, variantId } } }))?.quantity ?? 0;
 }

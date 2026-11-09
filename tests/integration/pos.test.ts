@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { closeShift, createPosSale, openShift } from "@/actions/pos";
-import { actAs, makeProduct, makeUser, resetDb } from "../support/db";
+import { actAs, makeLocation, makeProduct, makeUser, resetDb } from "../support/db";
 
 const ref = () => `test-${Math.random().toString(36).slice(2, 12)}`;
 const cash = (amount: number, tendered?: number) => ({ method: "CASH" as const, amount, tendered });
@@ -42,7 +42,7 @@ describe("POS sale", () => {
 
   it("never sells the last unit twice, even at the same instant", async () => {
     const p = await makeProduct({ stock: { M: 1 } });
-    const store = await db.store.create({ data: { code: "FLAGSHIP", name: "Flagship", address: "KTM" } });
+    const store = await makeLocation({ code: "FLAGSHIP" });
     const a = await makeUser("CASHIER"), b = await makeUser("CASHIER");
     await db.shift.createMany({ data: [{ storeId: store.id, cashierId: a.id, openingFloat: 0 }, { storeId: store.id, cashierId: b.id, openingFloat: 0 }] });
     const sell = async (u: typeof a) => { actAs(u); return createPosSale({ clientRef: ref(), lines: [{ variantId: p.variants[0].id, quantity: 1 }], discount: null, tenders: [cash(100_000)] }); };

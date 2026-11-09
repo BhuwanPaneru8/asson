@@ -2,6 +2,7 @@
 
 import { refresh, revalidateTag, revalidatePath } from "next/cache";
 import { queueBackInStock } from "@/lib/stock-alerts";
+import { activeLocation, defaultReceivingLocation, moveStock, moveStockOrThrow, StockError, zeroVariant, type StockReason } from "@/lib/stock";
 import { dispatchNotifications } from "@/lib/notifications";
 import { after } from "next/server";
 import { z } from "zod";
@@ -76,7 +77,7 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
   try {
     const productId = await db.$transaction(async (tx) => {
       const before = id ? await tx.product.findUnique({ where: { id }, select: { name: true, slug: true, brand: true, description: true, details: true, gender: true, status: true, categoryId: true, price: true, compareAtPrice: true, material: true, fit: true, care: true, tags: true, featured: true } }) : null;
-      const vCount = { added: 0, removed: 0, stock: 0, cost: [] as [string, number | null, number | null][] };
+      const vCount = { added: 0, removed: 0, cost: [] as [string, number | null, number | null][] };
       const p = id
         ? await tx.product.update({ where: { id }, data: { ...base, collections: { set: d.collectionIds.map((cid) => ({ id: cid })) } } })
         : await tx.product.create({ data: { ...base, collections: { connect: d.collectionIds.map((cid) => ({ id: cid })) } } });
@@ -85,26 +86,33 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
       if (d.images.length) await tx.productImage.createMany({ data: d.images.map((im, i) => ({ productId: p.id, url: im.url, alt: im.alt, color: im.color || null, position: i })) });
 
       // Variants: update in place (keeps cart/order references), add new, delete removed (unless ever ordered)
-      const existing = await tx.variant.findMany({ where: { productId: p.id }, select: { id: true, stock: true, _count: { select: { orderItems: true } } } });
+      const existing = await tx.variant.findMany({ where: { productId: p.id }, select: { id: true, _count: { select: { orderItems: true } } } });
       const keep = new Set(d.variants.filter((v) => v.id).map((v) => v.id!));
       for (const ex of existing.filter((e) => !keep.has(e.id))) {
-        if (ex._count.orderItems > 0) await tx.variant.update({ where: { id: ex.id }, data: { stock: 0 } });
-        else await tx.variant.delete({ where: { id: ex.id } });
+        // a size with order history is kept (for the records) but emptied at every location
+        if (ex._count.orderItems > 0) await zeroVariant(tx, ex.id, staff.id, "Size removed in product editor");
+        else {
+          await zeroVariant(tx, ex.id, staff.id, "Size deleted in product editor");
+          await tx.variant.delete({ where: { id: ex.id } });
+        }
         vCount.removed++;
       }
+      let receiveAt: string | undefined;
       for (const [i, v] of d.variants.entries()) {
-        const data = { sku: v.sku, color: v.color, colorHex: v.colorHex, size: v.size, stock: v.stock, position: i, ...(v.costPrice !== undefined ? { costPrice: v.costPrice } : {}) };
+        // stock of existing sizes changes only through Inventory (per location), never by typing a total here
+        const data = { sku: v.sku, color: v.color, colorHex: v.colorHex, size: v.size, position: i, ...(v.costPrice !== undefined ? { costPrice: v.costPrice } : {}) };
         const prev = v.id ? existing.find((e) => e.id === v.id) : undefined;
         if (prev) {
           const old = await tx.variant.findUniqueOrThrow({ where: { id: prev.id }, select: { sku: true, costPrice: true } });
           await tx.variant.update({ where: { id: prev.id }, data });
-          if (prev.stock !== v.stock) vCount.stock++;
           if (v.costPrice !== undefined && (v.costPrice ?? null) !== old.costPrice) vCount.cost.push([v.sku, old.costPrice, v.costPrice ?? null]);
-          if (prev.stock !== v.stock) await tx.inventoryLog.create({ data: { variantId: prev.id, delta: v.stock - prev.stock, reason: "MANUAL_ADJUST", note: "Product editor", actorId: staff.id } });
         } else {
           const nv = await tx.variant.create({ data: { ...data, productId: p.id } });
           vCount.added++;
-          if (v.stock) await tx.inventoryLog.create({ data: { variantId: nv.id, delta: v.stock, reason: "RECEIVED", note: "Initial stock", actorId: staff.id } });
+          if (v.stock) {
+            receiveAt ??= (await defaultReceivingLocation(tx)).id;
+            await moveStock(tx, { variantId: nv.id, storeId: receiveAt, delta: v.stock, reason: "RECEIVED", note: "Initial stock", actorId: staff.id });
+          }
         }
       }
       const fields = ["name", "slug", "brand", "description", "details", "gender", "status", "categoryId", "price", "compareAtPrice", "material", "fit", "care", "tags", "featured"] as const;
@@ -119,7 +127,6 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
       const extra = [
         vCount.added && `${vCount.added} size${vCount.added > 1 ? "s" : ""} added`,
         vCount.removed && `${vCount.removed} size${vCount.removed > 1 ? "s" : ""} removed`,
-        vCount.stock && `stock changed on ${vCount.stock} size${vCount.stock > 1 ? "s" : ""}`,
         vCount.cost.length && `cost changed on ${vCount.cost.length} size${vCount.cost.length > 1 ? "s" : ""}`,
       ].filter(Boolean).join("; ");
       if (!before) {
@@ -154,28 +161,30 @@ export async function setProductStatus(id: string, status: "DRAFT" | "ACTIVE" | 
   return { ok: true };
 }
 
-export async function adjustStock(variantId: string, delta: number, reason: string, note?: string): Promise<R & { stock?: number }> {
+export async function adjustStock(variantId: string, delta: number, reason: string, note?: string, storeId?: string): Promise<R & { stock?: number; here?: number }> {
   const staff = await requirePermission("inventory.adjust");
   if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 100000) return { ok: false, error: "Enter a whole number." };
   const allowed = ["RECEIVED", "MANUAL_ADJUST", "DAMAGED", "RETURN_RESTOCK"];
   if (!allowed.includes(reason)) return { ok: false, error: "Invalid reason." };
   try {
     const v = await db.$transaction(async (tx) => {
-      // never let stock go negative, even under concurrent sales
-      const res = await tx.variant.updateMany({ where: { id: variantId, ...(delta < 0 ? { stock: { gte: -delta } } : {}) }, data: { stock: { increment: delta } } });
-      if (!res.count) throw new Error("insufficient");
-      await tx.inventoryLog.create({ data: { variantId, delta, reason, note: note?.slice(0, 200), actorId: staff.id } });
-      const v = await tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { sku: true, color: true, size: true, stock: true, productId: true, product: { select: { name: true } } } });
-      await audit(tx, staff, { action: "stock.adjust", entity: ["Product", v.productId], summary: `${v.product.name} ${v.color} ${v.size} (${v.sku}): ${delta > 0 ? "+" : ""}${delta} ${reason.toLowerCase().replace("_", " ")}${note ? ` — ${note.slice(0, 80)}` : ""} → ${v.stock} in stock`, changes: { sku: v.sku, delta, reason, stockAfter: v.stock } });
+      const at = await activeLocation(tx, storeId);
+      // never let a location go negative, even under concurrent sales
+      await moveStockOrThrow(tx, { variantId, storeId: at.id, delta, reason: reason as StockReason, note, actorId: staff.id }, `Stock can't go below zero: ${at.name} doesn't have that many.`);
+      const v = await tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { sku: true, color: true, size: true, stock: true, productId: true, product: { select: { name: true } }, storeStock: { where: { storeId: at.id }, select: { quantity: true } } } });
+      const here = v.storeStock[0]?.quantity ?? 0;
+      await audit(tx, staff, { action: "stock.adjust", entity: ["Product", v.productId], summary: `${v.product.name} ${v.color} ${v.size} (${v.sku}) at ${at.name}: ${delta > 0 ? "+" : ""}${delta} ${reason.toLowerCase().replace("_", " ")}${note ? ` — ${note.slice(0, 80)}` : ""} → ${here} there, ${v.stock} in stock`, changes: { sku: v.sku, storeId: at.id, delta, reason, stockAfter: v.stock, locationAfter: here } });
       if (delta > 0) await queueBackInStock(tx, [variantId]);
-      return tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { stock: true } });
+      return { stock: v.stock, here };
     });
     revalidateTag("products", { expire: 60 });
     if (delta > 0) after(() => dispatchNotifications().catch((e) => console.error("dispatchNotifications", e)));
     refresh();
-    return { ok: true, stock: v.stock };
-  } catch {
-    return { ok: false, error: "Stock can't go below zero." };
+    return { ok: true, stock: v.stock, here: v.here };
+  } catch (e) {
+    if (e instanceof StockError) return { ok: false, error: e.message };
+    console.error("adjustStock", e);
+    return { ok: false, error: "Couldn't adjust stock. Please try again." };
   }
 }
 

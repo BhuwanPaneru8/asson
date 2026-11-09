@@ -154,7 +154,12 @@ export function ProductEditor({ initial, categories, collections, readOnly, show
                       <td className="px-4 py-1.5"><div className="flex items-center gap-2"><input type="color" value={v.colorHex} onChange={(e) => updV(i, { colorHex: e.target.value })} className="h-6 w-6 cursor-pointer rounded border-0 p-0" aria-label="Colour swatch" /><input value={v.color} onChange={(e) => updV(i, { color: e.target.value })} className="h-8 w-28 rounded border border-line px-2" aria-label="Colour name" /></div></td>
                       <td className="px-2 py-1.5"><input value={v.size} onChange={(e) => updV(i, { size: e.target.value })} className="h-8 w-16 rounded border border-line px-2" aria-label="Size" /></td>
                       <td className="px-2 py-1.5"><input value={v.sku} onChange={(e) => updV(i, { sku: e.target.value.toUpperCase() })} className="h-8 w-40 rounded border border-line px-2 font-mono text-[12.5px]" aria-label="SKU" /></td>
-                      <td className="px-2 py-1.5"><input value={v.stock} onChange={(e) => updV(i, { stock: Number(e.target.value.replace(/\D/g, "")) || 0 })} inputMode="numeric" className={`h-8 w-20 rounded border px-2 tabular-nums ${v.stock === 0 ? "border-danger/40 text-danger" : "border-line"}`} aria-label="Stock" /></td>
+                      <td className="px-2 py-1.5">
+                        {v.id
+                          // saved sizes: stock changes per location in Inventory, so every unit has a place and a reason
+                          ? <Link href={`/admin/inventory?q=${encodeURIComponent(v.sku)}`} title="Adjust in Inventory" className={`inline-block w-20 px-2 tabular-nums underline decoration-dotted ${v.stock === 0 ? "text-danger" : ""}`}>{v.stock}</Link>
+                          : <input value={v.stock} onChange={(e) => updV(i, { stock: Number(e.target.value.replace(/\D/g, "")) || 0 })} inputMode="numeric" className="h-8 w-20 rounded border border-line px-2 tabular-nums" aria-label="Opening stock" title="Opening stock, received into the main warehouse" />}
+                      </td>
                       {showCost && <td className="px-2 py-1.5"><input value={v.costPrice == null ? "" : v.costPrice / 100} onChange={(e) => updV(i, { costPrice: e.target.value === "" ? null : Math.round(Number(e.target.value.replace(/[^\d.]/g, "")) * 100) })} inputMode="decimal" placeholder="—" className="h-8 w-20 rounded border border-line px-2 tabular-nums" aria-label="Cost" /></td>}
                       <td className="px-2"><button type="button" onClick={() => setVariants((x) => x.filter((_, j) => j !== i))} className="p-1.5 text-muted hover:text-danger" aria-label="Remove variant"><Trash2 className="h-4 w-4" /></button></td>
                     </tr>

@@ -169,7 +169,8 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 
 ## Phase 10: Scale ⬜
 
-- Multiple stores and a warehouse: stock per location, transfers, pick lists, click-and-collect
+- ✅ Multiple stores and a warehouse: stock per location, transfers, pick lists, per-shop till and closing
+- ⬜ Click-and-collect (pickup at a shop)
 - Accounting integration (export or sync)
 - Search engine (Meilisearch or Typesense) when the catalogue exceeds about 100k variants
 - Native mobile app on the same domain logic

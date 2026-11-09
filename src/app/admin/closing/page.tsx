@@ -4,20 +4,20 @@ import { requirePermission } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { REFUND_LABEL } from "@/lib/pos";
 import { db } from "@/lib/db";
-import { buildDaySummary, getDefaultStore, ktmDate, type DaySummary } from "@/lib/pos";
+import { buildDaySummary, getShop, getShops, ktmDate, type DaySummary } from "@/lib/pos";
 import { formatDate, formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { LockDayForm } from "@/components/admin/lock-day-form";
 
 export const metadata = { title: "Daily closing" };
 
-export default async function ClosingPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function ClosingPage({ searchParams }: { searchParams: Promise<{ date?: string; store?: string }> }) {
   const me = await requirePermission("closing");
   const showProfit = can(me.role, "finance");
   const today = ktmDate();
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;
-  const store = await getDefaultStore();
+  const [store, shops] = await Promise.all([getShop(sp.store), getShops()]);
   const [locked, history] = await Promise.all([
     db.dayClose.findUnique({ where: { storeId_date: { storeId: store.id, date } } }),
     db.dayClose.findMany({ where: { storeId: store.id }, orderBy: { date: "desc" }, take: 14 }),
@@ -33,6 +33,11 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
         description={`${store.name} · ${formatDate(`${date}T12:00:00+05:45`)}`}
         actions={
           <form className="flex gap-2">
+            {shops.length > 1 && (
+              <select name="store" defaultValue={store.id} aria-label="Shop" className="h-10 rounded-md border border-line bg-white px-2 text-[14px]">
+                {shops.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            )}
             <input type="date" name="date" defaultValue={date} max={today} aria-label="Date" className="h-10 rounded-md border border-line bg-white px-3 text-[14px]" />
             <button className="h-10 rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Go</button>
           </form>
@@ -123,7 +128,7 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
         </Card>
       </div>
 
-      {!locked && <LockDayForm date={date} ready={s.allShiftsClosed} hasDifference={s.cash.difference !== 0} />}
+      {!locked && <LockDayForm date={date} storeId={store.id} ready={s.allShiftsClosed} hasDifference={s.cash.difference !== 0} />}
 
       <Card title="Recent closings" className="mt-4">
         <ul className="divide-y divide-line text-[13.5px]">
@@ -131,7 +136,7 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
           {history.map((h) => {
             const hs = h.summary as unknown as DaySummary;
             return (
-              <li key={h.id}><Link href={`/admin/closing?date=${h.date}`} className="flex justify-between px-5 py-2.5 hover:bg-cloud/40"><span>{formatDate(`${h.date}T12:00:00+05:45`)}</span><span className="tabular-nums">{formatPrice(hs.store.net)} · cash diff {formatPrice(hs.cash.difference)}</span></Link></li>
+              <li key={h.id}><Link href={`/admin/closing?date=${h.date}&store=${store.id}`} className="flex justify-between px-5 py-2.5 hover:bg-cloud/40"><span>{formatDate(`${h.date}T12:00:00+05:45`)}</span><span className="tabular-nums">{formatPrice(hs.store.net)} · cash diff {formatPrice(hs.cash.difference)}</span></Link></li>
             );
           })}
         </ul>

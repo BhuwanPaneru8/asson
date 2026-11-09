@@ -13,6 +13,7 @@ import { requirePermission } from "@/lib/auth";
 import { fieldErrors } from "@/lib/validators";
 import { landedUnitCost, weightedAverageCost } from "@/lib/costing";
 import { lookupVariants, type VariantHit } from "@/lib/pos";
+import { activeLocation, moveStock } from "@/lib/stock";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -140,6 +141,8 @@ export async function setPurchaseOrderStatus(poId: string, to: "ORDERED" | "CANC
 
 const receiptSchema = z.object({
   poId: z.string(),
+  /** location the goods are counted into (default: the main warehouse) */
+  storeId: z.string().optional(),
   note: z.string().trim().max(500).optional(),
   lines: z.array(z.object({ poItemId: z.string(), quantity: z.number().int().min(0).max(100_000), damaged: z.number().int().min(0).max(100_000) })).min(1),
 });
@@ -162,7 +165,8 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
       if (!po) throw new Error("Purchase order not found.");
       if (po.status !== "ORDERED" && po.status !== "PARTIALLY_RECEIVED") throw new Error("Place the order before receiving goods.");
       const goodsValue = po.items.reduce((s, i) => s + i.unitCost * i.quantityOrdered, 0);
-      const receipt = await tx.goodsReceipt.create({ data: { purchaseOrderId: po.id, receivedById: me.id, note: d.note || null }, select: { id: true, number: true } });
+      const into = await activeLocation(tx, d.storeId);
+      const receipt = await tx.goodsReceipt.create({ data: { purchaseOrderId: po.id, receivedById: me.id, storeId: into.id, note: d.note || null }, select: { id: true, number: true } });
 
       for (const l of lines) {
         const item = po.items.find((i) => i.id === l.poItemId);
@@ -179,8 +183,9 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
         const landed = landedUnitCost(item.unitCost, po.landedCost, goodsValue);
         if (l.quantity > 0) {
           const v = await tx.variant.findUniqueOrThrow({ where: { id: item.variantId }, select: { stock: true, costPrice: true } });
-          await tx.variant.update({ where: { id: item.variantId }, data: { stock: { increment: l.quantity }, costPrice: weightedAverageCost(v.stock, v.costPrice, l.quantity, landed) } });
-          await tx.inventoryLog.create({ data: { variantId: item.variantId, delta: l.quantity, reason: "RECEIVED", note: `PO-${String(po.number).padStart(5, "0")} · GRN-${receipt.number}`, actorId: me.id } });
+          // cost blends over stock at every location (one weighted-average cost per variant)
+          await tx.variant.update({ where: { id: item.variantId }, data: { costPrice: weightedAverageCost(v.stock, v.costPrice, l.quantity, landed) } });
+          await moveStock(tx, { variantId: item.variantId, storeId: into.id, delta: l.quantity, reason: "RECEIVED", note: `PO-${String(po.number).padStart(5, "0")} · GRN-${receipt.number}`, actorId: me.id });
         }
         await tx.goodsReceiptItem.create({ data: { receiptId: receipt.id, poItemId: item.id, variantId: item.variantId, quantity: l.quantity, damaged: l.damaged, landedUnitCost: landed } });
       }
@@ -190,7 +195,7 @@ export async function receiveGoods(input: z.input<typeof receiptSchema>): Promis
       await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: complete ? "RECEIVED" : "PARTIALLY_RECEIVED" } });
       await queueBackInStock(tx, lines.filter((l) => l.quantity > 0).flatMap((l) => po.items.filter((i) => i.id === l.poItemId).map((i) => i.variantId)));
       const good = lines.reduce((s, l) => s + l.quantity, 0), bad = lines.reduce((s, l) => s + l.damaged, 0);
-      await audit(tx, me, { action: "po.receive", entity: ["PurchaseOrder", po.id], summary: `GRN-${receipt.number} on PO-${String(po.number).padStart(5, "0")}: ${good} good unit${good === 1 ? "" : "s"} into stock${bad ? `, ${bad} damaged` : ""}${complete ? " — order complete" : ""}`, changes: { receiptId: receipt.id, good, damaged: bad } });
+      await audit(tx, me, { action: "po.receive", entity: ["PurchaseOrder", po.id], summary: `GRN-${receipt.number} on PO-${String(po.number).padStart(5, "0")}: ${good} good unit${good === 1 ? "" : "s"} into ${into.name}${bad ? `, ${bad} damaged` : ""}${complete ? " — order complete" : ""}`, changes: { receiptId: receipt.id, good, damaged: bad } });
       return receipt;
     }, { timeout: 30_000 });
     revalidateTag("products", { expire: 0 });

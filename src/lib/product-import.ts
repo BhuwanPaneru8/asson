@@ -4,6 +4,7 @@ import { parseCsv, toCsv } from "./csv";
 import { colorHexFor } from "./colors";
 import { isMediaUrl } from "./media-url";
 import { slugify } from "./utils";
+import { defaultReceivingLocation, moveStock } from "./stock";
 
 /**
  * Spreadsheet import/export for the catalogue. One row per variant (colour × size); rows with the same
@@ -277,6 +278,7 @@ export async function applyImport(db: PrismaClient, plan: ImportPlan, actorId: s
     // one importer at a time, so generated SKUs never collide
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(4417001)`;
     let next = await nextSkuNumber(tx);
+    let receiveAt: string | undefined;
     const touched: { id: string; slug: string; action: "create" | "update" }[] = [];
     for (const p of plan.products) {
       let id = p.existingId;
@@ -310,8 +312,11 @@ export async function applyImport(db: PrismaClient, plan: ImportPlan, actorId: s
       let pos = (posAgg._max.position ?? -1) + 1;
       for (const v of p.newVariants) {
         const sku = v.sku ?? `AS-${String(next++).padStart(5, "0")}`;
-        const nv = await tx.variant.create({ data: { productId: id, sku, color: v.color, colorHex: v.colorHex, size: v.size, stock: v.stock, position: pos++, ...(v.costPrice != null ? { costPrice: v.costPrice } : {}) } });
-        if (v.stock) await tx.inventoryLog.create({ data: { variantId: nv.id, delta: v.stock, reason: "RECEIVED", note: "Spreadsheet import", actorId } });
+        const nv = await tx.variant.create({ data: { productId: id, sku, color: v.color, colorHex: v.colorHex, size: v.size, position: pos++, ...(v.costPrice != null ? { costPrice: v.costPrice } : {}) } });
+        if (v.stock) {
+          receiveAt ??= (await defaultReceivingLocation(tx)).id;
+          await moveStock(tx, { variantId: nv.id, storeId: receiveAt, delta: v.stock, reason: "RECEIVED", note: "Spreadsheet import", actorId });
+        }
       }
       for (const c of p.costUpdates) await tx.variant.update({ where: { id: c.variantId }, data: { costPrice: c.costPrice } });
       touched.push({ id, slug: p.handle, action: p.action });

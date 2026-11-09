@@ -167,10 +167,10 @@ async function main() {
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
     db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(),
-    db.dayClose.deleteMany(), db.shift.deleteMany(), db.store.deleteMany(),
+    db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
     db.inventoryLog.deleteMany(), db.cartItem.deleteMany(), db.cart.deleteMany(),
     db.wishlistItem.deleteMany(), db.review.deleteMany(), db.productImage.deleteMany(),
-    db.variant.deleteMany(), db.product.deleteMany(), db.collection.deleteMany(),
+    db.variant.deleteMany(), db.store.deleteMany(), db.product.deleteMany(), db.collection.deleteMany(),
     db.category.deleteMany(), db.address.deleteMany(), db.coupon.deleteMany(), db.user.deleteMany(),
   ]);
 
@@ -188,7 +188,12 @@ async function main() {
   void admin; void staff;
   await db.user.create({ data: { email: "manager@asson.test", name: "Sita Manager", role: "MANAGER", passwordHash: await bcrypt.hash("Manager@12345", 12), approvalPinHash: await bcrypt.hash("2580", 10) } });
   await db.user.create({ data: { email: "cashier@asson.test", name: "Ram Cashier", role: "CASHIER", passwordHash: await bcrypt.hash("Cashier@12345", 12) } });
-  await db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", address: "Kathmandu, Nepal" } });
+  // Locations: online orders are filled from the warehouse first, then the shops
+  const [warehouse, flagship, pokhara] = await Promise.all([
+    db.store.create({ data: { code: "WH-KTM", name: "Main warehouse", kind: "WAREHOUSE", address: "Balaju Industrial Area, Kathmandu", priority: 10 } }),
+    db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: "10am – 7pm, Sun–Fri", pickup: true, priority: 20 } }),
+    db.store.create({ data: { code: "PKR", name: "Asson Pokhara", kind: "SHOP", address: "Lakeside, Pokhara", hours: "10am – 8pm, every day", pickup: true, priority: 30 } }),
+  ]);
 
   const FIRST = ["Sita", "Bikash", "Anjali", "Prakash", "Sunita", "Rohan", "Pooja", "Nabin", "Srijana", "Suman", "Kritika", "Bibek", "Asmita", "Ramesh", "Manisha", "Sagar", "Pratiksha", "Aayush", "Sabina", "Dipesh"];
   const LAST = ["Shrestha", "Maharjan", "Thapa", "Gurung", "Adhikari", "Rai", "Karki", "Tamang", "Bhandari", "Poudel", "KC", "Joshi", "Sharma", "Lama", "Yadav", "Magar", "Limbu", "Basnet"];
@@ -280,10 +285,19 @@ async function main() {
         categoryId: catIds.get(t.cat)!,
         collections: { connect: (t.collections ?? []).map((slug) => ({ slug })) },
         images: { create: t.images.map((id, pos) => ({ url: U(id), alt: `${t.name}${pos ? " — alternate view" : ""}`, position: pos })) },
-        variants: { create: variantsData },
+        // stock is added per location below (Variant.stock is derived from it)
+        variants: { create: variantsData.map((v) => ({ ...v, stock: 0 })) },
       },
       include: { variants: true },
     });
+    const split = p.variants.flatMap((v) => {
+      const total = variantsData.find((x) => x.sku === v.sku)!.stock;
+      const wh = Math.ceil(total * 0.6), shop = Math.floor((total - wh) * 0.6);
+      return ([[warehouse.id, wh], [flagship.id, shop], [pokhara.id, total - wh - shop]] as const).filter(([, q]) => q > 0).map(([storeId, quantity]) => ({ variantId: v.id, storeId, quantity }));
+    });
+    await db.storeStock.createMany({ data: split });
+    await db.inventoryLog.createMany({ data: split.map(({ variantId, storeId, quantity }) => ({ variantId, storeId, delta: quantity, reason: "RECEIVED", note: "Opening stock", createdAt: created })) });
+    p.variants = await db.variant.findMany({ where: { productId: p.id } });
     productIds.push({ id: p.id, cat: t.cat, price: p.price, name: p.name, slug: p.slug, images: t.images.map(U), variants: p.variants });
     void i;
   }
@@ -400,7 +414,8 @@ async function main() {
         ? [{ status: "PENDING" as OrderStatus, message: "Order placed", actor: "customer", createdAt: created }, { status: "CANCELLED" as OrderStatus, message: "Cancelled by customer", actor: "customer", createdAt: new Date(created.getTime() + 3600000) }]
         : FLOW.slice(0, flowIdx + 1).map((st, k) => ({ status: st, message: k === 0 ? "Order placed" : `Status changed to ${st.replace(/_/g, " ").toLowerCase()}`, actor: k === 0 ? "customer" : "staff@asson.test", createdAt: new Date(created.getTime() + k * 20 * 3600000) }));
     if (status === "RETURNED") events.push({ status: "RETURNED", message: "Return received & refunded", actor: "staff@asson.test", createdAt: new Date(created.getTime() + 8 * 86400000) });
-    await db.order.create({
+    const o = await db.order.create({
+      include: { items: true },
       data: {
         userId: u.id, email: u.email, phone: u.phone ?? "9000000000", status,
         paymentMethod, paymentStatus: status === "RETURNED" ? "REFUNDED" : paid ? "PAID" : "PENDING",
@@ -413,6 +428,12 @@ async function main() {
         events: { create: events },
       },
     });
+    // demo history: where open and past orders were filled from (packed onwards = already picked)
+    if (status !== "CANCELLED") {
+      await db.orderAllocation.createMany({
+        data: o.items.map((it) => ({ orderId: o.id, orderItemId: it.id, variantId: it.variantId, storeId: warehouse.id, quantity: it.quantity, createdAt: created, ...(flowIdx >= 2 ? { pickedAt: new Date(created.getTime() + 30 * 3600000) } : {}) })),
+      });
+    }
   }
 
   console.log("Loyalty points & stock alerts…");

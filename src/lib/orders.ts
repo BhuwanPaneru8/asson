@@ -1,5 +1,6 @@
 import "server-only";
 import { queueBackInStock } from "./stock-alerts";
+import { restockOrder } from "./stock";
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { NOTICE_FOR_STATUS, queueOrderNotice } from "./notifications";
@@ -38,17 +39,14 @@ export async function transitionOrder(opts: {
     const res = await tx.order.updateMany({ where: { id: orderId, status: order.status }, data });
     if (res.count === 0) throw new TransitionError("This order was just updated by someone else. Refresh and try again.");
 
+    // packing implies picking: clear anything still on a pick list
+    if (to === "PACKED") await tx.orderAllocation.updateMany({ where: { orderId, pickedAt: null }, data: { pickedAt: new Date(), pickedById: actorId ?? null } });
+
     if (to === "CANCELLED" || to === "RETURNED") {
-      for (const it of order.items) {
-        // units already handled by a store return were restocked (or quarantined) there
-        const qty = it.quantity - it.returnItems.reduce((s, r) => s + r.quantity, 0);
-        if (!it.variantId || qty <= 0) continue;
-        await tx.variant.update({ where: { id: it.variantId }, data: { stock: { increment: qty } } });
-        await tx.inventoryLog.create({
-          data: { variantId: it.variantId, delta: qty, reason: to === "CANCELLED" ? "CANCEL_RESTOCK" : "RETURN_RESTOCK", orderId, actorId },
-        });
-        await tx.product.update({ where: { id: it.productId }, data: { soldCount: { decrement: qty } } });
-      }
+      // units already handled by a store return were restocked (or quarantined) there
+      const back = order.items.map((it) => ({ id: it.id, variantId: it.variantId, productId: it.productId, quantity: it.quantity - it.returnItems.reduce((s, r) => s + r.quantity, 0) }));
+      await restockOrder(tx, { orderId, items: back, reason: to === "CANCELLED" ? "CANCEL_RESTOCK" : "RETURN_RESTOCK", actorId });
+      for (const it of back) if (it.variantId && it.quantity > 0) await tx.product.update({ where: { id: it.productId }, data: { soldCount: { decrement: it.quantity } } });
       await queueBackInStock(tx, order.items.flatMap((i) => (i.variantId ? [i.variantId] : [])));
     }
 

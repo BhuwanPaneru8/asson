@@ -19,6 +19,7 @@ import { dispatchNotifications, queueOrderNotice } from "@/lib/notifications";
 import { formatPrice } from "@/lib/utils";
 import { maxRedeemable, pointsValue } from "@/lib/loyalty-shared";
 import { clientIp } from "@/lib/client-ip";
+import { allocateOrder, StockError } from "@/lib/stock";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -116,12 +117,6 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
   let orderId: string;
   try {
     orderId = await db.$transaction(async (tx) => {
-      // Atomic, race-safe stock reservation: the WHERE stock >= qty guard means two shoppers
-      // can never both buy the last unit.
-      for (const l of cart.lines) {
-        const res = await tx.variant.updateMany({ where: { id: l.variantId, stock: { gte: l.quantity } }, data: { stock: { decrement: l.quantity } } });
-        if (res.count === 0) throw new CheckoutError(`${l.name} (${l.size}) just sold out. Please update your bag.`);
-      }
       if (coupon && couponCheck?.ok && coupon.isCredit) {
         // store credit: draw down the balance atomically
         const res = await tx.coupon.updateMany({ where: { id: coupon.id, active: true, value: { gte: couponCheck.discount } }, data: { value: { decrement: couponCheck.discount }, usedCount: { increment: 1 } } });
@@ -163,12 +158,18 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
           },
           events: { create: { status: "PENDING", message: "Order placed", actor: user?.email ?? "guest" } },
         },
-        select: { id: true },
+        select: { id: true, items: { select: { id: true, variantId: true, quantity: true, name: true, size: true } } },
       });
-      // fill SKU snapshot + audit trail
+      // Atomic, race-safe stock reservation per location (conditional decrements, see lib/stock.ts):
+      // two shoppers can never both buy the last unit. Records where each unit comes from.
+      await allocateOrder(tx, {
+        orderId: order.id,
+        lines: order.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: `${i.name} (${i.size})` })),
+        actorId: user?.id,
+      });
+      // fill SKU snapshot
       const variants = await tx.variant.findMany({ where: { id: { in: cart.lines.map((l) => l.variantId) } }, select: { id: true, sku: true, costPrice: true } });
       for (const v of variants) await tx.orderItem.updateMany({ where: { orderId: order.id, variantId: v.id }, data: { sku: v.sku, unitCost: v.costPrice } });
-      await tx.inventoryLog.createMany({ data: cart.lines.map((l) => ({ variantId: l.variantId, delta: -l.quantity, reason: "SALE", orderId: order.id, actorId: user?.id })) });
       for (const l of cart.lines) await tx.product.update({ where: { id: l.productId }, data: { soldCount: { increment: l.quantity } } });
       await tx.cartItem.deleteMany({ where: { cartId: cart.id! } });
       if (user && data.saveAddress && !data.addressId) {
@@ -181,7 +182,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
       return order.id;
     }, { timeout: 15_000 });
   } catch (e) {
-    if (e instanceof CheckoutError) return { error: e.message };
+    if (e instanceof CheckoutError || e instanceof StockError) return { error: e.message };
     console.error("placeOrder failed", e);
     return { error: "We couldn't place your order. You have not been charged — please try again." };
   }
