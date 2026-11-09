@@ -43,7 +43,7 @@ The local DB is named `threadline` (pre-rename name; harmless). Demo staff and c
 | Growth (Phase 9, part 1) | ✅ Loyalty points and tiers (account card, checkout redemption, ledger `PointsEntry`), back-in-stock SMS alerts, "Complete the look", recently viewed, Google/Meta feed at `/feeds/products.xml` |
 | Shipping + notifications | ✅ SMS outbox (Admin → Notifications), COD call queue ("To call" tab), shipping labels, COD remittance (`/admin/cod`). ⬜ SMS gateway and NCM API need accounts |
 | Git | Repo `BhuwanPaneru8/asson` (private); work merged to `main` (PRs #1–#3). Merges to `main` deploy staging automatically |
-| Hosting | ✅ **Staging live** at https://staging-asson.bhuwanpaneru.com (demo data, `noindex`). Oracle Always Free `asson-micro` (1 GB + 2 GB swap, Hyderabad) behind a Cloudflare Tunnel. Production host `asson.bhuwanpaneru.com` is routed but **not deployed** (shows 502). Runbook: [deploy/README.md](../deploy/README.md) |
+| Hosting | ✅ **Staging live** at https://staging-asson.bhuwanpaneru.com (demo data, `noindex`). Oracle Always Free `asson-micro` (1 GB + 2 GB swap, Hyderabad) behind a Cloudflare Tunnel. **Production live** at https://asson.bhuwanpaneru.com since 9 Nov 2026 (release `fb4166f`): reference data only (20 categories, 77 delivery rates, 8 suppliers, 0 products) and the owner's ADMIN login; no demo data. Runbook: [deploy/README.md](../deploy/README.md) |
 
 ## 4. Stack (short)
 
@@ -104,6 +104,7 @@ Then: Phase 5 (real catalogue, photos, tests, production infrastructure). See [P
 | 2026-11-09 | Localised for Nepal (NPR, districts, zones, couriers, timezone); added district to `Address`; restored the trigram index Prisma had dropped. |
 | 2026-11-09 | Started eSewa and Khalti: `Payment` model, provider clients, settlement and reconciliation, return routes, cron. eSewa signature verified against the UAT sandbox. |
 | 2026-11-09 | Tests and CI (67 Vitest + 9 Playwright, GitHub Actions); fixes found by them (dropped rapid scans, unlabeled bag drawer, sitemap needing a DB at build, toasts covering CTAs earlier); `loading.tsx` skeletons on all dynamic routes (prefetch storm); configurable DB pool. Phase 6: SMS outbox + Admin → Notifications, COD call queue, shipping labels, COD remittance. |
+| 2026-11-09 | Production deployed and bootstrapped (`prisma/bootstrap.ts` + `reference-data.ts`); production owner login. Welcome-code banner now shows only while that coupon is usable (production has none). |
 | 2026-11-09 | Owner login created on staging (`deploy/owner-login.sh`); demo staff logins locked; off-site backups to Oracle Object Storage (write-only link, restore drill with matching row counts). |
 | 2026-11-09 | Merged PRs #1–#3 to `main`; first automatic Deploy needed two fixes (Prisma client rejected a missing DB URL at build time; repo has no `public/`). Staging now deploys itself after CI. |
 | 2026-11-09 | Deployment: Oracle A1 out of capacity → Always Free AMD micro + retry script; server setup, Cloudflare Tunnel, standalone bundles built in CI, release script with health check + rollback, `/api/health`, startup env check, Cloudflare-aware IP for rate limits, HSTS, staging noindex, `scripts/create-owner.ts`. Staging live and seeded. Home/help/footer no longer advertise online payments while COD-only. |
