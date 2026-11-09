@@ -11,6 +11,7 @@ import { findApproverByPin } from "@/lib/approvals";
 import { getOpenShift } from "@/lib/pos";
 import { store } from "@/lib/config";
 import { refundPerUnit } from "@/lib/costing";
+import { audit } from "@/lib/audit";
 import { dispatchNotifications, queueOrderNotice } from "@/lib/notifications";
 import { after } from "next/server";
 import { reverseForReturn } from "@/lib/loyalty";
@@ -172,6 +173,12 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
           orderId: order.id, status: fully ? "RETURNED" : null, actor: me.email,
           message: `Return R${created.number}: ${rows.reduce((s, r) => s + r.quantity, 0)} item(s), ${d.reason}. Refunded ${formatPrice(refund)} by ${d.refundMethod === "STORE_CREDIT" ? `store credit ${voucherCode}` : d.refundMethod.replace("_QR", "").toLowerCase()}.`,
         },
+      });
+      const approver = approverId && approverId !== me.id ? await tx.user.findUnique({ where: { id: approverId }, select: { name: true } }) : null;
+      await audit(tx, me, {
+        action: "return.process", entity: ["Order", order.id],
+        summary: `Return R${created.number} on ${formatOrderNumber(order.number)}: ${rows.reduce((s, r) => s + r.quantity, 0)} item(s), refunded ${formatPrice(refund)} by ${d.refundMethod === "STORE_CREDIT" ? `store credit ${voucherCode}` : d.refundMethod.replace("_QR", "").toLowerCase()} — ${d.reason}${approver ? ` · approved by ${approver.name}` : ""}`,
+        changes: { returnId: created.id, refund, method: d.refundMethod, damaged: rows.filter((r) => r.condition !== "RESELLABLE").reduce((s, r) => s + r.quantity, 0) },
       });
       return created;
     });

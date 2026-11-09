@@ -1,5 +1,6 @@
 "use server";
 
+import { audit } from "@/lib/audit";
 import { refresh, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -22,13 +23,14 @@ export async function searchProductsForLook(q: string, excludeId: string): Promi
 
 /** Pairing is symmetric: if the shirt goes with the chinos, the chinos go with the shirt. */
 export async function setLook(productId: string, pairIds: string[]): Promise<R> {
-  await requirePermission("catalog.edit");
+  const staff = await requirePermission("catalog.edit");
   const ids = z.array(z.string().min(1).max(40)).max(8).safeParse([...new Set(pairIds)].filter((i) => i !== productId));
   if (!ids.success) return { ok: false, error: "Pick up to 8 products." };
   await db.$transaction(async (tx) => {
     const current = await tx.product.findUniqueOrThrow({ where: { id: productId }, select: { pairsWith: { select: { id: true } }, pairedBy: { select: { id: true } } } });
     const old = [...new Set([...current.pairsWith, ...current.pairedBy].map((p) => p.id))];
-    await tx.product.update({ where: { id: productId }, data: { pairsWith: { set: ids.data.map((id) => ({ id })) }, pairedBy: { disconnect: old.filter((id) => !ids.data.includes(id)).map((id) => ({ id })) } } });
+    const p = await tx.product.update({ where: { id: productId }, data: { pairsWith: { set: ids.data.map((id) => ({ id })) }, pairedBy: { disconnect: old.filter((id) => !ids.data.includes(id)).map((id) => ({ id })) } }, select: { name: true } });
+    await audit(tx, staff, { action: "product.look", entity: ["Product", productId], summary: `${p.name}: "Complete the look" set to ${ids.data.length} product${ids.data.length === 1 ? "" : "s"}`, changes: { pairs: [old, ids.data] } });
   });
   revalidateTag("products", { expire: 0 });
   refresh();

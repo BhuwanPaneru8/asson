@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { applyImport, loadImportContext, planImport, readSheet, type ImportIssue, type PlannedProduct } from "@/lib/product-import";
 import { slugify } from "@/lib/utils";
+import { audit } from "@/lib/audit";
 
 export type ImportPreview = {
   ok: boolean;
@@ -58,6 +59,7 @@ export async function runImport(text: string): Promise<{ ok: boolean; error?: st
   if (!p.products.length) return { ok: false, error: "No products found in the file." };
   try {
     const touched = await applyImport(db, p, user.id);
+    await audit(db, user, { action: "catalog.import", entity: ["Product"], summary: `Spreadsheet import: ${touched.filter((t) => t.action === "create").length} new, ${touched.filter((t) => t.action === "update").length} updated, ${p.summary.newVariants} new variants, ${p.summary.units} units received`, changes: { products: touched.map((t) => `${t.action}:${t.slug}`).slice(0, 500) } });
     revalidateTag("products", { expire: 0 });
     revalidateTag("catalog", { expire: 0 });
     return { ok: true, created: touched.filter((t) => t.action === "create").length, updated: touched.filter((t) => t.action === "update").length, products: touched };

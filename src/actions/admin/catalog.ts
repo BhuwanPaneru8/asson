@@ -10,6 +10,8 @@ import { requireAdmin, requirePermission } from "@/lib/auth";
 import { fieldErrors } from "@/lib/validators";
 import { slugify } from "@/lib/utils";
 import { isMediaUrl } from "@/lib/media-url";
+import { audit, diff } from "@/lib/audit";
+import { formatPrice } from "@/lib/utils";
 
 type R = { ok: boolean; error?: string; id?: string; fieldErrors?: Record<string, string> };
 
@@ -73,6 +75,8 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
 
   try {
     const productId = await db.$transaction(async (tx) => {
+      const before = id ? await tx.product.findUnique({ where: { id }, select: { name: true, slug: true, brand: true, description: true, details: true, gender: true, status: true, categoryId: true, price: true, compareAtPrice: true, material: true, fit: true, care: true, tags: true, featured: true } }) : null;
+      const vCount = { added: 0, removed: 0, stock: 0, cost: [] as [string, number | null, number | null][] };
       const p = id
         ? await tx.product.update({ where: { id }, data: { ...base, collections: { set: d.collectionIds.map((cid) => ({ id: cid })) } } })
         : await tx.product.create({ data: { ...base, collections: { connect: d.collectionIds.map((cid) => ({ id: cid })) } } });
@@ -86,17 +90,46 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
       for (const ex of existing.filter((e) => !keep.has(e.id))) {
         if (ex._count.orderItems > 0) await tx.variant.update({ where: { id: ex.id }, data: { stock: 0 } });
         else await tx.variant.delete({ where: { id: ex.id } });
+        vCount.removed++;
       }
       for (const [i, v] of d.variants.entries()) {
         const data = { sku: v.sku, color: v.color, colorHex: v.colorHex, size: v.size, stock: v.stock, position: i, ...(v.costPrice !== undefined ? { costPrice: v.costPrice } : {}) };
         const prev = v.id ? existing.find((e) => e.id === v.id) : undefined;
         if (prev) {
+          const old = await tx.variant.findUniqueOrThrow({ where: { id: prev.id }, select: { sku: true, costPrice: true } });
           await tx.variant.update({ where: { id: prev.id }, data });
+          if (prev.stock !== v.stock) vCount.stock++;
+          if (v.costPrice !== undefined && (v.costPrice ?? null) !== old.costPrice) vCount.cost.push([v.sku, old.costPrice, v.costPrice ?? null]);
           if (prev.stock !== v.stock) await tx.inventoryLog.create({ data: { variantId: prev.id, delta: v.stock - prev.stock, reason: "MANUAL_ADJUST", note: "Product editor", actorId: staff.id } });
         } else {
           const nv = await tx.variant.create({ data: { ...data, productId: p.id } });
+          vCount.added++;
           if (v.stock) await tx.inventoryLog.create({ data: { variantId: nv.id, delta: v.stock, reason: "RECEIVED", note: "Initial stock", actorId: staff.id } });
         }
+      }
+      const fields = ["name", "slug", "brand", "description", "details", "gender", "status", "categoryId", "price", "compareAtPrice", "material", "fit", "care", "tags", "featured"] as const;
+      const { changes, text: rawText } = before ? diff(before, base, [...fields]) : { changes: {}, text: "" };
+      let text = rawText;
+      if (changes.categoryId) {
+        // show category names, not ids
+        const cats = await tx.category.findMany({ where: { id: { in: changes.categoryId as string[] } }, select: { id: true, name: true, parent: { select: { name: true } } } });
+        const label = (cid: unknown) => { const c = cats.find((x) => x.id === cid); return c ? `${c.parent ? `${c.parent.name} / ` : ""}${c.name}` : "—"; };
+        text = text.replace(`Category ${changes.categoryId[0]} → ${changes.categoryId[1]}`, `Category ${label(changes.categoryId[0])} → ${label(changes.categoryId[1])}`);
+      }
+      const extra = [
+        vCount.added && `${vCount.added} size${vCount.added > 1 ? "s" : ""} added`,
+        vCount.removed && `${vCount.removed} size${vCount.removed > 1 ? "s" : ""} removed`,
+        vCount.stock && `stock changed on ${vCount.stock} size${vCount.stock > 1 ? "s" : ""}`,
+        vCount.cost.length && `cost changed on ${vCount.cost.length} size${vCount.cost.length > 1 ? "s" : ""}`,
+      ].filter(Boolean).join("; ");
+      if (!before) {
+        await audit(tx, staff, { action: "product.create", entity: ["Product", p.id], summary: `Created ${base.name} (${formatPrice(base.price)}, ${d.variants.length} variants, ${base.status.toLowerCase()})` });
+      } else if (text || extra || vCount.cost.length || Object.keys(changes).length) {
+        await audit(tx, staff, {
+          action: "product.update", entity: ["Product", p.id],
+          summary: `${base.name}: ${[text, extra].filter(Boolean).join("; ") || "details edited"}`,
+          changes: { ...changes, ...(vCount.cost.length ? { costPrice: vCount.cost.map(([sku, a, b]) => ({ sku, costPrice: [a, b] })) } : {}) },
+        });
       }
       return p.id;
     }, { timeout: 30_000 });
@@ -110,8 +143,12 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
 }
 
 export async function setProductStatus(id: string, status: "DRAFT" | "ACTIVE" | "ARCHIVED"): Promise<R> {
-  await requireAdmin();
-  await db.product.update({ where: { id }, data: { status } });
+  const staff = await requireAdmin();
+  await db.$transaction(async (tx) => {
+    const before = await tx.product.findUniqueOrThrow({ where: { id }, select: { name: true, status: true } });
+    await tx.product.update({ where: { id }, data: { status } });
+    if (before.status !== status) await audit(tx, staff, { action: "product.status", entity: ["Product", id], summary: `${before.name}: status ${before.status.toLowerCase()} → ${status.toLowerCase()}`, changes: { status: [before.status, status] } });
+  });
   revalidateTag("products", { expire: 0 });
   refresh();
   return { ok: true };
@@ -128,6 +165,8 @@ export async function adjustStock(variantId: string, delta: number, reason: stri
       const res = await tx.variant.updateMany({ where: { id: variantId, ...(delta < 0 ? { stock: { gte: -delta } } : {}) }, data: { stock: { increment: delta } } });
       if (!res.count) throw new Error("insufficient");
       await tx.inventoryLog.create({ data: { variantId, delta, reason, note: note?.slice(0, 200), actorId: staff.id } });
+      const v = await tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { sku: true, color: true, size: true, stock: true, productId: true, product: { select: { name: true } } } });
+      await audit(tx, staff, { action: "stock.adjust", entity: ["Product", v.productId], summary: `${v.product.name} ${v.color} ${v.size} (${v.sku}): ${delta > 0 ? "+" : ""}${delta} ${reason.toLowerCase().replace("_", " ")}${note ? ` — ${note.slice(0, 80)}` : ""} → ${v.stock} in stock`, changes: { sku: v.sku, delta, reason, stockAfter: v.stock } });
       if (delta > 0) await queueBackInStock(tx, [variantId]);
       return tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { stock: true } });
     });
@@ -152,13 +191,13 @@ const couponSchema = z.object({
 });
 
 export async function createCoupon(input: unknown): Promise<R> {
-  await requireAdmin();
+  const staff = await requireAdmin();
   const p = couponSchema.safeParse(input);
   if (!p.success) return { ok: false, fieldErrors: fieldErrors(p.error) };
   const d = p.data;
   if (d.type === "PERCENT" && (d.value <= 0 || d.value > 90)) return { ok: false, fieldErrors: { value: "Percent must be between 1 and 90" } };
   if (await db.coupon.findUnique({ where: { code: d.code } })) return { ok: false, fieldErrors: { code: "This code already exists" } };
-  await db.coupon.create({
+  const c = await db.coupon.create({
     data: {
       code: d.code, description: d.description || null, type: d.type,
       value: d.type === "PERCENT" ? Math.round(d.value) : Math.round(d.value * 100),
@@ -168,35 +207,41 @@ export async function createCoupon(input: unknown): Promise<R> {
       endsAt: d.endsAt ? new Date(`${d.endsAt}T23:59:59+05:45`) : null, // end of day, Nepal time
     },
   });
+  await audit(db, staff, { action: "coupon.create", entity: ["Coupon", c.id], summary: `Created coupon ${c.code}: ${c.type === "PERCENT" ? `${c.value}% off` : `${formatPrice(c.value)} off`}${c.minSubtotal ? ` over ${formatPrice(c.minSubtotal)}` : ""}${c.usageLimit ? `, ${c.usageLimit} uses` : ""}${c.endsAt ? `, ends ${c.endsAt.toISOString().slice(0, 10)}` : ""}` });
   refresh();
   return { ok: true };
 }
 
 export async function toggleCoupon(id: string): Promise<R> {
-  await requireAdmin();
+  const staff = await requireAdmin();
   const c = await db.coupon.findUnique({ where: { id } });
   if (!c) return { ok: false, error: "Not found" };
-  await db.coupon.update({ where: { id }, data: { active: !c.active } });
+  await db.$transaction(async (tx) => {
+    await tx.coupon.update({ where: { id }, data: { active: !c.active } });
+    await audit(tx, staff, { action: "coupon.toggle", entity: ["Coupon", id], summary: `Coupon ${c.code} ${c.active ? "turned off" : "turned on"}`, changes: { active: [c.active, !c.active] } });
+  });
   refresh();
   return { ok: true };
 }
 
 /** Feature a coupon in the home-page offer banner (only one at a time), or take it off. */
 export async function setCouponOnHome(id: string, on: boolean): Promise<R> {
-  await requireAdmin();
+  const staff = await requireAdmin();
   const c = await db.coupon.findUnique({ where: { id } });
   if (!c || c.isCredit) return { ok: false, error: "Not found" };
   await db.$transaction([
     ...(on ? [db.coupon.updateMany({ where: { showOnHome: true, NOT: { id } }, data: { showOnHome: false } })] : []),
     db.coupon.update({ where: { id }, data: { showOnHome: on } }),
   ]);
+  await audit(db, staff, { action: "coupon.home", entity: ["Coupon", id], summary: `Coupon ${c.code} ${on ? "featured on" : "removed from"} the home page`, changes: { showOnHome: [c.showOnHome, on] } });
   refresh();
   return { ok: true };
 }
 
 export async function setReviewStatus(id: string, status: "PUBLISHED" | "HIDDEN"): Promise<R> {
-  await requirePermission("reviews");
-  const r = await db.review.update({ where: { id }, data: { status } });
+  const staff = await requirePermission("reviews");
+  const r = await db.review.update({ where: { id }, data: { status }, include: { product: { select: { name: true } } } });
+  await audit(db, staff, { action: "review.status", entity: ["Product", r.productId], summary: `${status === "HIDDEN" ? "Hid" : "Published"} a ${r.rating}★ review on ${r.product.name}`, changes: { reviewId: r.id, status } });
   const agg = await db.review.aggregate({ where: { productId: r.productId, status: "PUBLISHED" }, _avg: { rating: true }, _count: { _all: true } });
   await db.product.update({ where: { id: r.productId }, data: { ratingAvg: Math.round((agg._avg.rating ?? 0) * 10) / 10, ratingCount: agg._count._all } });
   revalidateTag("products", { expire: 0 });
@@ -209,7 +254,11 @@ export async function setUserRole(userId: string, role: "CUSTOMER" | "CASHIER" |
   if (!["CUSTOMER", "CASHIER", "STAFF", "MANAGER", "ADMIN"].includes(role)) return { ok: false, error: "Invalid role." };
   if (me.id === userId) return { ok: false, error: "You can't change your own role." };
   // bump tokenVersion so the new permissions take effect immediately
-  await db.user.update({ where: { id: userId }, data: { role, tokenVersion: { increment: 1 } } });
+  await db.$transaction(async (tx) => {
+    const before = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true, role: true } });
+    await tx.user.update({ where: { id: userId }, data: { role, tokenVersion: { increment: 1 } } });
+    if (before.role !== role) await audit(tx, me, { action: "user.role", entity: ["User", userId], summary: `${before.name} (${before.email}): role ${before.role.toLowerCase()} → ${role.toLowerCase()}`, changes: { role: [before.role, role] } });
+  });
   refresh();
   return { ok: true };
 }

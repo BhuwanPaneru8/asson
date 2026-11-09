@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { OrderStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
+import { audit } from "@/lib/audit";
+import { formatOrderNumber, formatPrice } from "@/lib/utils";
 import { TransitionError, transitionOrder } from "@/lib/orders";
 import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
@@ -58,9 +60,15 @@ export async function addOrderNote(orderId: string, message: string): Promise<R>
 
 export async function markPaid(orderId: string, reference?: string): Promise<R> {
   const staff = await requirePermission("orders");
-  const res = await db.order.updateMany({ where: { id: orderId, paymentStatus: "PENDING" }, data: { paymentStatus: "PAID", paymentRef: reference?.slice(0, 100) || undefined } });
-  if (!res.count) return { ok: false, error: "Payment is not pending." };
-  await db.orderEvent.create({ data: { orderId, message: `Payment marked as received${reference ? ` (${reference})` : ""}`, actor: staff.email } });
+  const ok = await db.$transaction(async (tx) => {
+    const res = await tx.order.updateMany({ where: { id: orderId, paymentStatus: "PENDING" }, data: { paymentStatus: "PAID", paymentRef: reference?.slice(0, 100) || undefined } });
+    if (!res.count) return false;
+    await tx.orderEvent.create({ data: { orderId, message: `Payment marked as received${reference ? ` (${reference})` : ""}`, actor: staff.email } });
+    const o = await tx.order.findUniqueOrThrow({ where: { id: orderId }, select: { number: true, total: true, paymentMethod: true } });
+    await audit(tx, staff, { action: "order.paid", entity: ["Order", orderId], summary: `${formatOrderNumber(o.number)}: marked paid ${formatPrice(o.total)} (${o.paymentMethod})${reference ? ` ref ${reference.slice(0, 60)}` : ""}`, changes: { paymentStatus: ["PENDING", "PAID"] } });
+    return true;
+  });
+  if (!ok) return { ok: false, error: "Payment is not pending." };
   refresh();
   return { ok: true };
 }
@@ -114,6 +122,7 @@ export async function recordCodRemittance(input: z.input<typeof remitSchema>): P
       const res = await tx.order.updateMany({ where: { id: { in: d.orderIds }, codRemittanceId: null }, data: { codRemittanceId: rem.id } });
       if (res.count !== d.orderIds.length) throw new TransitionError("Another remittance just claimed some of these orders.");
       await tx.orderEvent.createMany({ data: orders.map((o) => ({ orderId: o.id, actor: staff.email, message: `COD remitted by ${d.carrier} (ref ${d.reference})` })) });
+      await audit(tx, staff, { action: "cod.remittance", entity: ["CodRemittance", rem.id], summary: `${d.carrier} remittance ${d.reference}: received ${formatPrice(d.received)} of ${formatPrice(expected)} for ${orders.length} order${orders.length > 1 ? "s" : ""}${d.received !== expected ? ` (difference ${formatPrice(d.received - expected)})` : ""}`, changes: { expected, received: d.received, orders: orders.length } });
     });
   } catch (e) {
     return { ok: false, error: e instanceof TransitionError ? e.message : "Couldn't record the remittance." };

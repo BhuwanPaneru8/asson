@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/coupons", label: "Coupons", icon: TicketPercent, perm: "coupons" },
   { href: "/admin/delivery", label: "Delivery rates", icon: Truck, perm: "delivery" },
   { href: "/admin/reviews", label: "Reviews", icon: MessageSquare, perm: "reviews" },
+  { href: "/admin/activity", label: "Activity log", icon: History, perm: "audit" },
 ];
 
 export function AdminNav({ badges, role }: { badges: { orders: number; stock: number }; role: Role }) {

@@ -4,6 +4,8 @@ import { can } from "@/lib/permissions";
 import { rateLimit } from "@/lib/rate-limit";
 import { MAX_FILE_BYTES, saveMedia } from "@/lib/media";
 import { MEDIA_WIDTHS } from "@/lib/media-url";
+import { audit } from "@/lib/audit";
+import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,7 @@ export async function POST(req: NextRequest) {
   const name = form.get("name");
   try {
     const r = await saveMedia({ files, originalName: typeof name === "string" ? name : "", uploadedById: user.id });
+    if (r.ok && !r.reused) await audit(db, user, { action: "media.upload", entity: ["MediaAsset"], summary: `Uploaded photo ${typeof name === "string" ? name.slice(0, 80) : ""} (${r.width}×${r.height})`, changes: { url: r.url } });
     return json(r, r.ok ? 200 : 422);
   } catch (e) {
     console.error("[media] upload failed", e);
