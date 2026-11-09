@@ -55,13 +55,18 @@ export async function setDefaultAddress(id: string): Promise<R> {
   return { ok: true };
 }
 
-const profileSchema = z.object({ name: z.string().trim().min(2).max(80), phone: phoneSchema.or(z.literal("")) });
+const profileSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  phone: phoneSchema.or(z.literal("")),
+  // "MM-DD", no year: we only need the day to say happy birthday
+  birthday: z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "Choose a valid day").refine((d) => !["02-30", "02-31", "04-31", "06-31", "09-31", "11-31"].includes(d), "Choose a valid day").optional().or(z.literal("")),
+});
 
 export async function updateProfile(input: unknown): Promise<R> {
   const user = await requireUser();
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
-  await db.user.update({ where: { id: user.id }, data: { name: parsed.data.name, phone: parsed.data.phone || null } });
+  await db.user.update({ where: { id: user.id }, data: { name: parsed.data.name, phone: parsed.data.phone || null, ...(parsed.data.birthday !== undefined ? { birthday: parsed.data.birthday || null } : {}) } });
   refresh();
   return { ok: true };
 }

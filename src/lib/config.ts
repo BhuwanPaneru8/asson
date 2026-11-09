@@ -58,6 +58,15 @@ export const store = {
     ],
   },
   maxQtyPerItem: 10,
+  /** Refer a friend (owner to confirm the amounts). The friend's discount is on their first order only. */
+  referral: {
+    friendDiscount: 20_000, // Rs 200 off …
+    friendMinSubtotal: 150_000, // … an order of Rs 1,500 or more
+    referrerPoints: 200, // = Rs 200 in points, once the friend's order is delivered
+    monthlyCap: 10, // referral rewards per customer per 30 days
+  },
+  /** Birthday treat (owner to confirm): points added on the day, once a year, for customers with a delivered order. */
+  birthday: { points: 200 },
   /** Planning numbers for reorder and dead-stock insights (Admin → Insights). */
   insights: {
     leadTimeDays: 14, // typical days from placing a purchase order to counting it in

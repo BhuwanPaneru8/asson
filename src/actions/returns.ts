@@ -11,6 +11,7 @@ import { can } from "@/lib/permissions";
 import { findApproverByPin } from "@/lib/approvals";
 import { getOpenShift, getShop } from "@/lib/pos";
 import { moveStock } from "@/lib/stock";
+import { reverseReferral } from "@/lib/referrals";
 import { store } from "@/lib/config";
 import { refundPerUnit } from "@/lib/costing";
 import { audit } from "@/lib/audit";
@@ -170,6 +171,7 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
       const fully = order.items.every((i) => i.returnItems.reduce((s, x) => s + x.quantity, 0) + rows.filter((r) => r.item.id === i.id).reduce((s, r) => s + r.quantity, 0) >= i.quantity);
       await tx.order.update({ where: { id: order.id }, data: fully ? { status: "RETURNED", paymentStatus: "REFUNDED" } : {} });
       await reverseForReturn(tx, order.id, refund);
+      if (fully) await reverseReferral(tx, order.id); // the friend's first order came back
       await queueBackInStock(tx, rows.filter((r) => r.condition === "RESELLABLE" && r.item.variantId).map((r) => r.item.variantId!));
       if (order.channel === "ONLINE") await queueOrderNotice(tx, order.id, "refund", { amount: refund });
       await tx.orderEvent.create({

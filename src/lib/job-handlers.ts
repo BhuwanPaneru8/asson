@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { dispatchNotifications } from "./notifications";
 import { expireUnpaidOrders } from "./payments";
+import { birthdayRun } from "./referrals";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -30,6 +31,7 @@ export const HANDLERS = {
   "payments.expire": { label: "Release unpaid online orders", run: () => expireUnpaidOrders(), maxAttempts: 3 },
   // a mismatch is a bug, not a flaky network: fail once, loudly
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
+  "loyalty.birthdays": { label: "Birthday points and greetings", run: () => birthdayRun(), maxAttempts: 3 },
   "jobs.prune": {
     label: "Tidy finished jobs",
     // finished bookkeeping rows only; dead jobs and errors stay until a human deals with them
@@ -46,6 +48,7 @@ export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "payments.expire", everyMs: 10 * MIN },
   { type: "stock.audit", everyMs: DAY },
   { type: "jobs.prune", everyMs: DAY },
+  { type: "loyalty.birthdays", everyMs: DAY },
 ];
 
 export const EVERY_LABEL = (ms: number) => (ms >= DAY ? "daily" : ms >= 60 * MIN ? `every ${ms / (60 * MIN)} h` : `every ${ms / MIN} min`);

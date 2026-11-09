@@ -6,6 +6,7 @@ import { db } from "./db";
 import { NOTICE_FOR_STATUS, PICKUP_NOTICE_FOR_STATUS, queueOrderNotice } from "./notifications";
 import { earnForOrder, refundRedeemed, reverseForReturn } from "./loyalty";
 import { audit } from "./audit";
+import { reverseReferral, rewardReferrer } from "./referrals";
 import { formatOrderNumber, formatPrice } from "./utils";
 
 export { STATUS_LABEL, TRANSITIONS, CUSTOMER_CANCELLABLE } from "./order-status";
@@ -68,9 +69,10 @@ export async function transitionOrder(opts: {
       await audit(tx, who, { action: "order.status", entity: ["Order", orderId], summary: `${formatOrderNumber(order.number)} (${formatPrice(order.total)}): ${label(order.status)} → ${label(to)}${shipNote}${opts.message ? ` — ${opts.message.slice(0, 120)}` : ""}`, changes: { status: [order.status, to] } });
     }
     // loyalty: earn on delivery, give back spent points on cancel, take back earned points on return
-    if (to === "DELIVERED") await earnForOrder(tx, orderId);
+    if (to === "DELIVERED") { await earnForOrder(tx, orderId); await rewardReferrer(tx, orderId); }
     if (to === "CANCELLED") await refundRedeemed(tx, orderId);
     if (to === "RETURNED") {
+      await reverseReferral(tx, orderId);
       const alreadyRefunded = await tx.returnItem.aggregate({ where: { orderItem: { orderId } }, _sum: { amount: true } });
       await reverseForReturn(tx, orderId, Math.max(0, order.total - order.shippingFee - (alreadyRefunded._sum.amount ?? 0)));
     }

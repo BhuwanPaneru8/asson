@@ -21,6 +21,7 @@ import { formatPrice } from "@/lib/utils";
 import { maxRedeemable, pointsValue } from "@/lib/loyalty-shared";
 import { clientIp } from "@/lib/client-ip";
 import { allocateOrder, StockError } from "@/lib/stock";
+import { resolveReferral } from "@/lib/referrals";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -53,7 +54,9 @@ export async function quoteCheckout(input: { couponCode?: string; shippingMethod
   const code = input.couponCode?.trim().toUpperCase();
   const lines = cart.lines.map((l) => ({ unitPrice: l.unitPrice, quantity: l.quantity }));
   const coupon = code ? await db.coupon.findUnique({ where: { code } }) : null;
-  const check = code ? evaluateCoupon(coupon, cart.subtotal) : null;
+  // not a coupon? it may be a friend's referral code (first orders only; re-checked with phone and email at order time)
+  const referral = code && !coupon ? await resolveReferral(db, code, { userId: user?.id, email: user?.email }, cart.subtotal) : null;
+  const check = referral ? referral.check : code ? evaluateCoupon(coupon, cart.subtotal) : null;
   const couponDiscount = check?.ok ? check.discount : 0;
   const points = await pointsFor(user?.id, cart.subtotal - couponDiscount, !!input.usePoints);
   const totals = computeTotals(lines, { method, rate, coupon: check, pointsDiscount: pointsValue(points.used) });
@@ -121,7 +124,8 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
   }
 
   const coupon = data.couponCode ? await db.coupon.findUnique({ where: { code: data.couponCode } }) : null;
-  const couponCheck = data.couponCode ? evaluateCoupon(coupon, cart.subtotal) : null;
+  const referral = data.couponCode && !coupon ? await resolveReferral(db, data.couponCode, { userId: user?.id, email: data.email, phone: data.phone }, cart.subtotal) : null;
+  const couponCheck = referral ? referral.check : data.couponCode ? evaluateCoupon(coupon, cart.subtotal) : null;
   if (couponCheck && !couponCheck.ok) return { error: couponCheck.reason };
   const points = await pointsFor(user?.id, cart.subtotal - (couponCheck?.ok ? couponCheck.discount : 0), data.usePoints);
   const totals = computeTotals(cart.lines, { method: data.shippingMethod, rate, coupon: couponCheck, pointsDiscount: pointsValue(points.used) });
@@ -166,6 +170,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
           shippingMethod: shop ? "pickup" : data.shippingMethod,
           shippingAddress,
           pickupStoreId: shop?.id ?? null,
+          referrerId: referral?.check.ok ? referral.referrerId : null,
           customerNote: data.note || null,
           items: {
             create: cart.lines.map((l) => ({
@@ -195,6 +200,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
         await tx.address.create({ data: { ...address, line2: address.line2 || null, postalCode: address.postalCode || null, userId: user.id, isDefault: count === 0 } });
       }
       if (user && !user.phone) await tx.user.update({ where: { id: user.id }, data: { phone: data.phone } });
+      if (user && referral?.check.ok) await tx.user.updateMany({ where: { id: user.id, referredById: null }, data: { referredById: referral.referrerId } });
       if (points.used > 0) await tx.pointsEntry.create({ data: { userId: user!.id, delta: -points.used, reason: "REDEEM", orderId: order.id } });
       await queueOrderNotice(tx, order.id, "placed");
       return order.id;
