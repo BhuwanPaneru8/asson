@@ -67,6 +67,14 @@ export const store = {
   },
   /** Birthday treat (owner to confirm): points added on the day, once a year, for customers with a delivered order. */
   birthday: { points: 200 },
+  /** Keeping shops stocked from warehouses (Admin → Replenishment). Owner to confirm. */
+  replenishment: {
+    shopCoverDays: 21, // a shop holds enough for this many days of its own sales
+    minDisplay: 1, // and at least this many of each size it has sold in the last 90 days
+    warehouseReserveDays: 7, // a warehouse keeps this many days of its own online sales back
+    rebalanceAfterDays: 60, // stock unsold this long at a shop can be moved to a shop that sells it
+    autoDraft: false, // true: a nightly job drafts the suggested transfers by itself
+  },
   /** Planning numbers for reorder and dead-stock insights (Admin → Insights). */
   insights: {
     leadTimeDays: 14, // typical days from placing a purchase order to counting it in
