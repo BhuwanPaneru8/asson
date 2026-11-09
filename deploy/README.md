@@ -45,6 +45,11 @@ export DATABASE_URL=$(ssh -i ~/.ssh/asson_deploy ubuntu@HOST "sudo grep ^DATABAS
 npx tsx scripts/create-owner.ts      # owner login (password typed at a hidden prompt)
 npm run db:seed                      # STAGING ONLY: wipes and loads demo data
 ```
+After a staging re-seed: clear the data cache (`rm -rf /srv/asson/staging/current/.next-bundle/cache`, restart), re-create the owner login (`deploy/owner-login.sh staging`), and lock the demo staff accounts again (their seed passwords are public in the repo):
+```bash
+H=$(node -e 'const b=require("bcryptjs");console.log(b.hashSync(require("crypto").randomBytes(48).toString("hex"),12))')
+ssh -i ~/.ssh/asson_deploy ubuntu@HOST "sudo -u postgres psql -d asson_staging -c \"update \\\"User\\\" set \\\"passwordHash\\\"='$H', \\\"approvalPinHash\\\"=null, \\\"tokenVersion\\\"=\\\"tokenVersion\\\"+1 where email like '%@asson.test' and role <> 'CUSTOMER'\""
+```
 
 ## Backups and restore
 Nightly at 02:30 (Nepal time) into `/var/backups/asson`. Restore into an env:

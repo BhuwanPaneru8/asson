@@ -73,7 +73,8 @@ Next.js **16.4.5** (App Router, Server Actions, Turbopack) · React 19.3 · Type
 20. **Anything that adds stock must call `queueBackInStock(tx, variantIds)`** in the same transaction (receiving, adjustments, cancel/return restock, store returns), then dispatch with `after()`.
 21. **A browser pane in the background delays React hydration** until the first interaction. Effects (recently viewed, checkout quote) look "broken" in that state; click or scroll first before concluding.
 22. **Builds are per environment.** `NEXT_PUBLIC_SITE_URL`, `ASSON_ENV` (staging = noindex) and `ASSON_RELEASE` are baked in at build, so `deploy/build-bundle.sh <env> <url>` builds once per target. Standalone output is only on with `NEXT_OUTPUT=standalone` (tests use `next start`).
-23. **After re-seeding staging, clear its data cache** (`rm -rf /srv/asson/staging/current/.next-bundle/cache` then restart) — gotcha 16 applies on the server too.
+23. **Staging demo staff logins (`*@asson.test`, non-customer) are locked** with an unknown password (9 Nov 2026); the owner signs in with their own account. A re-seed recreates them with the passwords in `prisma/seed.ts`, so re-lock them afterwards (see deploy/README.md).
+23a. **After re-seeding staging, clear its data cache** (`rm -rf /srv/asson/staging/current/.next-bundle/cache` then restart) — gotcha 16 applies on the server too.
 24. **Production migrations are never rolled back** by `deploy/release.sh`; only the code switch is. Keep each migration backward compatible with the previous release.
 25. **Rate limiting reads the visitor IP via `lib/client-ip.ts`** (CF-Connecting-IP first). Don't read `x-forwarded-for` directly: its first entry is client-controlled behind Cloudflare.
 
