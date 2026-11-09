@@ -21,7 +21,8 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: { db: { url: databaseUrl() } },
+    // no URL at build time (CI bundles are built without a database): let Prisma read the env when it first connects
+    ...(databaseUrl() ? { datasources: { db: { url: databaseUrl() } } } : {}),
     log: process.env.PRISMA_LOG === "query" ? ["query", "warn", "error"] : process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
