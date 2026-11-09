@@ -166,7 +166,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ⬜ Birthday offers, referral codes
 - Nepali language (नेपाली) interface
 - ✅ Top search terms and zero-result searches; reorder by sales speed, dead stock, size/colour sell-through and margin (Admin → Insights)
-- Analytics: funnel, cohort
+- ✅ Analytics: shop funnel (views → bag → checkout → order), customer cohorts, repeat rate, RFM segments (Admin → Insights)
 
 ## Phase 10: Scale ⬜
 
