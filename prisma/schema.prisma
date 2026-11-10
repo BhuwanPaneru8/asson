@@ -278,21 +278,25 @@ model Product {
   ratingAvg      Float         @default(0)
   ratingCount    Int           @default(0)
   soldCount      Int           @default(0)
+  /// stitching (cut-make-trim) charge per piece when made in our own production, paisa
+  labourCost     Int?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  categoryId  String
-  category    Category       @relation(fields: [categoryId], references: [id])
-  collections Collection[]
-  images      ProductImage[]
-  variants    Variant[]
+  categoryId       String
+  category         Category          @relation(fields: [categoryId], references: [id])
+  collections      Collection[]
+  images           ProductImage[]
+  variants         Variant[]
   /// "Complete the look" — pieces styled with this one (chosen by the team)
-  pairsWith   Product[]      @relation("CompleteTheLook")
-  pairedBy    Product[]      @relation("CompleteTheLook")
-  reviews     Review[]
-  wishlistBy  WishlistItem[]
-  stats       ProductStat[]
-  lookItems   LookItem[]
+  pairsWith        Product[]         @relation("CompleteTheLook")
+  pairedBy         Product[]         @relation("CompleteTheLook")
+  reviews          Review[]
+  wishlistBy       WishlistItem[]
+  stats            ProductStat[]
+  lookItems        LookItem[]
+  bomLines         BomLine[]
+  productionOrders ProductionOrder[]
 
   @@index([status, categoryId])
   @@index([status, gender])
@@ -347,15 +351,16 @@ model Variant {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  cartItems     CartItem[]
-  orderItems    OrderItem[]
-  inventoryLogs InventoryLog[]
-  purchaseItems PurchaseOrderItem[]
-  stockAlerts   StockAlert[]
-  storeStock    StoreStock[]
-  allocations   OrderAllocation[]
-  transferItems StockTransferItem[]
-  countLines    StockCountLine[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  inventoryLogs   InventoryLog[]
+  purchaseItems   PurchaseOrderItem[]
+  stockAlerts     StockAlert[]
+  storeStock      StoreStock[]
+  allocations     OrderAllocation[]
+  transferItems   StockTransferItem[]
+  countLines      StockCountLine[]
+  productionLines ProductionLine[]
 
   @@unique([productId, color, size])
   @@index([color])
@@ -490,36 +495,39 @@ model Order {
 /// A physical shop. One today (flagship); more later.
 /// A place that holds stock: a shop (has a till, can offer pickup) or a warehouse.
 model Store {
-  id            String            @id @default(cuid())
-  code          String            @unique
-  name          String
-  address       String
-  kind          StoreKind         @default(SHOP)
-  phone         String?
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  address          String
+  kind             StoreKind         @default(SHOP)
+  phone            String?
   /// online orders are filled from the lowest number first (ties: most lines in stock)
-  priority      Int               @default(100)
+  priority         Int               @default(100)
   /// one of the 77 districts (province follows): online orders are filled from the nearest location first
-  district      String?
+  district         String?
   /// sends online (courier) orders; off = in-store sales and pickup only
-  shipsOnline   Boolean           @default(true)
+  shipsOnline      Boolean           @default(true)
   /// click-and-collect point (shops only)
-  pickup        Boolean           @default(false)
+  pickup           Boolean           @default(false)
   /// opening hours shown to pickup customers, e.g. "10am – 7pm, Sun–Fri"
-  hours         String?
-  active        Boolean           @default(true)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @default(now()) @updatedAt
-  shifts        Shift[]
-  closings      DayClose[]
-  stock         StoreStock[]
-  inventoryLogs InventoryLog[]
-  allocations   OrderAllocation[]
-  receipts      GoodsReceipt[]
-  transfersOut  StockTransfer[]   @relation("TransferFrom")
-  transfersIn   StockTransfer[]   @relation("TransferTo")
-  pickupOrders  Order[]           @relation("PickupOrders")
-  stockCounts   StockCount[]
-  staff         StaffLocation[]
+  hours            String?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
+  shifts           Shift[]
+  closings         DayClose[]
+  stock            StoreStock[]
+  inventoryLogs    InventoryLog[]
+  allocations      OrderAllocation[]
+  receipts         GoodsReceipt[]
+  transfersOut     StockTransfer[]   @relation("TransferFrom")
+  transfersIn      StockTransfer[]   @relation("TransferTo")
+  pickupOrders     Order[]           @relation("PickupOrders")
+  stockCounts      StockCount[]
+  staff            StaffLocation[]
+  materialStock    MaterialStock[]
+  materialLogs     MaterialLog[]
+  productionOrders ProductionOrder[]
 
   @@index([active, priority])
 }
@@ -746,6 +754,8 @@ model Supplier {
   active           Boolean           @default(true)
   createdAt        DateTime          @default(now())
   orders           PurchaseOrder[]
+  materials        Material[]
+  productionOrders ProductionOrder[] @relation("Workshop")
   bills            SupplierBill[]
   payments         SupplierPayment[]
   /// days after the bill date that a bill falls due
@@ -1260,4 +1270,154 @@ model Incident {
 
   @@index([check, resolvedAt])
   @@index([startedAt])
+}
+
+// ---------- Own production (Phase 11.8) ----------
+// Fabric and trims are stocked per location like finished goods; quantities in milli-units (1 m = 1000) so
+// fractions of a metre stay exact. A product's bill of materials says what one piece uses; a production
+// order issues those materials to a workshop and receives finished pieces back, costed and billed.
+
+enum MaterialKind {
+  FABRIC
+  TRIM
+  PACKAGING
+}
+
+model Material {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  kind        MaterialKind
+  /// unit of measure shown to people: m, pcs, kg, cone…
+  unit        String
+  color       String?
+  supplierId  String?
+  supplier    Supplier?       @relation(fields: [supplierId], references: [id])
+  /// weighted-average cost per whole unit, paisa (blended at every receipt)
+  costPerUnit Int?
+  /// reorder level, milli-units across all locations
+  minStock    Int             @default(0)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  stock       MaterialStock[]
+  logs        MaterialLog[]
+  bomLines    BomLine[]
+}
+
+model MaterialStock {
+  storeId    String
+  store      Store    @relation(fields: [storeId], references: [id])
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
+  /// milli-units (CHECK >= 0)
+  quantity   Int      @default(0)
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@id([storeId, materialId])
+  @@index([materialId])
+}
+
+/// Every change to material stock, with why (RECEIVED, ISSUED, RETURNED, ADJUST).
+model MaterialLog {
+  id                String           @id @default(cuid())
+  materialId        String
+  material          Material         @relation(fields: [materialId], references: [id])
+  storeId           String
+  store             Store            @relation(fields: [storeId], references: [id])
+  /// milli-units, + in / − out
+  delta             Int
+  reason            String
+  /// paisa per whole unit at the time
+  unitCost          Int?
+  note              String?
+  supplierId        String?
+  productionOrderId String?
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  actorId           String?
+  createdAt         DateTime         @default(now())
+
+  @@index([materialId, createdAt])
+  @@index([storeId, createdAt])
+  @@index([productionOrderId])
+}
+
+/// What one finished piece of a product uses (milli-units per piece).
+model BomLine {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id])
+  quantity   Int
+  note       String?
+
+  @@unique([productId, materialId])
+}
+
+enum ProductionStatus {
+  DRAFT
+  ISSUED
+  PARTIAL
+  COMPLETED
+  CANCELLED
+}
+
+model ProductionOrder {
+  id             String              @id @default(cuid())
+  number         Int                 @unique @default(autoincrement())
+  productId      String
+  product        Product             @relation(fields: [productId], references: [id])
+  /// the workshop (a supplier) that cuts and stitches
+  workshopId     String
+  workshop       Supplier            @relation("Workshop", fields: [workshopId], references: [id])
+  /// materials are issued from, and finished pieces received into, this location
+  storeId        String
+  store          Store               @relation(fields: [storeId], references: [id])
+  status         ProductionStatus    @default(DRAFT)
+  /// stitching charge per good piece, paisa (billed to us by the workshop)
+  labourPerPiece Int                 @default(0)
+  /// cost of the materials issued so far, paisa
+  materialsCost  Int                 @default(0)
+  dueDate        DateTime?
+  note           String?
+  createdById    String
+  createdAt      DateTime            @default(now())
+  issuedAt       DateTime?
+  completedAt    DateTime?
+  lines          ProductionLine[]
+  receipts       ProductionReceipt[]
+  materialLogs   MaterialLog[]
+
+  @@index([status, createdAt])
+}
+
+model ProductionLine {
+  id        String          @id @default(cuid())
+  orderId   String
+  order     ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   Variant         @relation(fields: [variantId], references: [id])
+  planned   Int
+  /// good pieces taken into stock
+  received  Int             @default(0)
+  /// pieces the quality check turned away
+  rejected  Int             @default(0)
+
+  @@unique([orderId, variantId])
+}
+
+/// One delivery of finished pieces from the workshop.
+model ProductionReceipt {
+  id           String          @id @default(cuid())
+  number       Int             @unique @default(autoincrement())
+  orderId      String
+  order        ProductionOrder @relation(fields: [orderId], references: [id])
+  good         Int
+  rejected     Int
+  /// cost per good piece used for stock valuation (materials per planned piece + labour), paisa
+  unitCost     Int
+  labourAmount Int
+  billId       String?
+  createdById  String
+  createdAt    DateTime        @default(now())
 }

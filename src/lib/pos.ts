@@ -83,7 +83,7 @@ export async function buildDaySummary(storeId: string, date: string) {
     db.order.aggregate({ where: { channel: "ONLINE", createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" } }, _count: { _all: true }, _sum: { total: true } }),
     db.order.count({ where: { updatedAt: { gte: start, lt: end }, status: { in: ["CANCELLED", "RETURNED"] } } }),
     db.inventoryLog.findMany({
-      where: { storeId, createdAt: { gte: start, lt: end }, reason: { in: ["MANUAL_ADJUST", "DAMAGED", "RECEIVED", "RETURN_RESTOCK", "TRANSFER_LOSS"] } },
+      where: { storeId, createdAt: { gte: start, lt: end }, reason: { in: ["MANUAL_ADJUST", "DAMAGED", "RECEIVED", "PRODUCED", "RETURN_RESTOCK", "TRANSFER_LOSS"] } },
       include: { variant: { select: { sku: true, product: { select: { name: true } } } } },
       orderBy: { createdAt: "asc" },
       take: 200,

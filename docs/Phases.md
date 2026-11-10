@@ -189,7 +189,8 @@ Goal (owner, Nov 2026): at least one shop in every one of the 77 districts, ware
 5. ✅ **New-store rollout.** Open a shop from a template: location, staff, opening stock transfer, till, pickup point.
 6. ✅ **Nepali-language storefront** (नेपाली) with an English switch: every shopper page, server messages, Nepali product/category/collection names with Devanagari search, order SMS templates (switch `store.smsInNepali`, off for SMS cost). Before production: native-speaker review of `src/lib/i18n/ne.ts`.
 7. 🚧 **Infrastructure for national traffic.** ✅ 7a: national-scale dataset, budgeted benchmark, load tester, the slow and crashing reports fixed; measured capacity and the step-by-step plan in [Scaling](Scaling.md). ✅ 7b: health checks, watchdog with incidents and owner SMS alerts, deep health URL, hourly backups. ✅ 7c: zero-downtime blue/green deploys (active after server setup is re-run). Next: production VM and UptimeRobot (owner accounts); several processes serving at once needs a shared Next.js cache handler (when traffic needs it). (Original scope: larger server or managed Postgres with replicas, CDN for media, uptime monitoring and error alerts, load tests.)
-8. **Own production.** Fabric and trims stock, tech packs, production orders, cost roll-up into product cost.
+8. ✅ **Own production.** Fabric and trims stock at locations with weighted-average cost (supplier bills on receipt), bills of materials and stitching charge per product, production orders to workshops (issue all materials with a cutting allowance, count deliveries with rejects, close short or cancel), finished pieces into stock at real cost, workshop bills into Payables automatically. Later: tech-pack files (spec sheets, photos), per-size fabric use, piece-rate tracking by worker.
+9. **People (next).** Staff attendance from the till, leave, payroll under Nepal rules (SSF, TDS), sales commissions by shop and person.
 
 ---
 
