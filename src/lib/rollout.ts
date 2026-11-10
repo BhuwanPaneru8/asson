@@ -4,6 +4,7 @@ import { store } from "./config";
 import { audit, type AuditActor } from "./audit";
 import { salesVelocity } from "./insights";
 import { createTransfer } from "./transfers";
+import { inChunks } from "./batch";
 
 // Opening a new shop from a template: the location, its staff and an opening-stock transfer draft from
 // a warehouse, in one transaction. Opening stock is either a copy of a similar shop's current stock
@@ -45,9 +46,10 @@ export async function openingAssortment(reader: Tx, warehouseId: string, plan: O
   } else {
     // the network's best sellers over 90 days, and the sizes of them that actually sell
     const sold = await reader.inventoryLog.groupBy({ by: ["variantId"], where: { reason: "SALE", createdAt: { gte: new Date(Date.now() - 90 * DAY) }, variant: { product: { status: "ACTIVE" } } }, _sum: { delta: true } });
-    const variants = await reader.variant.findMany({ where: { id: { in: sold.map((s) => s.variantId) } }, select: { id: true, productId: true } });
+    const variants = await inChunks(sold.map((s) => s.variantId), (chunk) => reader.variant.findMany({ where: { id: { in: chunk } }, select: { id: true, productId: true } }));
+    const productOf = new Map(variants.map((v) => [v.id, v.productId]));
     const byProduct = new Map<string, number>();
-    for (const s of sold) { const pid = variants.find((v) => v.id === s.variantId)?.productId; if (pid) byProduct.set(pid, (byProduct.get(pid) ?? 0) - (s._sum.delta ?? 0)); }
+    for (const s of sold) { const pid = productOf.get(s.variantId); if (pid) byProduct.set(pid, (byProduct.get(pid) ?? 0) - (s._sum.delta ?? 0)); }
     const top = new Set([...byProduct.entries()].sort((a, b) => b[1] - a[1]).slice(0, plan.products).map(([pid]) => pid));
     for (const v of variants) if (top.has(v.productId)) want.set(v.id, plan.perSize);
   }

@@ -5,6 +5,7 @@ import { distanceTier } from "./geo";
 import { salesVelocity } from "./insights";
 import { createTransfer, transferNo } from "./transfers";
 import type { Scope } from "./scope";
+import { inChunks } from "./batch";
 
 // Keeping every shop stocked. For each shop and size:
 //   target = max(minDisplay if it sold there in 90 days, ceil(its own daily sales × shopCoverDays))
@@ -45,13 +46,15 @@ export async function replenishmentPlan(now = new Date()): Promise<ReplenishRout
   const warehouses = locations.filter((l) => l.kind === "WAREHOUSE");
   const shopTarget = (key: Key) => Math.max((sold90.get(key) ?? 0) > 0 ? cfg.minDisplay : 0, Math.ceil(perDay(key) * cfg.shopCoverDays));
 
-  // what each source can give without hurting itself
+  // what each source can give without hurting itself (stock grouped by location once: ~1M rows nationally)
+  const stockAt = new Map<string, typeof stock>();
+  for (const r of stock) { const list = stockAt.get(r.storeId); if (list) list.push(r); else stockAt.set(r.storeId, [r]); }
   const spare = new Map<Key, number>();
-  for (const w of warehouses) for (const r of stock.filter((x) => x.storeId === w.id)) {
+  for (const w of warehouses) for (const r of stockAt.get(w.id) ?? []) {
     const key = k(w.id, r.variantId);
     spare.set(key, Math.max(0, r.quantity - (outgoingDraft.get(key) ?? 0) - Math.ceil(perDay(key) * cfg.warehouseReserveDays)));
   }
-  for (const s of shops) for (const r of stock.filter((x) => x.storeId === s.id)) {
+  for (const s of shops) for (const r of stockAt.get(s.id) ?? []) {
     const key = k(s.id, r.variantId);
     // a shop gives up only stock it hasn't sold lately, and keeps its own target
     if ((soldIdle.get(key) ?? 0) === 0) spare.set(key, Math.max(0, r.quantity - (outgoingDraft.get(key) ?? 0) - shopTarget(key)));
@@ -73,6 +76,8 @@ export async function replenishmentPlan(now = new Date()): Promise<ReplenishRout
 
   const moves: { fromId: string; toId: string; variantId: string; quantity: number; reason: ReplenishLine["reason"]; cover: number | null }[] = [];
   const near = (to: (typeof shops)[number]) => (a: (typeof locations)[number], b: (typeof locations)[number]) => distanceTier(a.district, to.district) - distanceTier(b.district, to.district) || a.priority - b.priority;
+  // the order a shop is supplied in depends only on the shop: work it out once per shop, not once per need
+  const sources = new Map(shops.map((s) => [s.id, { warehouses: [...warehouses].sort(near(s)), shops: shops.filter((x) => x.id !== s.id).sort(near(s)) }]));
   for (const n of needs) {
     let left = n.need;
     const take = (from: (typeof locations)[number], reason: ReplenishLine["reason"]) => {
@@ -83,16 +88,18 @@ export async function replenishmentPlan(now = new Date()): Promise<ReplenishRout
       left -= q;
       moves.push({ fromId: from.id, toId: n.shop.id, variantId: n.variantId, quantity: q, reason, cover: n.cover });
     };
-    for (const w of [...warehouses].sort(near(n.shop))) { if (!left) break; take(w, "warehouse"); }
-    for (const s of shops.filter((x) => x.id !== n.shop.id).sort(near(n.shop))) { if (!left) break; take(s, "rebalance"); }
+    const from = sources.get(n.shop.id)!;
+    for (const w of from.warehouses) { if (!left) break; take(w, "warehouse"); }
+    for (const s of from.shops) { if (!left) break; take(s, "rebalance"); }
   }
   if (!moves.length) return [];
 
-  const variants = await db.variant.findMany({ where: { id: { in: [...new Set(moves.map((m) => m.variantId))] } }, select: { id: true, sku: true, color: true, size: true, product: { select: { name: true } } } });
-  const name = (id: string) => locations.find((l) => l.id === id)!.name;
+  const variants = new Map((await inChunks([...new Set(moves.map((m) => m.variantId))], (chunk) => db.variant.findMany({ where: { id: { in: chunk } }, select: { id: true, sku: true, color: true, size: true, product: { select: { name: true } } } }))).map((v) => [v.id, v]));
+  const names = new Map(locations.map((l) => [l.id, l.name]));
+  const name = (id: string) => names.get(id)!;
   const routes = new Map<string, ReplenishRoute>();
   for (const m of moves) {
-    const v = variants.find((x) => x.id === m.variantId)!;
+    const v = variants.get(m.variantId)!;
     const r = routes.get(`${m.fromId}>${m.toId}`) ?? { fromId: m.fromId, fromName: name(m.fromId), toId: m.toId, toName: name(m.toId), lines: [], units: 0 };
     r.lines.push({ variantId: m.variantId, sku: v.sku, name: v.product.name, color: v.color, size: v.size, quantity: m.quantity, reason: m.reason, coverDays: m.cover });
     r.units += m.quantity;

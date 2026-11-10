@@ -98,6 +98,8 @@ Why this shape works for Asson specifically:
 
 ## 8. When to start paying (in order)
 
+*Superseded for growth beyond launch by [Scaling](Scaling.md), which has measured capacity and triggers.*
+
 1. **Domain** (~US$10/year) if `.com.np` isn't possible.
 2. **SMS gateway** — per message, when order notifications go live.
 3. **Managed hosting** once orders are steady: Cloudflare Workers Paid (US$5/month) or a small paid VM, plus Neon Launch (pay-as-you-go) — buys managed backups, point-in-time restore and no single server.
