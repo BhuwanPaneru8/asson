@@ -46,6 +46,8 @@ jobs:
         run: npm run test:unit
       - name: Integration tests
         run: npm run test:int
+      - name: Deploy script (blue/green, zero failed requests)
+        run: bash tests/deploy/release.test.sh
       - name: Production build
         run: npx next build
       - name: Install Playwright browser

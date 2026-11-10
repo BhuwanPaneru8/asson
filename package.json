@@ -20,6 +20,7 @@
     "scale:load": "tsx tests/scale/load.ts",
     "bench:scale": "vitest run --config vitest.scale.config.mts --silent=false",
     "load-test": "tsx scripts/load-test.ts",
+    "test:deploy": "bash tests/deploy/release.test.sh",
     "test:watch": "vitest --project unit"
   },
   "dependencies": {

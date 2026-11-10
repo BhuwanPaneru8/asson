@@ -141,10 +141,104 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-cat > /etc/sudoers.d/asson <<'EOF'
-asson ALL=(root) NOPASSWD: /usr/bin/systemctl restart asson@staging, /usr/bin/systemctl restart asson@production, /usr/bin/systemctl enable asson@staging, /usr/bin/systemctl enable asson@production, /usr/bin/systemctl is-active asson@staging, /usr/bin/systemctl is-active asson@production
+
+step "Blue/green slots: two app processes per environment, nginx in front (zero-downtime deploys)"
+# A deploy starts the new release in the idle slot, checks it, then nginx switches to it gracefully and the
+# old slot stops after in-flight requests finish. A release that fails its health check never gets traffic.
+# Slot ports: a = PORT+100, b = PORT+200 (production 3100/3200, staging 3101/3201); nginx keeps PORT.
+cat > /usr/local/bin/asson-run <<'EOF'
+#!/usr/bin/env bash
+# asson-run <env>-<slot>: start one blue/green slot (same env file, its own port and release folder)
+set -euo pipefail
+e=${1%-*}; s=${1##*-}
+set -a; . "/etc/asson/$e.env"; set +a
+case $s in a) PORT=$((PORT + 100));; b) PORT=$((PORT + 200));; *) echo "unknown slot $s" >&2; exit 2;; esac
+export PORT ASSON_SLOT=$s
+cd "/srv/asson/$e/slot-$s"
+exec /usr/bin/node server.js
 EOF
+cat > /usr/local/bin/asson-ctl <<'EOF'
+#!/usr/bin/env bash
+# asson-ctl <env> start|stop|restart|status|logs: act on whichever slot is live (or the old single service)
+set -euo pipefail
+e=$1; v=$2
+if [ -f "/srv/asson/$e/active-slot" ]; then u="asson-slot@$e-$(cat "/srv/asson/$e/active-slot")"; else u="asson@$e"; fi
+if [ "$v" = logs ]; then exec journalctl -u "$u" -n 100 -f; fi
+exec systemctl "$v" "$u"
+EOF
+chmod 755 /usr/local/bin/asson-run /usr/local/bin/asson-ctl
+cat > /etc/systemd/system/asson-slot@.service <<'EOF'
+[Unit]
+Description=Asson web slot %i
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=asson
+Group=asson
+Environment=NODE_OPTIONS=--max-old-space-size=384
+ExecStart=/usr/local/bin/asson-run %i
+Restart=always
+RestartSec=3
+# SIGTERM lets in-flight requests finish before the old slot goes away
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+
+# the deploy user may run exactly these, nothing else
+{
+  printf 'asson ALL=(root) NOPASSWD: /usr/sbin/nginx -t, /usr/sbin/nginx -s reload'
+  for e in staging production; do
+    for v in restart enable is-active; do printf ', /usr/bin/systemctl %s asson@%s' "$v" "$e"; done
+    for sl in a b; do for v in start stop restart enable disable is-active; do printf ', /usr/bin/systemctl %s asson-slot@%s-%s' "$v" "$e" "$sl"; done; done
+  done
+  echo
+} > /etc/sudoers.d/asson
 chmod 440 /etc/sudoers.d/asson && visudo -cq
+
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx >/dev/null
+rm -f /etc/nginx/sites-enabled/default
+install -d -o asson -g asson -m 755 /etc/nginx/asson
+for e in staging production; do
+  p=${PORT[$e]}; b=/srv/asson/$e
+  # first run: slot a takes over the release that is live now, then the old single service stops
+  if [ ! -f "$b/active-slot" ]; then
+    if [ -L "$b/current" ]; then
+      ln -sfn "$(readlink "$b/current")" "$b/slot-a" && chown -h asson:asson "$b/slot-a"
+      systemctl enable --now "asson-slot@$e-a"
+      for _ in $(seq 1 45); do curl -fs -m 5 "http://127.0.0.1:$((p + 100))/api/health" | grep -q '"ok":true' && break; sleep 2; done
+      systemctl disable --now "asson@$e" 2>/dev/null || true
+      echo a > "$b/active-slot" && chown asson:asson "$b/active-slot"
+    fi
+    printf 'upstream asson_%s { server 127.0.0.1:%s; keepalive 16; }\n' "$e" "$((p + 100))" > "/etc/nginx/asson/$e.upstream.conf"
+    chown asson:asson "/etc/nginx/asson/$e.upstream.conf"
+  fi
+  cat > "/etc/nginx/conf.d/asson-$e.conf" <<EOF
+# Asson $e: Cloudflare Tunnel -> nginx (127.0.0.1:$p) -> live slot (see $b/active-slot)
+include /etc/nginx/asson/$e.upstream.conf;
+server {
+  listen 127.0.0.1:$p;
+  server_name _;
+  client_max_body_size 40m;     # photo uploads carry several resized copies
+  location / {
+    proxy_pass http://asson_$e;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host \$host;
+    proxy_buffering off;        # streamed pages arrive as they render
+    proxy_read_timeout 120s;
+  }
+}
+EOF
+done
+nginx -t && systemctl enable --now nginx >/dev/null 2>&1 && systemctl reload nginx
 
 step "Scheduled jobs and backups"
 cat > /usr/local/bin/asson-cron <<'EOF'
@@ -152,7 +246,7 @@ cat > /usr/local/bin/asson-cron <<'EOF'
 # asson-cron <env> <path>: call a cron route on a running app (skips quietly if that env isn't deployed)
 set -euo pipefail
 e=$1; p=$2; f=/etc/asson/$e.env
-systemctl is-active -q asson@$e || exit 0
+[ -f /srv/asson/$e/active-slot ] || systemctl is-active -q asson@$e || exit 0
 port=$(grep '^PORT=' "$f" | cut -d= -f2); secret=$(grep '^CRON_SECRET=' "$f" | cut -d= -f2)
 curl -fsS -m 50 -H "Authorization: Bearer $secret" "http://127.0.0.1:$port$p" >/dev/null || logger -t asson-cron "$e $p failed"
 EOF
