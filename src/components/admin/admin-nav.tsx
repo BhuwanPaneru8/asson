@@ -27,6 +27,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/people", label: "People", icon: UsersRound, perm: "people" },
   { href: "/admin/payroll", label: "Payroll", icon: HandCoins, perm: "payroll" },
   { href: "/admin/today", label: "Today", icon: ListChecks, perm: "self.time" },
+  { href: "/admin/visits", label: "Store visits", icon: ClipboardCheck, perm: "self.time" },
   { href: "/admin/vm", label: "Visual merchandising", icon: Frame, perm: "self.time" },
   { href: "/admin/issues", label: "Issues", icon: Wrench, perm: "self.time" },
   { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time" },
