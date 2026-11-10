@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { reportError } from "@/lib/errors";
+import { CommissionError, saveRule } from "@/lib/commissions";
 import { adjustSlip, approveRun, buildRun, confirmTaxYear, markPaid, PayrollError, reopenRun, saveEmployment, saveTaxYear } from "@/lib/payroll";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -83,4 +84,22 @@ export async function payPayroll(month: string, paidVia: string): Promise<R> {
   const via = paidVia.trim().slice(0, 40);
   if (!via) return { ok: false, error: "How were salaries paid?" };
   return run("payPayroll", () => db.$transaction((tx) => markPaid(tx, me, month, via)));
+}
+
+const ruleSchema = z.object({ storeId: z.string().nullable(), ratePct: z.coerce.number().min(0).max(20), threshold: z.coerce.number().min(0).max(100_000_000), active: z.boolean() });
+
+/** Commission for one shop (storeId) or every shop (null): % of sales excl. VAT once the monthly target is reached. */
+export async function saveCommissionRule(input: z.input<typeof ruleSchema>): Promise<R> {
+  const me = await requirePermission("payroll");
+  const p = ruleSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "The rate is 0–20% and the target a rupee amount." };
+  try {
+    await db.$transaction((tx) => saveRule(tx, me, { storeId: p.data.storeId, rateBp: Math.round(p.data.ratePct * 100), threshold: paisa(p.data.threshold), active: p.data.active }));
+  } catch (e) {
+    if (e instanceof CommissionError) return { ok: false, error: e.message };
+    void reportError("saveCommissionRule", e);
+    return { ok: false, error: "Couldn't save that. Nothing changed — please try again." };
+  }
+  refresh();
+  return { ok: true };
 }

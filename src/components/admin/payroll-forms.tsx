@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { adjustPayslip, approvePayroll, buildPayroll, confirmTaxBands, payPayroll, reopenPayroll, savePayTerms, saveTaxBands } from "@/actions/admin/payroll";
+import { adjustPayslip, approvePayroll, buildPayroll, confirmTaxBands, payPayroll, reopenPayroll, saveCommissionRule, savePayTerms, saveTaxBands } from "@/actions/admin/payroll";
 import { TEMPLATE_2082, type Band } from "@/lib/payroll-rules";
 import { cn } from "@/lib/utils";
 import { Card } from "./ui";
@@ -106,5 +106,19 @@ export function RunActions({ month, status }: { month: string; status: "DRAFT" |
       {status === "DRAFT" && <><button className={ghost} disabled={pending} onClick={() => run(() => buildPayroll(month), "Rebuilt")}>Rebuild from timesheet</button><button className={btn} disabled={pending} onClick={() => confirm(`Approve ${month} payroll? Payslips will be frozen.`) && run(() => approvePayroll(month), "Approved")}>Approve</button></>}
       {status === "APPROVED" && <><button className={ghost} disabled={pending} onClick={() => { const why = prompt("Reopen for changes. Why?"); if (why) run(() => reopenPayroll(month, why), "Reopened"); }}>Reopen</button><button className={btn} disabled={pending} onClick={() => { const via = prompt("Salaries paid how? (e.g. Bank transfer, Cash)", "Bank transfer"); if (via) run(() => payPayroll(month, via), "Marked paid: cost posted to expenses"); }}>Mark salaries paid</button></>}
     </div>
+  );
+}
+
+export function CommissionRuleRow({ storeId, label, rule }: { storeId: string | null; label: string; rule: { rateBp: number; threshold: number; active: boolean } | null }) {
+  const [f, setF] = useState({ rate: rule ? String(rule.rateBp / 100) : "", threshold: rule ? String(rule.threshold / 100) : "0", active: rule?.active ?? true });
+  const { pending, run } = useRun();
+  return (
+    <tr>
+      <td className="px-4 py-2 text-[13.5px]">{label}{!rule && storeId && <span className="block text-[12px] text-muted">uses the rule for every shop</span>}</td>
+      <td className="px-2 py-2"><div className="flex items-center gap-1"><input className={cn(input, "w-20 text-right")} value={f.rate} onChange={(e) => setF({ ...f, rate: num(e.target.value) })} inputMode="decimal" aria-label={`${label} rate`} /><span className="text-muted">%</span></div></td>
+      <td className="px-2 py-2"><input className={cn(input, "w-32 text-right")} value={f.threshold} onChange={(e) => setF({ ...f, threshold: num(e.target.value) })} inputMode="decimal" aria-label={`${label} monthly target`} /></td>
+      <td className="px-2 py-2 text-[13px]"><label className="flex items-center gap-1.5"><input type="checkbox" className="accent-ink" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> On</label></td>
+      <td className="px-4 py-2 text-right"><button className={btn} disabled={pending || f.rate === ""} onClick={() => run(() => saveCommissionRule({ storeId, ratePct: Number(f.rate), threshold: Number(f.threshold) || 0, active: f.active }), `${label} saved`)}>Save</button></td>
+    </tr>
   );
 }

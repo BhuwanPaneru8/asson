@@ -533,6 +533,7 @@ model Store {
   materialLogs     MaterialLog[]
   productionOrders ProductionOrder[]
   attendances      Attendance[]
+  commissionRules  CommissionRule[]
 
   @@index([active, priority])
 }
@@ -1545,6 +1546,8 @@ model Payslip {
   basic           Int
   allowance       Int
   bonus           Int        @default(0)
+  /// till sales commission for the month (taxable, part of gross)
+  commission      Int        @default(0)
   workingDays     Int
   daysWorked      Int
   leaveDays       Int
@@ -1563,4 +1566,16 @@ model Payslip {
   note            String?
 
   @@unique([runId, userId])
+}
+
+/// Sales commission for till staff: rate (basis points: 100 = 1%) on their sales excluding VAT, net of
+/// refunds, once the month's sales at that shop reach the threshold. storeId null = every shop without its own.
+model CommissionRule {
+  id        String   @id @default(cuid())
+  storeId   String?
+  store     Store?   @relation(fields: [storeId], references: [id])
+  rateBp    Int
+  threshold Int      @default(0)
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
 }

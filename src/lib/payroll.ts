@@ -7,6 +7,7 @@ import { ktmDate } from "./pos";
 import { timesheet } from "./people";
 import { computeSlip, fiscalYearOf, workingDaysIn, type Band, type TaxYear } from "./payroll-rules";
 import { formatPrice } from "./utils";
+import { commissionByPerson } from "./commissions";
 
 // Monthly payroll, owner only. A run for a month is built from each person's salary terms (Employment) and
 // the timesheet (unpaid leave), with tax from the fiscal year's confirmed bands. While DRAFT it can be
@@ -76,9 +77,10 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
   const run = await tx.payrollRun.findUnique({ where: { month }, include: { slips: true } });
   if (run && run.status !== "DRAFT") throw new PayrollError(`${month} payroll is already ${run.status.toLowerCase()}. Reopen it first.`);
   const r = run ?? (await tx.payrollRun.create({ data: { month, fiscalYear: fy, createdById: owner.id }, include: { slips: true } }));
-  const [staff, sheet] = await Promise.all([
+  const [staff, sheet, commission] = await Promise.all([
     tx.employment.findMany({ where: { active: true }, include: { user: { select: { id: true, role: true } } } }),
     timesheet(month, { all: true }),
+    commissionByPerson(month),
   ]);
   const workingDays = workingDaysIn(month, store.people.weeklyOff);
   const keep = new Set<string>();
@@ -87,8 +89,9 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
     const prev = r.slips.find((s) => s.userId === e.userId);
     const extra = prev?.extraUnpaidDays ?? 0, bonus = prev?.bonus ?? 0;
     const unpaidDays = Math.min(workingDays, (t?.unpaidLeaveDays ?? 0) + extra);
-    const s = computeSlip({ basic: e.basic, allowance: e.allowance, bonus, workingDays, unpaidDays, inSsf: e.inSsf, married: e.married }, year);
-    const data = { basic: e.basic, allowance: e.allowance, bonus, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, inSsf: e.inSsf, married: e.married, ...slipFields(s) };
+    const earned = commission.get(e.userId) ?? 0;
+    const s = computeSlip({ basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, unpaidDays, inSsf: e.inSsf, married: e.married }, year);
+    const data = { basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, inSsf: e.inSsf, married: e.married, ...slipFields(s) };
     await tx.payslip.upsert({ where: { runId_userId: { runId: r.id, userId: e.userId } }, create: { runId: r.id, userId: e.userId, ...data }, update: data });
     keep.add(e.userId);
   }
@@ -106,7 +109,7 @@ export async function adjustSlip(tx: Tx, owner: Actor, slipId: string, d: { bonu
   if (!year?.confirmed) throw new PayrollError(`Confirm the income-tax bands for FY ${s.run.fiscalYear} first.`);
   const timesheetUnpaid = s.unpaidDays - s.extraUnpaidDays;
   const unpaidDays = Math.min(s.workingDays, timesheetUnpaid + d.extraUnpaidDays);
-  const c = computeSlip({ basic: s.basic, allowance: s.allowance, bonus: d.bonus, workingDays: s.workingDays, unpaidDays, inSsf: s.inSsf, married: s.married }, year);
+  const c = computeSlip({ basic: s.basic, allowance: s.allowance, bonus: d.bonus, commission: s.commission, workingDays: s.workingDays, unpaidDays, inSsf: s.inSsf, married: s.married }, year);
   await tx.payslip.update({ where: { id: slipId }, data: { bonus: d.bonus, extraUnpaidDays: d.extraUnpaidDays, unpaidDays, note: d.note || null, ...slipFields(c) } });
   await audit(tx, owner, { action: "payroll.adjust", entity: ["Payslip", slipId], summary: `${s.user.name} ${s.run.month}: bonus ${formatPrice(d.bonus)}, ${d.extraUnpaidDays} extra unpaid day(s)${d.note ? ` (${d.note})` : ""}` });
 }

@@ -25,6 +25,7 @@ export default async function PayslipPage({ params }: { params: Promise<{ id: st
           {s.allowance > 0 && row("Allowance", s.allowance)}
           {s.unpaidDeduction > 0 && row(`Unpaid days (${s.unpaidDays})`, s.unpaidDeduction, true)}
           {s.bonus > 0 && row("Bonus", s.bonus)}
+          {s.commission > 0 && row("Sales commission", s.commission)}
           <div className="flex justify-between border-t border-line py-1.5 font-semibold"><dt>Gross</dt><dd className="tabular-nums">{formatPrice(s.gross)}</dd></div>
           {s.inSsf && row("SSF (11% of basic)", s.ssfEmployee, true)}
           {row("Income tax (TDS)", s.incomeTax, true)}
