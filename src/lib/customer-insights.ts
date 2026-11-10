@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { ktmDate } from "./pos";
 
@@ -32,33 +33,60 @@ export function segmentOf(orders: number, daysSinceLast: number): Segment {
 
 const maskPhone = (p: string) => (p.length >= 10 ? `${p.slice(0, 2)}••••${p.slice(-4)}` : "");
 
+/** One row per customer (account, or phone for guests and till sales), built in the database. */
+const CUSTOMERS = Prisma.sql`
+  WITH o AS (
+    SELECT o."createdAt", o."total" - o."shippingFee" AS "goods", o."channel",
+      right(regexp_replace(o."phone", '[^0-9]', '', 'g'), 10) AS "phone", o."userId",
+      COALESCE(NULLIF(u."name", ''), o."shippingAddress"->>'fullName', '') AS "name",
+      to_char((o."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kathmandu', 'YYYY-MM') AS "month"
+    FROM "Order" o LEFT JOIN "User" u ON u."id" = o."userId"
+    WHERE o."status" NOT IN ('CANCELLED', 'RETURNED')
+  ), k AS (
+    SELECT *, COALESCE("userId", CASE WHEN length("phone") = 10 THEN 'p:' || "phone" END) AS "key" FROM o
+  ), c AS (
+    SELECT "key",
+      (array_agg("name" ORDER BY "createdAt" DESC) FILTER (WHERE "name" <> '' AND "name" <> 'Walk-in customer'))[1] AS "name",
+      (array_agg("phone" ORDER BY "createdAt"))[1] AS "phone",
+      MIN("createdAt") AS "first", MAX("createdAt") AS "last", COUNT(*)::int AS "orders", SUM("goods")::bigint AS "revenue",
+      MIN("month") AS "firstMonth", array_agg(DISTINCT "month") AS "months", COUNT(DISTINCT "channel")::int AS "channels"
+    FROM k WHERE "key" IS NOT NULL GROUP BY "key"
+  )`;
+
+/**
+ * Repeat buying, value, segments and cohorts. Everything is summed in the database: a national chain has
+ * hundreds of thousands of customers, and shipping one row each to the app was the slow part (13 s at
+ * 300k orders); the old version also capped at 200k orders and silently dropped the newest.
+ */
 export async function customerInsights(now = new Date()) {
-  const orders = await db.order.findMany({
-    where: { status: { notIn: ["CANCELLED", "RETURNED"] } },
-    select: { createdAt: true, total: true, shippingFee: true, userId: true, phone: true, channel: true, shippingAddress: true, user: { select: { name: true } } },
-    orderBy: { createdAt: "asc" },
-    take: 200_000,
-  });
-  type C = { key: string; name: string; phone: string; first: Date; last: Date; orders: number; revenue: number; months: Set<string>; firstMonth: string; channels: Set<string> };
-  const customers = new Map<string, C>();
-  for (const o of orders) {
-    const phone = o.phone.replace(/\D/g, "").slice(-10);
-    const key = o.userId ?? (phone.length === 10 ? `p:${phone}` : null);
-    if (!key) continue;
-    const c = customers.get(key) ?? { key, name: "", phone, first: o.createdAt, last: o.createdAt, orders: 0, revenue: 0, months: new Set<string>(), firstMonth: month(o.createdAt), channels: new Set<string>() };
-    // the latest real name wins (till sales are recorded as "Walk-in customer")
-    const name = o.user?.name || (o.shippingAddress as { fullName?: string } | null)?.fullName || "";
-    if (name && name !== "Walk-in customer") c.name = name;
-    c.orders++;
-    c.revenue += o.total - o.shippingFee;
-    c.last = o.createdAt;
-    c.months.add(month(o.createdAt));
-    c.channels.add(o.channel);
-    customers.set(key, c);
-  }
-  const all = [...customers.values()];
-  const repeaters = all.filter((c) => c.orders >= 2);
-  const gaps = repeaters.map((c) => (c.last.getTime() - c.first.getTime()) / DAY / (c.orders - 1));
+  const n = (v: bigint | number | null) => Number(v ?? 0);
+  const [[sum], recency, cohortCells, topRows] = await Promise.all([
+    db.$queryRaw<{ customers: bigint; repeaters: bigint; orders: bigint; revenue: bigint | null; repeatRevenue: bigint | null; gap: number | null; omni: bigint }[]>`
+      ${CUSTOMERS}
+      SELECT COUNT(*) AS "customers", COUNT(*) FILTER (WHERE "orders" >= 2) AS "repeaters", SUM("orders") AS "orders", SUM("revenue") AS "revenue",
+        SUM("revenue") FILTER (WHERE "orders" >= 2) AS "repeatRevenue",
+        AVG(EXTRACT(EPOCH FROM ("last" - "first")) / 86400 / ("orders" - 1)) FILTER (WHERE "orders" >= 2) AS "gap",
+        COUNT(*) FILTER (WHERE "channels" > 1) AS "omni"
+      FROM c`,
+    // recency × frequency buckets; the segment rules themselves stay in segmentOf()
+    db.$queryRaw<{ orders: number; days: number; customers: bigint; revenue: bigint }[]>`
+      ${CUSTOMERS}
+      SELECT LEAST("orders", 3) AS "orders", FLOOR(EXTRACT(EPOCH FROM (${now}::timestamptz - ("last" AT TIME ZONE 'UTC'))) / 86400)::int AS "days",
+        COUNT(*) AS "customers", SUM("revenue") AS "revenue"
+      FROM c GROUP BY 1, 2`,
+    // how many of each first-month cohort bought in each later month
+    db.$queryRaw<{ firstMonth: string; month: string; customers: bigint; size: bigint }[]>`
+      ${CUSTOMERS}
+      SELECT c."firstMonth", m AS "month", COUNT(*) AS "customers", MAX(s."size") AS "size"
+      FROM c CROSS JOIN LATERAL unnest(c."months") AS m
+      JOIN (SELECT "firstMonth", COUNT(*) AS "size" FROM c GROUP BY 1) s ON s."firstMonth" = c."firstMonth"
+      WHERE c."firstMonth" >= to_char((${now}::timestamptz AT TIME ZONE 'Asia/Kathmandu') - interval '12 months', 'YYYY-MM')
+      GROUP BY 1, 2`,
+    db.$queryRaw<{ name: string | null; phone: string; orders: number; revenue: bigint; last: Date }[]>`
+      ${CUSTOMERS}
+      SELECT "name", "phone", "orders", "revenue", "last" FROM c ORDER BY "revenue" DESC, "last" DESC LIMIT 15`,
+  ]);
+  const customers = n(sum?.customers ?? 0), revenue = n(sum?.revenue ?? 0);
 
   // cohorts: customers by first-order month (last 12), and the share who ordered again in each later month
   const thisMonth = month(now);
@@ -68,37 +96,39 @@ export async function customerInsights(now = new Date()) {
     return month(d);
   });
   const cohorts = cohortMonths.map((m) => {
-    const members = all.filter((c) => c.firstMonth === m);
+    const cells = cohortCells.filter((x) => x.firstMonth === m);
+    const size = n(cells[0]?.size ?? 0);
     const maxOffset = monthsBetween(m, thisMonth);
     return {
       month: m,
-      size: members.length,
+      size,
       // offset k = still buying k months after their first month (null = that month hasn't happened yet)
-      retention: [1, 2, 3, 4, 5, 6].map((k) => (k > maxOffset || !members.length ? null : Math.round((members.filter((c) => [...c.months].some((x) => monthsBetween(m, x) === k)).length / members.length) * 1000) / 10)),
+      retention: [1, 2, 3, 4, 5, 6].map((k) => (k > maxOffset || !size ? null : Math.round((n(cells.find((x) => monthsBetween(m, x.month) === k)?.customers ?? 0) / size) * 1000) / 10)),
     };
   });
 
   const bySegment = new Map<Segment, { customers: number; revenue: number }>();
-  for (const c of all) {
-    const s = segmentOf(c.orders, Math.floor((now.getTime() - c.last.getTime()) / DAY));
+  for (const r of recency) {
+    const s = segmentOf(r.orders, r.days);
     const row = bySegment.get(s) ?? { customers: 0, revenue: 0 };
-    row.customers++; row.revenue += c.revenue;
+    row.customers += n(r.customers); row.revenue += n(r.revenue);
     bySegment.set(s, row);
   }
-  const revenue = all.reduce((s, c) => s + c.revenue, 0);
-  const repeatRevenue = repeaters.reduce((s, c) => s + c.revenue, 0);
 
   return {
-    customers: all.length,
-    repeatRate: all.length ? Math.round((repeaters.length / all.length) * 1000) / 10 : 0,
-    repeatRevenueShare: revenue ? Math.round((repeatRevenue / revenue) * 1000) / 10 : 0,
-    ordersPerCustomer: all.length ? Math.round((all.reduce((s, c) => s + c.orders, 0) / all.length) * 100) / 100 : 0,
-    lifetimeValue: all.length ? Math.round(revenue / all.length) : 0,
-    daysBetweenOrders: gaps.length ? Math.round(gaps.reduce((s, g) => s + g, 0) / gaps.length) : null,
-    omnichannel: all.filter((c) => c.channels.size > 1).length,
+    customers,
+    repeatRate: customers ? Math.round((n(sum.repeaters) / customers) * 1000) / 10 : 0,
+    repeatRevenueShare: revenue ? Math.round((n(sum.repeatRevenue) / revenue) * 1000) / 10 : 0,
+    ordersPerCustomer: customers ? Math.round((n(sum.orders) / customers) * 100) / 100 : 0,
+    lifetimeValue: customers ? Math.round(revenue / customers) : 0,
+    daysBetweenOrders: sum?.gap != null ? Math.round(Number(sum.gap)) : null,
+    omnichannel: n(sum?.omni ?? 0),
     segments: SEGMENTS.map((s) => ({ ...s, customers: bySegment.get(s.key)?.customers ?? 0, revenue: bySegment.get(s.key)?.revenue ?? 0 })),
     cohorts,
-    top: all.sort((a, b) => b.revenue - a.revenue).slice(0, 15).map((c) => ({ name: c.name || "Customer", phone: maskPhone(c.phone), orders: c.orders, revenue: c.revenue, last: c.last, segment: segmentOf(c.orders, Math.floor((now.getTime() - c.last.getTime()) / DAY)) })),
+    top: topRows.map((c) => {
+      const days = Math.floor((now.getTime() - c.last.getTime()) / DAY);
+      return { name: c.name || "Customer", phone: maskPhone(c.phone), orders: c.orders, revenue: n(c.revenue), last: c.last, segment: segmentOf(c.orders, days) };
+    }),
   };
 }
 

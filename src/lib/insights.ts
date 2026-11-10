@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { store, sortSizes } from "./config";
 import { ktmDate } from "./pos";
+import { inChunks } from "./batch";
 
 // Buying and merchandising insights. Demand = units on orders that weren't cancelled or returned,
 // online and at the till. Cost and margin numbers are for the owner only (the page strips them).
@@ -37,24 +38,28 @@ export async function reorderPlan(opts: { leadTimeDays?: number; coverDays?: num
   ]);
   const ids = s90.flatMap((s) => (s.variantId ? [s.variantId] : []));
   if (!ids.length) return [];
+  // id lists in chunks (bind-value limit at national scale); lookups by Map, not .find() in a loop
   const [variants, onOrder] = await Promise.all([
-    db.variant.findMany({
-      where: { id: { in: ids }, product: { status: "ACTIVE" } },
+    inChunks(ids, (chunk) => db.variant.findMany({
+      where: { id: { in: chunk }, product: { status: "ACTIVE" } },
       select: {
         id: true, sku: true, color: true, size: true, stock: true, lowStockThreshold: true, costPrice: true, product: { select: { name: true } },
         purchaseItems: { orderBy: { purchaseOrder: { createdAt: "desc" } }, take: 1, select: { purchaseOrder: { select: { supplierId: true, supplier: { select: { name: true } } } } } },
       },
-    }),
+    })),
     // units already on open POs shouldn't be ordered twice
-    db.purchaseOrderItem.findMany({ where: { variantId: { in: ids }, purchaseOrder: { status: { in: ["DRAFT", "ORDERED", "PARTIALLY_RECEIVED"] } } }, select: { variantId: true, quantityOrdered: true, quantityReceived: true, quantityDamaged: true } }),
+    inChunks(ids, (chunk) => db.purchaseOrderItem.findMany({ where: { variantId: { in: chunk }, purchaseOrder: { status: { in: ["DRAFT", "ORDERED", "PARTIALLY_RECEIVED"] } } }, select: { variantId: true, quantityOrdered: true, quantityReceived: true, quantityDamaged: true } })),
   ]);
-  const sold = (rows: typeof s30, id: string) => rows.find((r) => r.variantId === id)?._sum.quantity ?? 0;
+  const soldBy = (rows: typeof s30) => new Map(rows.map((r) => [r.variantId, r._sum.quantity ?? 0]));
+  const m30 = soldBy(s30), m90 = soldBy(s90);
+  const incomingBy = new Map<string, number>();
+  for (const o of onOrder) if (o.variantId) incomingBy.set(o.variantId, (incomingBy.get(o.variantId) ?? 0) + o.quantityOrdered - o.quantityReceived - o.quantityDamaged);
   const rows: ReorderRow[] = [];
   for (const v of variants) {
-    const sold30 = sold(s30, v.id), sold90 = sold(s90, v.id);
+    const sold30 = m30.get(v.id) ?? 0, sold90 = m90.get(v.id) ?? 0;
     const perDay = salesVelocity(sold30, sold90);
     if (perDay <= 0) continue;
-    const incoming = onOrder.filter((o) => o.variantId === v.id).reduce((s, o) => s + o.quantityOrdered - o.quantityReceived - o.quantityDamaged, 0);
+    const incoming = incomingBy.get(v.id) ?? 0;
     const daysLeft = (v.stock + incoming) / perDay;
     const urgency = daysLeft < lead ? "now" : daysLeft < lead + 14 ? "soon" : null;
     if (!urgency) continue;
@@ -91,8 +96,9 @@ export async function deadStock(days = store.insights.deadStockDays) {
         WHERE oi."variantId" IN (${Prisma.join(dead.map((d) => d.id))}) AND o."status" NOT IN ('CANCELLED', 'RETURNED')
         GROUP BY oi."variantId"`
     : [];
+  const lastBy = new Map(last.map((l) => [l.variantId, l.at]));
   const rows: DeadRow[] = dead.map((d) => {
-    const lastSold = last.find((l) => l.variantId === d.id)?.at ?? null;
+    const lastSold = lastBy.get(d.id) ?? null;
     return {
       variantId: d.id, productId: d.product.id, sku: d.sku, name: d.product.name, color: d.color, size: d.size, stock: d.stock,
       value: d.costPrice != null ? d.costPrice * d.stock : null, lastSold,
