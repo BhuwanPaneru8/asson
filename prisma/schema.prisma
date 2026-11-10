@@ -542,6 +542,7 @@ model Store {
   checklistRuns    ChecklistRun[]
   issues           Issue[]
   careCases        CareCase[]
+  vmSubmissions    VmSubmission[]
 
   @@index([active, priority])
 }
@@ -1802,4 +1803,73 @@ model CareMessage {
   createdAt DateTime        @default(now())
 
   @@index([caseId, createdAt])
+}
+
+enum VmStatus {
+  SUBMITTED // waiting for review
+  APPROVED
+  REDO // reviewer asked for changes
+}
+
+/// A visual-merchandising brief from HQ: how a window or display must look, by when, at which shops.
+model VmBrief {
+  id           String         @id @default(cuid())
+  number       Int            @unique @default(autoincrement())
+  title        String
+  instructions String
+  /// how it should look
+  refPhotos    String[]
+  /// [{ name, hint }]: the shots each shop must send, e.g. Window, Entrance table
+  areas        Json
+  /// [{ text }]: what the reviewer scores 0–2 each
+  criteria     Json
+  /// empty = every shop
+  storeIds     String[]
+  dueAt        DateTime
+  closedAt     DateTime?
+  createdById  String
+  createdAt    DateTime       @default(now())
+  submissions  VmSubmission[]
+
+  @@index([createdAt])
+}
+
+/// One shop's answer to a brief. Resubmitting after a redo starts a new round.
+model VmSubmission {
+  id            String    @id @default(cuid())
+  briefId       String
+  brief         VmBrief   @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  storeId       String
+  store         Store     @relation(fields: [storeId], references: [id])
+  status        VmStatus
+  round         Int       @default(1)
+  /// [{ area, url }]
+  photos        Json
+  note          String    @default("")
+  submittedById String
+  submittedAt   DateTime
+  reviewedById  String?
+  reviewedAt    DateTime?
+  feedback      String    @default("")
+  /// one score 0–2 per criterion, and the total as a percentage
+  scores        Int[]
+  score         Int?
+  events        VmEvent[]
+
+  @@unique([briefId, storeId])
+  @@index([storeId, reviewedAt])
+}
+
+model VmEvent {
+  id           String       @id @default(cuid())
+  submissionId String
+  submission   VmSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  round        Int
+  status       VmStatus
+  message      String
+  byId         String
+  byName       String
+  createdAt    DateTime     @default(now())
+
+  @@index([submissionId, createdAt])
 }
