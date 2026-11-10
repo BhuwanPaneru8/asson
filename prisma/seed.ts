@@ -163,6 +163,10 @@ async function main() {
   }
   console.log("Resetting data…");
   await db.$transaction([
+    // own production first: it points at products, suppliers and locations
+    db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),
+    db.bomLine.deleteMany(), db.materialStock.deleteMany(), db.material.deleteMany(),
+    db.paymentAllocation.deleteMany(), db.supplierPayment.deleteMany(), db.supplierBill.deleteMany(),
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),

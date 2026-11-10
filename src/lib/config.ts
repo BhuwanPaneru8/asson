@@ -70,6 +70,10 @@ export const store = {
   },
   /** Birthday treat (owner to confirm): points added on the day, once a year, for customers with a delivered order. */
   birthday: { points: 200 },
+  /** Own production (Admin → Production). Owner to confirm. */
+  production: {
+    wastagePercent: 3, // extra fabric/trims issued on top of the bill of materials for cutting loss
+  },
   /** Keeping shops stocked from warehouses (Admin → Replenishment). Owner to confirm. */
   replenishment: {
     shopCoverDays: 21, // a shop holds enough for this many days of its own sales
