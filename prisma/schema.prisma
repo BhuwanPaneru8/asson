@@ -534,6 +534,7 @@ model Store {
   productionOrders ProductionOrder[]
   attendances      Attendance[]
   commissionRules  CommissionRule[]
+  checklistRuns    ChecklistRun[]
 
   @@index([active, priority])
 }
@@ -1578,4 +1579,65 @@ model CommissionRule {
   threshold Int      @default(0)
   active    Boolean  @default(true)
   updatedAt DateTime @updatedAt
+}
+
+// ---------- Shop operations hub (Phase 13a) ----------
+
+/// A message from HQ to all locations or chosen ones; staff confirm they've read it when it matters.
+model Announcement {
+  id          String             @id @default(cuid())
+  title       String
+  body        String
+  /// empty = every location
+  storeIds    String[]
+  requiresAck Boolean            @default(true)
+  createdById String
+  createdAt   DateTime           @default(now())
+  expiresAt   DateTime?
+  reads       AnnouncementRead[]
+
+  @@index([createdAt])
+}
+
+model AnnouncementRead {
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime     @default(now())
+
+  @@id([announcementId, userId])
+}
+
+/// A daily checklist HQ defines (opening, closing, cleaning…) for shops, warehouses or both.
+model ChecklistTemplate {
+  id        String         @id @default(cuid())
+  name      String
+  /// [{ text }]
+  items     Json
+  /// SHOP, WAREHOUSE or null for every location
+  kind      StoreKind?
+  /// "HH:mm" Nepal time it should be done by (shown and used for "late")
+  dueBy     String?
+  active    Boolean        @default(true)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+  runs      ChecklistRun[]
+}
+
+/// One location's checklist for one Nepal day. Items ticked one by one, by whoever does them.
+model ChecklistRun {
+  id          String            @id @default(cuid())
+  templateId  String
+  template    ChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  storeId     String
+  store       Store             @relation(fields: [storeId], references: [id])
+  /// Nepal date YYYY-MM-DD
+  date        String
+  /// [{ text, doneById, doneByName, doneAt }] — a snapshot of the template's items for that day
+  items       Json
+  completedAt DateTime?
+  createdAt   DateTime          @default(now())
+
+  @@unique([templateId, storeId, date])
+  @@index([storeId, date])
 }

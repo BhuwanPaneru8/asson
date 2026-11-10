@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -22,8 +22,10 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/nepali", label: "Nepali names", icon: Languages, perm: "catalog.edit" },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, perm: "catalog.view", badgeKey: "stock" },
   { href: "/admin/production", label: "Production", icon: Factory, perm: "production" },
+  { href: "/admin/ops", label: "Shop operations", icon: Megaphone, perm: "ops.manage" },
   { href: "/admin/people", label: "People", icon: UsersRound, perm: "people" },
   { href: "/admin/payroll", label: "Payroll", icon: HandCoins, perm: "payroll" },
+  { href: "/admin/today", label: "Today", icon: ListChecks, perm: "self.time" },
   { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time" },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers" },
   { href: "/admin/replenishment", label: "Replenishment", icon: RefreshCw, perm: "transfers" },
