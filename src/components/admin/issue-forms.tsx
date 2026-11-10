@@ -19,14 +19,14 @@ const PRIORITIES = [["URGENT", "Urgent: can't trade or unsafe"], ["NORMAL", "Nor
 const STATUSES = [["OPEN", "Open"], ["IN_PROGRESS", "Being fixed"], ["ON_HOLD", "On hold"], ["RESOLVED", "Resolved"]] as const;
 
 /** Take or choose photos (phone camera opens directly); each is resized in the browser, then uploaded. */
-export function IssuePhotos({ value, onChange, max = 6 }: { value: string[]; onChange: (v: string[]) => void; max?: number }) {
+export function IssuePhotos({ value, onChange, max = 6, purpose = "issue", label = "Add photo" }: { value: string[]; onChange: (v: string[]) => void; max?: number; purpose?: "issue" | "vm"; label?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   async function add(files: FileList) {
     setBusy(true);
     let next = value;
     for (const f of [...files].slice(0, max - value.length)) {
-      try { next = [...next, (await uploadPhoto(f, "issue")).url]; onChange(next); } catch (e) { toast.error(e instanceof Error ? e.message : "Upload failed"); }
+      try { next = [...next, (await uploadPhoto(f, purpose)).url]; onChange(next); } catch (e) { toast.error(e instanceof Error ? e.message : "Upload failed"); }
     }
     setBusy(false);
   }
@@ -43,7 +43,7 @@ export function IssuePhotos({ value, onChange, max = 6 }: { value: string[]; onC
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}Photo
         </button>
       )}
-      <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple hidden aria-label="Add photo" onChange={(e) => { if (e.target.files?.length) void add(e.target.files); e.target.value = ""; }} />
+      <input ref={ref} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple hidden aria-label={label} onChange={(e) => { if (e.target.files?.length) void add(e.target.files); e.target.value = ""; }} />
     </div>
   );
 }
