@@ -30,7 +30,7 @@ export function ProductEditor({ initial, categories, collections, readOnly, show
   const router = useRouter();
   const [pending, start] = useTransition();
   const [f, setF] = useState({
-    name: initial?.name ?? "", slug: initial?.slug ?? "", brand: initial?.brand ?? "Asson", description: initial?.description ?? "",
+    name: initial?.name ?? "", nameNe: initial?.nameNe ?? "", descriptionNe: initial?.descriptionNe ?? "", slug: initial?.slug ?? "", brand: initial?.brand ?? "Asson", description: initial?.description ?? "",
     details: (initial?.details ?? []).join("\n"), gender: initial?.gender ?? "UNISEX", status: initial?.status ?? "DRAFT", categoryId: initial?.categoryId ?? "",
     price: initial?.price ?? "", compareAtPrice: initial?.compareAtPrice ?? "", material: initial?.material ?? "", fit: initial?.fit ?? "", care: initial?.care ?? "",
     tags: (initial?.tags ?? []).join(", "), featured: initial?.featured ?? false, collectionIds: initial?.collectionIds ?? [],
@@ -96,6 +96,13 @@ export function ProductEditor({ initial, categories, collections, readOnly, show
               <div><label className={label}>Brand<input className={input} value={f.brand} onChange={(e) => set("brand", e.target.value)} /></label>{err("brand")}</div>
               <div><label className={label}>URL slug<input className={input} value={f.slug} placeholder={slugify(f.name)} onChange={(e) => set("slug", e.target.value)} /></label>{err("slug")}</div>
               <div className="sm:col-span-2"><label className={label}>Description<textarea className={`${input} h-28 py-2`} value={f.description} onChange={(e) => set("description", e.target.value)} /></label>{err("description")}</div>
+              <div className="sm:col-span-2 rounded-md border border-dashed border-line p-3">
+                <p className="mb-2 text-[12.5px] text-muted">नेपाली — shown to shoppers reading Nepali. Leave blank to show the English.</p>
+                <div className="grid gap-3">
+                  <label className={label}>Name in Nepali<input lang="ne" className={input} value={f.nameNe} onChange={(e) => set("nameNe", e.target.value)} placeholder="जस्तै: लिनेन सर्ट" /></label>
+                  <label className={label}>Description in Nepali<textarea lang="ne" className={`${input} h-24 py-2`} value={f.descriptionNe} onChange={(e) => set("descriptionNe", e.target.value)} /></label>
+                </div>
+              </div>
               <div className="sm:col-span-2"><label className={label}>Key features (one per line)<textarea className={`${input} h-24 py-2`} value={f.details} onChange={(e) => set("details", e.target.value)} /></label></div>
               <label className={label}>Fabric<input className={input} value={f.material} onChange={(e) => set("material", e.target.value)} placeholder="100% cotton" /></label>
               <label className={label}>Fit<input className={input} value={f.fit} onChange={(e) => set("fit", e.target.value)} placeholder="Regular fit" /></label>

@@ -14,13 +14,15 @@ import { Price, Stars, Badge } from "@/components/ui/misc";
 import { useShop } from "@/components/site/shop-provider";
 import { cn, discountPercent } from "@/lib/utils";
 import { useT } from "@/components/site/i18n-provider";
+import { pick } from "@/lib/i18n";
 
 export function ProductCard({ p, priority }: { p: ProductCardData; priority?: boolean }) {
   const [color, setColor] = useState(p.colors[0]?.name);
   const [pending, start] = useTransition();
   const { wishlist, openCart } = useShop();
   const router = useRouter();
-  const { t } = useT();
+  const { t, locale } = useT();
+  const name = pick(locale, p.name, p.nameNe);
   const saved = wishlist.has(p.id);
 
   const colorImgs = p.images.filter((i) => i.color === color);
@@ -36,7 +38,7 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
       const v = p.variants.find((x) => x.color === color && x.size === size);
       if (!v) return;
       const r = await addToCart({ variantId: v.id });
-      if (r.ok) { toast.success(t("pc.added", { name: p.name, size }), { action: { label: t("pc.viewBag"), onClick: openCart } }); if (r.message) toast(r.message); }
+      if (r.ok) { toast.success(t("pc.added", { name, size }), { action: { label: t("pc.viewBag"), onClick: openCart } }); if (r.message) toast(r.message); }
       else toast.error(r.error);
     });
 
@@ -50,8 +52,8 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
   return (
     <div className="group relative flex flex-col">
       <div className="relative aspect-[3/4] overflow-hidden bg-cloud">
-        <Link href={href} className="absolute inset-0" aria-label={p.name}>
-          {primary && <Image src={primary.url} alt={primary.alt || p.name} fill priority={priority} sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className={cn("object-cover transition-all duration-700", secondary && "group-hover:opacity-0", !p.inStock && "opacity-60")} />}
+        <Link href={href} className="absolute inset-0" aria-label={name}>
+          {primary && <Image src={primary.url} alt={primary.alt || name} fill priority={priority} sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className={cn("object-cover transition-all duration-700", secondary && "group-hover:opacity-0", !p.inStock && "opacity-60")} />}
           {secondary && <Image src={secondary.url} alt="" fill sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className="object-cover opacity-0 transition-opacity duration-700 group-hover:opacity-100" />}
         </Link>
         <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
@@ -88,7 +90,7 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
           </div>
         )}
         <p className="text-[12px] uppercase tracking-wider text-muted">{p.brand}</p>
-        <Link href={href} className="line-clamp-1 text-[14.5px] font-medium hover:text-accent">{p.name}</Link>
+        <Link href={href} className="line-clamp-1 text-[14.5px] font-medium hover:text-accent">{name}</Link>
         <Price price={p.price} compareAt={p.compareAtPrice} size="sm" offWord={t("price.off")} />
         {p.ratingCount > 0 && (
           <div className="flex items-center gap-1.5 text-[12px] text-muted"><Stars value={p.ratingAvg} size={12} /> ({p.ratingCount})</div>

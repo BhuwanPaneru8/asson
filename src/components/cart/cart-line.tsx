@@ -11,11 +11,13 @@ import { store } from "@/lib/config";
 import { cn, formatPrice } from "@/lib/utils";
 import { rich } from "@/lib/i18n/rich";
 import { useT } from "@/components/site/i18n-provider";
+import { pick } from "@/lib/i18n";
 
 export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate?: () => void; compact?: boolean }) {
   const [pending, start] = useTransition();
   const [qty, setQty] = useOptimistic(line.quantity);
-  const { t } = useT();
+  const { t, locale } = useT();
+  const name = pick(locale, line.name, line.nameNe);
 
   const change = (q: number) =>
     start(async () => {
@@ -29,12 +31,12 @@ export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate
   return (
     <div className={cn("flex gap-4", pending && "opacity-60")}>
       <Link href={`/p/${line.slug}`} onClick={onNavigate} className={cn("relative shrink-0 overflow-hidden bg-cloud", compact ? "h-28 w-[84px]" : "h-36 w-28")}>
-        {line.image && <Image src={line.image} alt={line.name} fill sizes="112px" className="object-cover" />}
+        {line.image && <Image src={line.image} alt={name} fill sizes="112px" className="object-cover" />}
       </Link>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <Link href={`/p/${line.slug}`} onClick={onNavigate} className="line-clamp-2 text-[14.5px] font-medium leading-snug hover:text-accent">{line.name}</Link>
+            <Link href={`/p/${line.slug}`} onClick={onNavigate} className="line-clamp-2 text-[14.5px] font-medium leading-snug hover:text-accent">{name}</Link>
             <p className="mt-1 text-[13px] text-muted">{t("line.variant", { color: line.color, size: line.size })}</p>
           </div>
           <div className="text-right">
@@ -52,7 +54,7 @@ export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate
             <span className="w-8 text-center text-[14px] font-medium tabular-nums" aria-live="polite">{qty}</span>
             <button onClick={() => change(qty + 1)} disabled={pending || qty >= max} className="flex h-full w-9 items-center justify-center hover:bg-cloud disabled:opacity-30" aria-label={t("line.inc")}><Plus className="h-3.5 w-3.5" /></button>
           </div>
-          <button onClick={() => change(0)} disabled={pending} className="flex items-center gap-1.5 text-[13px] text-muted hover:text-danger" aria-label={t("line.removeName", { name: line.name })}>
+          <button onClick={() => change(0)} disabled={pending} className="flex items-center gap-1.5 text-[13px] text-muted hover:text-danger" aria-label={t("line.removeName", { name })}>
             <Trash2 className="h-3.5 w-3.5" /> {t("line.remove")}
           </button>
         </div>

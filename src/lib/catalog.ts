@@ -34,7 +34,7 @@ export type ProductFilters = {
 
 // ---------- Category tree ----------
 
-export type CategoryNode = { id: string; name: string; slug: string; image: string | null; description: string | null; parentId: string | null; children: CategoryNode[] };
+export type CategoryNode = { id: string; name: string; nameNe: string | null; descriptionNe: string | null; slug: string; image: string | null; description: string | null; parentId: string | null; children: CategoryNode[] };
 
 export const getCategoryTree = unstable_cache(
   async (): Promise<CategoryNode[]> => {
@@ -84,7 +84,9 @@ const getColorNames = unstable_cache(
  */
 export async function searchProductIds(q: string, limit = 500): Promise<string[]> {
   const raw = q.toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s]/g, (c) => (c === "-" ? "" : " ")).split(/\s+/).filter(Boolean).slice(0, 8);
-  if (raw.length === 0) return [];
+  // Nepali words (Devanagari) are matched against the owner's Nepali names and descriptions
+  const deva = (q.normalize("NFC").match(/[\u0900-\u097F]+/g) ?? []).filter((w) => w.length > 1).slice(0, 8);
+  if (raw.length === 0 && deva.length === 0) return [];
   const colorNames = await getColorNames();
   const colors = new Set<string>();
   let gender: Gender | null = null;
@@ -95,7 +97,7 @@ export async function searchProductIds(q: string, limit = 500): Promise<string[]
     if (GENDER_WORDS[t] && raw.length > 1) { gender = GENDER_WORDS[t]; continue; }
     words.push(SYNONYMS[t] ?? t);
   }
-  if (words.length === 0 && colors.size === 0 && !gender) return [];
+  if (words.length === 0 && colors.size === 0 && !gender && deva.length === 0) return [];
 
   const doc = Prisma.sql`product_search_doc(p."name", p."brand", p."tags", p."description")`;
   const conds: Prisma.Sql[] = [Prisma.sql`p.status = 'ACTIVE'`];
@@ -103,6 +105,7 @@ export async function searchProductIds(q: string, limit = 500): Promise<string[]
     // a word matches by prefix full-text, or fuzzily against the name (handles "hodie", "jens")
     conds.push(Prisma.sql`(${doc} @@ to_tsquery('simple', ${w + ":*"}) OR ${w} <% p."name")`);
   }
+  for (const w of deva) conds.push(Prisma.sql`(p."nameNe" ILIKE ${"%" + w + "%"} OR p."descriptionNe" ILIKE ${"%" + w + "%"})`);
   if (colors.size) conds.push(Prisma.sql`EXISTS (SELECT 1 FROM "Variant" v WHERE v."productId" = p.id AND v.color IN (${Prisma.join([...colors])}))`);
   if (gender) conds.push(Prisma.sql`p.gender::text IN (${Prisma.join(gender === "KIDS" ? ["KIDS"] : [gender, "UNISEX"])})`);
 
@@ -128,6 +131,7 @@ export async function searchProductIds(q: string, limit = 500): Promise<string[]
 export const cardSelect = {
   id: true,
   name: true,
+  nameNe: true,
   slug: true,
   brand: true,
   price: true,
@@ -144,6 +148,8 @@ type RawCard = Prisma.ProductGetPayload<{ select: typeof cardSelect }>;
 export type ProductCardData = {
   id: string;
   name: string;
+  /** Nepali name if the owner wrote one; show with pick(locale, name, nameNe) */
+  nameNe: string | null;
   slug: string;
   brand: string;
   price: number;
@@ -171,6 +177,7 @@ export function toCard(p: RawCard): ProductCardData {
   return {
     id: p.id,
     name: p.name,
+    nameNe: p.nameNe,
     slug: p.slug,
     brand: p.brand,
     price: p.price,

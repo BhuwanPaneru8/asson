@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { getT } from "@/lib/i18n/server";
+import { rich } from "@/lib/i18n/rich";
 
 export const metadata: Metadata = { title: "Size guide" };
 
@@ -20,15 +22,16 @@ function Table({ title, head, rows }: { title: string; head: string[]; rows: str
   );
 }
 
-export default function SizeGuide() {
+export default async function SizeGuide() {
+  const { t } = await getT();
   return (
     <div className="container-page max-w-3xl py-12">
-      <h1 className="font-display text-5xl">Size guide</h1>
-      <p className="mt-3 text-muted">Measurements are body measurements in inches unless noted. Between sizes? Size up for a relaxed fit.</p>
-      <Table title="Tops, shirts & knitwear" head={["Size", "Chest (in)", "Waist (in)"]} rows={TOPS} />
-      <Table title="Jeans & trousers" head={["Size", "Waist (in)", "Hip (in)"]} rows={BOTTOMS} />
-      <Table title="Kids" head={["Age", "Height (cm)", "Chest (cm)"]} rows={KIDS} />
-      <div className="mt-10 bg-cloud p-6 text-[14.5px] text-ink-soft"><p className="font-semibold text-ink">How to measure</p><p className="mt-2"><b>Chest:</b> around the fullest part, under the arms. <b>Waist:</b> around your natural waistline. <b>Hip:</b> around the fullest part of your hips.</p></div>
+      <h1 className="font-display text-5xl">{t("nav.sizeGuide")}</h1>
+      <p className="mt-3 text-muted">{t("size.intro")}</p>
+      <Table title={t("size.tops")} head={[t("f.size"), t("size.chestIn"), t("size.waistIn")]} rows={TOPS} />
+      <Table title={t("size.bottoms")} head={[t("f.size"), t("size.waistIn"), t("size.hipIn")]} rows={BOTTOMS} />
+      <Table title={t("g.kids")} head={[t("size.age"), t("size.heightCm"), t("size.chestCm")]} rows={KIDS} />
+      <div className="mt-10 bg-cloud p-6 text-[14.5px] text-ink-soft"><p className="font-semibold text-ink">{t("size.how")}</p><p className="mt-2">{rich(t("size.howBody"), { chest: <b>{t("size.chest")}</b>, waist: <b>{t("size.waist")}</b>, hip: <b>{t("size.hip")}</b> })}</p></div>
     </div>
   );
 }

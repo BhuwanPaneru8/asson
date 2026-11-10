@@ -11,9 +11,11 @@ import { spendLast12Months } from "@/lib/loyalty";
 import { ensureReferralCode } from "@/lib/referrals";
 import { store } from "@/lib/config";
 import { ReferralCard } from "@/components/account/referral-card";
+import { getT } from "@/lib/i18n/server";
 
 export default async function AccountHome() {
   const user = await requireUser();
+  const { t } = await getT();
   const [orders, count, wish, spent, me, entries, spend12m] = await Promise.all([
     db.order.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 3, include: { items: { select: { image: true, name: true, quantity: true } } } }),
     db.order.count({ where: { userId: user.id } }),
@@ -32,7 +34,7 @@ export default async function AccountHome() {
   return (
     <div className="space-y-10">
       <div className="grid grid-cols-3 gap-3">
-        {[["Orders", count, "/account/orders"], ["Wishlist", wish, "/account/wishlist"], ["Total spent", formatPrice(spent._sum.total ?? 0), "/account/orders"]].map(([l, v, h]) => (
+        {[[t("footer.orders"), count, "/account/orders"], [t("nav.wishlist"), wish, "/account/wishlist"], [t("acc.totalSpent"), formatPrice(spent._sum.total ?? 0), "/account/orders"]].map(([l, v, h]) => (
           <Link key={l as string} href={h as string} className="border border-line bg-white p-4 hover:border-ink"><p className="text-[13px] text-muted">{l}</p><p className="mt-1 text-2xl font-semibold">{v}</p></Link>
         ))}
       </div>
@@ -45,10 +47,10 @@ export default async function AccountHome() {
         friends={friends}
         earned={referralPoints._sum.delta ?? 0}
       />
-      <PointsCard balance={me?.points ?? 0} spend12m={spend12m} entries={entries.map((e) => ({ ...e, orderNumber: e.orderId ? orderNos.get(e.orderId) : undefined }))} />
+      <PointsCard t={t} balance={me?.points ?? 0} spend12m={spend12m} entries={entries.map((e) => ({ ...e, orderNumber: e.orderId ? orderNos.get(e.orderId) : undefined }))} />
       <section>
-        <div className="mb-4 flex items-center justify-between"><h2 className="text-[18px] font-semibold">Recent orders</h2>{count > 3 && <Link href="/account/orders" className="text-[14px] underline underline-offset-4">View all</Link>}</div>
-        {orders.length ? <OrderList orders={orders} /> : <EmptyState icon={<Package className="h-10 w-10" strokeWidth={1.2} />} title="No orders yet" body="When you place an order, you can track it here." action={<Link href="/shop" className={buttonClass()}>Start shopping</Link>} />}
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-[18px] font-semibold">{t("acc.recent")}</h2>{count > 3 && <Link href="/account/orders" className="text-[14px] underline underline-offset-4">{t("rail.viewAll")}</Link>}</div>
+        {orders.length ? <OrderList orders={orders} t={t} /> : <EmptyState icon={<Package className="h-10 w-10" strokeWidth={1.2} />} title={t("acc.noOrders")} body={t("acc.noOrdersBody")} action={<Link href="/shop" className={buttonClass()}>{t("home.startShopping")}</Link>} />}
       </section>
     </div>
   );

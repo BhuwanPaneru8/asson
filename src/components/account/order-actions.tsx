@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { useT } from "@/components/site/i18n-provider";
+import type { MessageKey } from "@/lib/i18n";
 
 const CANCEL_REASONS = ["Ordered by mistake", "Found a better price", "Delivery is too slow", "Want to change size/colour", "Other"];
 const RETURN_REASONS = ["Size too small", "Size too large", "Not as pictured", "Quality not as expected", "Received damaged/wrong item", "Changed my mind"];
@@ -38,7 +39,7 @@ export function OrderActions({ orderId, canCancel, canReturn }: { orderId: strin
             <span className="mb-1.5 block text-[13px] font-medium text-ink-soft">{t("ord.reason")}</span>
             <Select value={reason} onChange={(e) => setReason(e.target.value)}>
               <option value="">{t("ord.selectReason")}</option>
-              {reasons.map((r) => <option key={r}>{r}</option>)}
+              {reasons.map((r) => <option key={r} value={r}>{t(`why.${r}` as MessageKey)}</option>)}
             </Select>
           </label>
           <Button className="w-full" size="lg" variant={mode === "cancel" ? "danger" : "primary"} disabled={!reason} loading={pending} onClick={go}>{mode === "cancel" ? t("ord.cancel") : t("ord.requestReturnBtn")}</Button>

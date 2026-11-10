@@ -2,13 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
-import { STATUS_LABEL } from "@/lib/order-status";
 import { Badge } from "@/components/ui/misc";
 import { formatDate, formatOrderNumber, formatPrice } from "@/lib/utils";
+import { makeT, type T } from "@/lib/i18n";
 
 type O = { id: string; number: number; status: OrderStatus; total: number; createdAt: Date; items: { image: string; name: string; quantity: number }[] };
 
-export function OrderList({ orders }: { orders: O[] }) {
+export function OrderList({ orders, t = makeT("en") }: { orders: O[]; t?: T }) {
   return (
     <ul className="space-y-3">
       {orders.map((o) => (
@@ -20,7 +20,7 @@ export function OrderList({ orders }: { orders: O[] }) {
               ))}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{formatOrderNumber(o.number)}</p><Badge tone={o.status === "DELIVERED" ? "success" : o.status === "CANCELLED" ? "danger" : "neutral"}>{STATUS_LABEL[o.status]}</Badge></div>
+              <div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{formatOrderNumber(o.number)}</p><Badge tone={o.status === "DELIVERED" ? "success" : o.status === "CANCELLED" ? "danger" : "neutral"}>{t(`status.${o.status}`)}</Badge></div>
               <p className="mt-1 truncate text-[13.5px] text-muted">{o.items.map((i) => i.name).join(", ")}</p>
               <p className="text-[13px] text-muted">{formatDate(o.createdAt)} · {formatPrice(o.total)}</p>
             </div>
