@@ -29,7 +29,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
       <Card title={`Payslips (${t.people})`} action={<Pill tone={r.status === "PAID" ? "success" : r.status === "APPROVED" ? "warn" : "neutral"}>{r.status.toLowerCase()}</Pill>}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-[13.5px]">
-            <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>Person</th><th className={`${th} text-right`}>Days worked</th><th className={`${th} text-right`}>Unpaid days</th><th className={`${th} text-right`}>Basic + allow.</th><th className={`${th} text-right`}>Bonus</th><th className={`${th} text-right`}>Gross</th><th className={`${th} text-right`}>SSF 11%</th><th className={`${th} text-right`}>TDS</th><th className={`${th} text-right`}>Net</th><th className={th} /></tr></thead>
+            <thead className="border-b border-line bg-cloud/40"><tr><th className={th}>Person</th><th className={`${th} text-right`}>Days worked</th><th className={`${th} text-right`}>Unpaid days</th><th className={`${th} text-right`}>Basic + allow.</th><th className={`${th} text-right`}>Bonus</th><th className={`${th} text-right`}>Commission</th><th className={`${th} text-right`}>Gross</th><th className={`${th} text-right`}>SSF 11%</th><th className={`${th} text-right`}>TDS</th><th className={`${th} text-right`}>Net</th><th className={th} /></tr></thead>
             <tbody className="divide-y divide-line">{r.slips.map((s) => (
               <tr key={s.id} className="align-top">
                 <td className="px-3 py-2"><Link href={`/admin/payroll/slip/${s.id}`} className="font-medium underline-offset-4 hover:underline">{s.user.name}</Link>{s.inSsf && <span className="text-[12px] text-muted"> · SSF</span>}{s.note && <span className="block text-[12px] text-muted">{s.note}</span>}</td>
@@ -37,6 +37,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
                 <td className={td}>{s.unpaidDays}{s.extraUnpaidDays ? <span className="text-[12px] text-muted"> ({s.extraUnpaidDays} added)</span> : null}</td>
                 <td className={td}>{formatPrice(s.basic + s.allowance)}</td>
                 <td className={td}>{s.bonus ? formatPrice(s.bonus) : "—"}</td>
+                <td className={td}>{s.commission ? formatPrice(s.commission) : "—"}</td>
                 <td className={td}>{formatPrice(s.gross)}</td>
                 <td className={td}>{formatPrice(s.ssfEmployee)}</td>
                 <td className={td}>{formatPrice(s.incomeTax)}</td>

@@ -26,14 +26,14 @@ export function bandTax(taxable: number, bands: Band[], firstBandZero = false) {
   return Math.round(tax);
 }
 
-export type SlipInput = { basic: number; allowance: number; bonus: number; workingDays: number; unpaidDays: number; inSsf: boolean; married: boolean };
+export type SlipInput = { basic: number; allowance: number; bonus: number; commission?: number; workingDays: number; unpaidDays: number; inSsf: boolean; married: boolean };
 export type Slip = { earnedBasic: number; earnedAllowance: number; unpaidDeduction: number; gross: number; ssfEmployee: number; ssfEmployer: number; taxable: number; incomeTax: number; net: number; costToCompany: number };
 
 export function computeSlip(i: SlipInput, year: TaxYear): Slip {
   const share = i.workingDays ? Math.max(0, i.workingDays - i.unpaidDays) / i.workingDays : 1;
   const earnedBasic = Math.round(i.basic * share), earnedAllowance = Math.round(i.allowance * share);
   const unpaidDeduction = i.basic + i.allowance - earnedBasic - earnedAllowance;
-  const gross = earnedBasic + earnedAllowance + i.bonus;
+  const gross = earnedBasic + earnedAllowance + i.bonus + (i.commission ?? 0);
   const ssfEmployee = i.inSsf ? Math.round(earnedBasic * SSF_EMPLOYEE) : 0;
   const ssfEmployer = i.inSsf ? Math.round(earnedBasic * SSF_EMPLOYER) : 0;
   const assessable = gross * 12 + ssfEmployer * 12;

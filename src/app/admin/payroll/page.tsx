@@ -26,6 +26,7 @@ export default async function PayrollPage() {
       <PageHeader title="Payroll" description="Monthly salaries from each person's pay terms and the timesheet, with SSF (11% / 20% of basic) and income tax from the bands you confirm. Paid payrolls post their cost to Expenses." actions={<BuildPayroll months={[prev, thisMonth]} />} />
       <div className="mb-4 flex flex-wrap gap-2 text-[13.5px]">
         <Link href="/admin/payroll/staff" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Pay terms ({onPayroll} of {staff} staff on payroll)</Link>
+        <Link href="/admin/payroll/commissions" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Sales commission</Link>
         <Link href="/admin/payroll/tax" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Tax bands · FY {fiscalYearOf(thisMonth)} {fy?.confirmedAt ? "✓" : <span className="text-warn">needs confirming</span>}</Link>
       </div>
       <Card title="Payrolls">
