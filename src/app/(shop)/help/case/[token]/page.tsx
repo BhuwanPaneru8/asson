@@ -5,7 +5,7 @@ import { caseForCustomer, careRef } from "@/lib/care";
 import { store } from "@/lib/config";
 import { getT } from "@/lib/i18n/server";
 import { formatDateTime, formatOrderNumber, now } from "@/lib/utils";
-import { CareReply } from "@/components/account/care-form";
+import { CareRate, CareReply } from "@/components/account/care-form";
 
 // Anyone with the link can read the case, so it's never indexed or cached.
 export const metadata: Metadata = { title: "Your request", robots: { index: false, follow: false } };
@@ -30,6 +30,9 @@ export default async function CarePage({ params }: { params: Promise<{ token: st
           </li>
         ))}
       </ol>
+      {c.status === "RESOLVED" && !closed && (
+        <div className="mt-8">{c.rating ? <p className="bg-cloud p-4 text-[14.5px]"><span className="text-accent">{"★".repeat(c.rating)}</span> {t("care.rate.thanks")}</p> : <CareRate token={token} />}</div>
+      )}
       <div className="mt-8">
         {closed ? <p className="text-[14.5px] text-ink-soft">{t("care.closed")} <Link href="/help#write" className="underline">{t("nav.help")}</Link></p> : <>
           {c.status === "RESOLVED" && <p className="mb-3 text-[14px] text-ink-soft">{t("care.reopen")}</p>}

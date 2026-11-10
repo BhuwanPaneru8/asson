@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { addNote, caseDetail, caseForCustomer, careStats, customerReply, listCases, normalisePhone, openCase, replyToCustomer, updateCase } from "@/lib/care";
+import { addNote, caseDetail, caseForCustomer, careStats, customerReply, listCases, normalisePhone, openCase, rateCase, replyToCustomer, updateCase } from "@/lib/care";
 import { makeLocation, makeUser, resetDb } from "../support/db";
 
 type U = Awaited<ReturnType<typeof makeUser>>;
@@ -110,5 +110,29 @@ describe("customer care queue", () => {
       db.$transaction((tx) => replyToCustomer(tx, agent, c.id, "Checking with the courier", {}, hours(1))),
     ]);
     expect(await db.careMessage.count({ where: { caseId: c.id } })).toBe(3);
+  });
+
+  it("ratings: only once resolved, once per resolution, again after a reopen; satisfaction stats", async () => {
+    const c = await db.$transaction((tx) => openCase(tx, web(), null, t0));
+    await expect(db.$transaction((tx) => rateCase(tx, c.token, { rating: 5, comment: "" }))).rejects.toThrow(/once your request is resolved/);
+    await db.$transaction((tx) => replyToCustomer(tx, agent, c.id, "Refunded", { resolve: true }, hours(1)));
+    await expect(db.$transaction((tx) => rateCase(tx, c.token, { rating: 6, comment: "" }))).rejects.toThrow(/1 to 5/);
+    await db.$transaction((tx) => rateCase(tx, c.token, { rating: 2, comment: "Took too long" }, hours(2)));
+    expect((await caseForCustomer(c.token))!.rating).toBe(2);
+    await expect(db.$transaction((tx) => rateCase(tx, c.token, { rating: 5, comment: "" }, hours(3)))).rejects.toThrow(/already rated/);
+    expect((await db.careMessage.findFirstOrThrow({ where: { caseId: c.id, kind: "NOTE" } })).body).toBe("Customer rated 2/5: Took too long");
+
+    // reopened and resolved again: they may rate the new outcome
+    await db.$transaction((tx) => customerReply(tx, c.token, "Still not received", hours(4)));
+    expect((await caseForCustomer(c.token))!.rating).toBeNull();
+    await db.$transaction((tx) => replyToCustomer(tx, agent, c.id, "Found it, sent again", { resolve: true }, hours(5)));
+    await db.$transaction((tx) => rateCase(tx, c.token, { rating: 5, comment: "" }, hours(6)));
+    const other = await db.$transaction((tx) => openCase(tx, web({ phone: "9800000001", subject: "Other" }), null, t0));
+    await db.$transaction((tx) => replyToCustomer(tx, owner, other.id, "Done", { resolve: true }, hours(1)));
+    await db.$transaction((tx) => rateCase(tx, other.token, { rating: 3, comment: "" }, hours(2)));
+    const s = await careStats({ all: true }, agent.id, 30, hours(7));
+    expect(s).toMatchObject({ rated: 2, csat: 50, avgRating: 4 });
+    expect(s.byAgent.map((a) => [a.name, a.csat])).toEqual([["Anita Care", 100], ["Owner", 0]]);
+    await expect(db.careCase.update({ where: { id: c.id }, data: { rating: 9 } })).rejects.toThrow(/CareCase_rating_range/);
   });
 });

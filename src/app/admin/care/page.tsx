@@ -20,8 +20,8 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   return (
     <>
       <PageHeader title="Customer care" description="Every complaint and order problem, from the website, phone, WhatsApp, shops and social media, in one queue." actions={<Link href="/admin/care/new" className="h-10 rounded-md bg-ink px-4 py-2.5 text-[14px] font-medium text-white">Log a case</Link>} />
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[["Need a reply", stats.open, false], ["Overdue", stats.overdue, stats.overdue > 0], ["Median first reply (30 d)", stats.medianFirstReplyHours == null ? "—" : stats.medianFirstReplyHours < 1 ? `${Math.round(stats.medianFirstReplyHours * 60)} min` : `${stats.medianFirstReplyHours.toFixed(1)} h`, false], ["Received · resolved (30 d)", `${stats.received} · ${stats.resolved}`, false]].map(([l, v, bad]) => (
+      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {[["Need a reply", stats.open, false], ["Overdue", stats.overdue, stats.overdue > 0], ["Median first reply (30 d)", stats.medianFirstReplyHours == null ? "—" : stats.medianFirstReplyHours < 1 ? `${Math.round(stats.medianFirstReplyHours * 60)} min` : `${stats.medianFirstReplyHours.toFixed(1)} h`, false], ["Received · resolved (30 d)", `${stats.received} · ${stats.resolved}`, false], ["Satisfied (4–5★, 30 d)", stats.csat === null ? "—" : `${stats.csat}% · ${stats.avgRating}★ (${stats.rated})`, stats.csat !== null && stats.csat < 70]].map(([l, v, bad]) => (
           <Card key={String(l)}><div className="p-4"><p className="text-[12px] text-muted">{l}</p><p className={cn("mt-1 text-[22px] font-semibold tabular-nums", bad && "text-danger")}>{v}</p></div></Card>
         ))}
       </div>
@@ -46,6 +46,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
           ))}</ul>
         )}
       </Card>
+      {stats.byAgent.length > 0 && <p className="mt-3 text-[13px] text-muted">Satisfaction by person (30 d): {stats.byAgent.map((a) => `${a.name} ${a.csat}% (${a.rated})`).join(" · ")}</p>}
       {stats.byCategory.length > 0 && <p className="mt-3 text-[13px] text-muted">Last 30 days: {stats.byCategory.map(([k, n]) => `${CATEGORY_LABEL[k]} ${n}`).join(" · ")}</p>}
     </>
   );

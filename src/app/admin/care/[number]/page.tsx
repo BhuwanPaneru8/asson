@@ -34,6 +34,7 @@ export default async function CasePage({ params }: { params: Promise<{ number: s
             <Pill tone={c.status === "RESOLVED" ? "success" : c.status === "WAITING" ? "neutral" : "warn"}>{STATUS_LABEL[c.status]}</Pill>
             {c.respondBy && <span className={cn("ml-1", overdue ? "font-medium text-danger" : "text-muted")}>{overdue ? "reply overdue since" : "reply by"} {formatDateTime(c.respondBy)}</span>}
             <span className="text-muted">· {c.assignee ? `handled by ${c.assignee.name}` : "unassigned"}</span>
+            {c.rating && <span className={cn("ml-1 font-medium", c.rating >= 4 ? "text-success" : c.rating <= 2 ? "text-danger" : "")}>· rated {"★".repeat(c.rating)}{"☆".repeat(5 - c.rating)}</span>}
           </div>
           <Card title="Conversation">
             <ol className="divide-y divide-line">{c.messages.map((m) => (
