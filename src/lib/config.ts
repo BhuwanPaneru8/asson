@@ -70,6 +70,24 @@ export const store = {
   },
   /** Birthday treat (owner to confirm): points added on the day, once a year, for customers with a delivered order. */
   birthday: { points: 200 },
+  /**
+   * People: attendance and leave (Admin → My time, Admin → People). Leave rules follow the Labour Act 2074
+   * as commonly summarised; owner/accountant to confirm against the Act and your contracts.
+   */
+  people: {
+    leaveYearStart: "07-17", // the leave year starts with the Nepal fiscal year (Shrawan 1, about 17 July)
+    weeklyOff: 6, // Saturday (0 = Sunday … 6 = Saturday): not counted as a leave day
+    autoCloseHours: 16, // an entry still open this long was a forgotten clock-out
+    presentMinutes: 240, // a day counts as worked (for home leave) at 4+ hours
+    leave: [
+      { key: "HOME", label: "Home leave", accruePerDaysWorked: 20, maxBalance: 90, paid: true },
+      { key: "SICK", label: "Sick leave", perYear: 12, paid: true },
+      { key: "MATERNITY", label: "Maternity leave", perRequest: 98, paid: true },
+      { key: "PATERNITY", label: "Paternity leave", perRequest: 15, paid: true },
+      { key: "MOURNING", label: "Mourning leave", perRequest: 13, paid: true },
+      { key: "UNPAID", label: "Unpaid leave", paid: false },
+    ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
+  },
   /** Own production (Admin → Production). Owner to confirm. */
   production: {
     wastagePercent: 3, // extra fabric/trims issued on top of the bill of materials for cutting loss

@@ -203,6 +203,8 @@ model User {
   /// staff: may act at every location (HQ, owner); otherwise only at their assigned locations
   allLocations       Boolean         @default(false)
   locations          StaffLocation[]
+  attendances        Attendance[]
+  leaveRequests      LeaveRequest[]
 
   @@index([role])
   @@index([createdAt])
@@ -528,6 +530,7 @@ model Store {
   materialStock    MaterialStock[]
   materialLogs     MaterialLog[]
   productionOrders ProductionOrder[]
+  attendances      Attendance[]
 
   @@index([active, priority])
 }
@@ -1420,4 +1423,57 @@ model ProductionReceipt {
   billId       String?
   createdById  String
   createdAt    DateTime        @default(now())
+}
+
+// ---------- People: attendance and leave (Phase 12a) ----------
+
+/// One stretch of work at a location: clock in → clock out (open while clockOut is null; one open per person).
+model Attendance {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  storeId    String
+  store      Store     @relation(fields: [storeId], references: [id])
+  clockIn    DateTime
+  clockOut   DateTime?
+  /// forgot to clock out: closed by the system at zero length, a manager must fix it
+  autoClosed Boolean   @default(false)
+  note       String?
+  editedById String?
+  editReason String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, clockIn])
+  @@index([storeId, clockIn])
+  @@index([clockOut])
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveRequest {
+  id           String      @id @default(cuid())
+  number       Int         @unique @default(autoincrement())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  /// leave type key from store.people.leave (HOME, SICK, …)
+  type         String
+  /// Nepal calendar dates, inclusive (YYYY-MM-DD)
+  fromDate     String
+  toDate       String
+  /// working days in the range (weekly day off not counted)
+  days         Int
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, fromDate])
+  @@index([status, createdAt])
 }
