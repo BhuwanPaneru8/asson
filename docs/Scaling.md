@@ -55,8 +55,8 @@ Till sales barely touch the web server: a sale is one request.
 | # | Step | Trigger | Who | Cost |
 |---|---|---|---|---|
 | A | **Production on a real VM:** at least 2 dedicated vCPU / 8 GB, e.g. Oracle A1 (2 OCPU / 12 GB, free when capacity allows) or a paid 2–4 vCPU VM in India. Keep the micro for staging only. | Before public launch | Owner creates the VM; I run `deploy/server-setup.sh` | US$0–25/month |
-| B | **Uptime and error alerts:** UptimeRobot (free) watching `/api/health` every 5 min; alerts to the owner's phone and email. Optional Sentry key (code ready). | Before public launch | Owner: account, alert contacts | Free |
-| C | **Backups every hour** instead of nightly (same script, cron change) and a monthly restore drill. | Before public launch | Me | Free |
+| B | **Uptime and error alerts:** ✅ code done (7b): watchdog + incidents + owner SMS, `/api/health/deep`. Owner: UptimeRobot (free) on `/api/health` and `/api/health/deep?key=…` every 5 min, and `ALERT_PHONES`. Optional Sentry key. | Before public launch | Owner: account, alert contacts | Free |
+| C | **Backups every hour** ✅ in `server-setup.sh` (production, 24 rotating copies on- and off-site; active once setup is re-run on the server). Monthly restore drill. | Before public launch | Me (re-run setup with owner) | Free |
 | D | **Database on its own machine or managed Postgres** (Neon / Supabase Pro / a DB VM) with point-in-time restore. | Orders > ~2,000/day or DB CPU > 50% at peak | Owner: account; me: move | ~US$20–50/month |
 | E | **Several app processes** (one per core) behind a local load balancer. Needs, in code: shared rate limits (Postgres), a shared Next.js cache handler so a price change clears every process, and one job worker. | Sustained > 50% CPU at peak, or sale spikes > ~100 pages/s | Me (code), then server config | Same VM |
 | F | Read replica for HQ reports. | HQ reports slow down tills or checkout | Owner + me | ~US$20+/month |

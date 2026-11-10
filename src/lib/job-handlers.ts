@@ -5,6 +5,7 @@ import { dispatchNotifications } from "./notifications";
 import { expireUnpaidOrders } from "./payments";
 import { birthdayRun } from "./referrals";
 import { autoDraftReplenishment } from "./replenishment";
+import { watchdog } from "./health";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -29,6 +30,7 @@ export async function stockAudit() {
 
 export const HANDLERS = {
   "notifications.dispatch": { label: "Send queued SMS", run: () => dispatchNotifications(200), maxAttempts: 3 },
+  "system.watchdog": { label: "Health checks and owner alerts", run: () => watchdog(), maxAttempts: 1 },
   "payments.expire": { label: "Release unpaid online orders", run: () => expireUnpaidOrders(), maxAttempts: 3 },
   // a mismatch is a bug, not a flaky network: fail once, loudly
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
@@ -47,6 +49,7 @@ export type JobType = keyof typeof HANDLERS;
 /** Recurring work. Slots are aligned to the epoch, so "daily" runs just after 05:45 Nepal time. */
 export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "notifications.dispatch", everyMs: 1 * MIN },
+  { type: "system.watchdog", everyMs: 5 * MIN },
   { type: "payments.expire", everyMs: 10 * MIN },
   { type: "stock.audit", everyMs: DAY },
   { type: "jobs.prune", everyMs: DAY },
