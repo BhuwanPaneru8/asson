@@ -9,6 +9,7 @@ import { scorecard } from "@/lib/scorecard";
 import { shopPl } from "@/lib/shop-pl";
 import { budgetReport, targetProgress } from "@/lib/budgets";
 import { cashPosition } from "@/lib/cash";
+import { importStatement, reconciliation } from "@/lib/bank-statements";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -82,6 +83,12 @@ it("hot paths stay within budget at national scale", async () => {
     }
     if (!(await db.shift.count({ where: { status: "OPEN" } }))) await db.$executeRawUnsafe(`INSERT INTO "Shift" ("id", "storeId", "cashierId", "status", "openingFloat") SELECT 'sh_' || s."id", s."id", 'bench', 'OPEN', 500000 FROM "Store" s`);
     await time("cash: position of every location", REPORT, () => cashPosition({ all: true }));
+    // a month's statement of 3,000 credits against ~20k recorded/verified deposits (a fresh account name each run)
+    const acct = `Bench Bank ${Date.now()}`;
+    const lines = Array.from({ length: 3000 }, (_, i) => ({ date: new Date(Date.now() - (i % 30) * 86_400_000).toISOString().slice(0, 10), amount: 2_500_000 + (i % 7), description: `CASH DEP ${i}`, reference: "", row: i + 2 }));
+    const finance = { id: "bench-finance", name: "Bench", role: "ADMIN" };
+    await time("bank: import and match a 3,000-line statement", REPORT, () => db.$transaction((tx) => importStatement(tx, finance, acct, lines), { timeout: 60_000 }));
+    await time("bank: reconciliation view", REPORT, () => reconciliation());
   }
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));
   await time("network: by province, 90 days", REPORT, () => networkReport({ days: 90, scope: { all: true }, group: "province" }));

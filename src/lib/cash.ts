@@ -185,3 +185,16 @@ export async function cashBook(user: { id: string; role: string }, storeId: stri
 }
 
 export const depositsToCheck = (take = 100) => db.bankDeposit.findMany({ where: { status: "RECORDED" }, orderBy: { createdAt: "asc" }, take, include: { store: { select: { name: true } } } });
+
+/** Cash collected by couriers on delivery: still owed to us, and remitted but not yet seen on a bank statement. */
+export async function codPosition() {
+  const [owed, unseen] = await Promise.all([
+    db.order.groupBy({ by: ["carrier"], where: { channel: "ONLINE", paymentMethod: "COD", status: "DELIVERED", codRemittanceId: null }, _sum: { total: true }, _count: { _all: true }, _min: { updatedAt: true } }),
+    db.codRemittance.aggregate({ where: { statementLine: null }, _sum: { received: true }, _count: { _all: true } }),
+  ]);
+  return {
+    owed: owed.map((o) => ({ carrier: o.carrier ?? "Unassigned", amount: o._sum.total ?? 0, orders: o._count._all, oldest: o._min.updatedAt })).sort((a, b) => b.amount - a.amount),
+    owedTotal: owed.reduce((a, o) => a + (o._sum.total ?? 0), 0),
+    unseen: { amount: unseen._sum.received ?? 0, count: unseen._count._all },
+  };
+}

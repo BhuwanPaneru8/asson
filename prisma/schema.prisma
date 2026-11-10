@@ -870,15 +870,16 @@ model Notification {
 
 /// A payout from a courier for COD it collected on our behalf.
 model CodRemittance {
-  id          String   @id @default(cuid())
-  carrier     String
-  reference   String // bank transfer / statement ref
-  expected    Int // sum of COD totals of the linked orders
-  received    Int // what actually arrived
-  note        String?
-  createdById String
-  createdAt   DateTime @default(now())
-  orders      Order[]
+  id            String         @id @default(cuid())
+  carrier       String
+  reference     String // bank transfer / statement ref
+  expected      Int // sum of COD totals of the linked orders
+  received      Int // what actually arrived
+  note          String?
+  createdById   String
+  createdAt     DateTime       @default(now())
+  orders        Order[]
+  statementLine StatementLine?
 }
 
 /// Append-only loyalty ledger. User.points is the running balance.
@@ -2040,25 +2041,60 @@ enum DepositStatus {
 }
 
 model BankDeposit {
-  id          String        @id @default(cuid())
-  number      Int           @unique @default(autoincrement())
-  storeId     String
-  store       Store         @relation(fields: [storeId], references: [id])
-  amount      Int
-  bank        String
-  slipNo      String
-  slipPhoto   String?
-  depositedOn String // YYYY-MM-DD
-  status      DepositStatus @default(RECORDED)
+  id            String         @id @default(cuid())
+  number        Int            @unique @default(autoincrement())
+  storeId       String
+  store         Store          @relation(fields: [storeId], references: [id])
+  amount        Int
+  bank          String
+  slipNo        String
+  slipPhoto     String?
+  depositedOn   String // YYYY-MM-DD
+  status        DepositStatus  @default(RECORDED)
   /// what the bank statement showed (for disputes)
-  bankAmount  Int?
-  checkNote   String        @default("")
-  byId        String
-  byName      String
-  checkedById String?
-  checkedAt   DateTime?
-  createdAt   DateTime      @default(now())
+  bankAmount    Int?
+  checkNote     String         @default("")
+  byId          String
+  byName        String
+  checkedById   String?
+  checkedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  statementLine StatementLine?
 
   @@unique([bank, slipNo])
   @@index([storeId, status])
+}
+
+enum StatementLineStatus {
+  UNMATCHED // a credit we haven't explained yet
+  MATCHED // tied to a shop deposit or a courier COD remittance
+  IGNORED // not ours to match (interest, wallet settlement, owner top-up): with a note
+  DEBIT // money out: kept for the record, not matched here
+}
+
+/// One line of an imported bank statement. Importing the same file twice adds nothing (the key is unique).
+model StatementLine {
+  id           String              @id @default(cuid())
+  /// the account name finance typed when importing, e.g. "NIC Asia current"
+  account      String
+  date         String // YYYY-MM-DD
+  /// paisa: + credit, − debit
+  amount       Int
+  description  String
+  reference    String              @default("")
+  /// account + date + amount + description + reference + nth identical line in that file
+  key          String              @unique
+  status       StatementLineStatus
+  depositId    String?             @unique
+  deposit      BankDeposit?        @relation(fields: [depositId], references: [id])
+  remittanceId String?             @unique
+  remittance   CodRemittance?      @relation(fields: [remittanceId], references: [id])
+  note         String              @default("")
+  matchedById  String?
+  matchedAt    DateTime?
+  importedById String
+  importedAt   DateTime            @default(now())
+
+  @@index([account, date])
+  @@index([status])
 }
