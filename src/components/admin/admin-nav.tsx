@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/orders", label: "Orders", icon: Package, perm: "orders", badgeKey: "orders" },
   { href: "/admin/picking", label: "Pick lists", icon: PackageCheck, perm: "orders" },
   { href: "/admin/closing", label: "Daily closing", icon: Lock, perm: "closing" },
+  { href: "/admin/cash", label: "Cash", icon: Vault, perm: "closing" },
   { href: "/admin/cod", label: "COD remittance", icon: Banknote, perm: "closing" },
   { href: "/admin/care", label: "Customer care", icon: Headset, perm: "care" },
   { href: "/admin/notifications", label: "Notifications", icon: MessageCircle, perm: "orders" },
