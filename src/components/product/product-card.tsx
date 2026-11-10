@@ -13,12 +13,14 @@ import { toggleWishlist } from "@/actions/wishlist";
 import { Price, Stars, Badge } from "@/components/ui/misc";
 import { useShop } from "@/components/site/shop-provider";
 import { cn, discountPercent } from "@/lib/utils";
+import { useT } from "@/components/site/i18n-provider";
 
 export function ProductCard({ p, priority }: { p: ProductCardData; priority?: boolean }) {
   const [color, setColor] = useState(p.colors[0]?.name);
   const [pending, start] = useTransition();
   const { wishlist, openCart } = useShop();
   const router = useRouter();
+  const { t } = useT();
   const saved = wishlist.has(p.id);
 
   const colorImgs = p.images.filter((i) => i.color === color);
@@ -34,15 +36,15 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
       const v = p.variants.find((x) => x.color === color && x.size === size);
       if (!v) return;
       const r = await addToCart({ variantId: v.id });
-      if (r.ok) { toast.success(`Added ${p.name} (${size})`, { action: { label: "View bag", onClick: openCart } }); if (r.message) toast(r.message); }
+      if (r.ok) { toast.success(t("pc.added", { name: p.name, size }), { action: { label: t("pc.viewBag"), onClick: openCart } }); if (r.message) toast(r.message); }
       else toast.error(r.error);
     });
 
   const heart = () =>
     start(async () => {
       const r = await toggleWishlist(p.id);
-      if (r.needsLogin) { toast("Sign in to save favourites", { action: { label: "Sign in", onClick: () => router.push("/login") } }); return; }
-      if (r.ok) toast.success(r.saved ? "Saved to wishlist" : "Removed from wishlist");
+      if (r.needsLogin) { toast(t("pc.signInToSave"), { action: { label: t("nav.signIn"), onClick: () => router.push("/login") } }); return; }
+      if (r.ok) toast.success(r.saved ? t("pc.saved") : t("pc.removed"));
     });
 
   return (
@@ -53,15 +55,15 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
           {secondary && <Image src={secondary.url} alt="" fill sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className="object-cover opacity-0 transition-opacity duration-700 group-hover:opacity-100" />}
         </Link>
         <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
-          {!p.inStock ? <Badge tone="dark">Sold out</Badge> : off >= 10 ? <Badge tone="accent">-{off}%</Badge> : p.isNew ? <Badge>New</Badge> : null}
-          {p.inStock && p.lowStock && <Badge tone="warn">Few left</Badge>}
+          {!p.inStock ? <Badge tone="dark">{t("pc.soldOut")}</Badge> : off >= 10 ? <Badge tone="accent">-{off}%</Badge> : p.isNew ? <Badge>{t("pc.new")}</Badge> : null}
+          {p.inStock && p.lowStock && <Badge tone="warn">{t("pc.fewLeft")}</Badge>}
         </div>
-        <button onClick={heart} disabled={pending} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm transition hover:scale-105" aria-label={saved ? "Remove from wishlist" : "Save to wishlist"} aria-pressed={saved}>
+        <button onClick={heart} disabled={pending} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm transition hover:scale-105" aria-label={saved ? t("pc.unsave") : t("pc.save")} aria-pressed={saved}>
           <Heart className={cn("h-[18px] w-[18px]", saved ? "fill-accent text-accent" : "text-ink")} strokeWidth={1.8} />
         </button>
         {p.inStock && sizes.length > 0 && (
           <div className="absolute inset-x-2 bottom-2 hidden translate-y-2 bg-white/95 p-2 opacity-0 shadow-sm backdrop-blur transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 md:block">
-            <p className="mb-1.5 text-center text-[11.5px] font-semibold uppercase tracking-wider text-muted">Quick add</p>
+            <p className="mb-1.5 text-center text-[11.5px] font-semibold uppercase tracking-wider text-muted">{t("pc.quickAdd")}</p>
             <div className="flex flex-wrap justify-center gap-1">
               {sizes.map((s) => {
                 const v = p.variants.find((x) => x.color === color && x.size === s);
@@ -87,7 +89,7 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
         )}
         <p className="text-[12px] uppercase tracking-wider text-muted">{p.brand}</p>
         <Link href={href} className="line-clamp-1 text-[14.5px] font-medium hover:text-accent">{p.name}</Link>
-        <Price price={p.price} compareAt={p.compareAtPrice} size="sm" />
+        <Price price={p.price} compareAt={p.compareAtPrice} size="sm" offWord={t("price.off")} />
         {p.ratingCount > 0 && (
           <div className="flex items-center gap-1.5 text-[12px] text-muted"><Stars value={p.ratingAvg} size={12} /> ({p.ratingCount})</div>
         )}

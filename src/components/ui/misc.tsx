@@ -1,7 +1,8 @@
 import { Star } from "lucide-react";
 import { cn, discountPercent, formatPrice } from "@/lib/utils";
 
-export function Price({ price, compareAt, className, size = "md" }: { price: number; compareAt?: number | null; className?: string; size?: "sm" | "md" | "lg" }) {
+/** offWord: the translated word after the discount percentage ("off" / "छुट"). */
+export function Price({ price, compareAt, className, size = "md", offWord = "off" }: { price: number; compareAt?: number | null; className?: string; size?: "sm" | "md" | "lg"; offWord?: string }) {
   const off = discountPercent(price, compareAt);
   return (
     <div className={cn("flex flex-wrap items-baseline gap-x-2", className)}>
@@ -9,7 +10,7 @@ export function Price({ price, compareAt, className, size = "md" }: { price: num
       {off > 0 && (
         <>
           <span className={cn("text-muted line-through", size === "lg" ? "text-base" : "text-[13px]")}>{formatPrice(compareAt!)}</span>
-          <span className={cn("font-medium text-accent", size === "lg" ? "text-base" : "text-[13px]")}>{off}% off</span>
+          <span className={cn("font-medium text-accent", size === "lg" ? "text-base" : "text-[13px]")}>{off}% {offWord}</span>
         </>
       )}
     </div>

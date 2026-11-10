@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useId } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Accessible slide-over panel (drawer). Locks scroll and closes on Escape / backdrop. */
+/** Accessible slide-over panel (drawer). Locks scroll and closes on Escape / backdrop.
+ *  Rendered into <body>: a parent with backdrop-filter/transform (like the sticky header) would otherwise
+ *  become the box `fixed` is measured from and squeeze the panel into it. */
 export function Sheet({ open, onClose, side = "right", title, children, className, footer }: { open: boolean; onClose: () => void; side?: "right" | "left" | "bottom"; title: React.ReactNode; children: React.ReactNode; className?: string; footer?: React.ReactNode }) {
   const titleId = useId();
   useEffect(() => {
@@ -20,7 +23,7 @@ export function Sheet({ open, onClose, side = "right", title, children, classNam
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <div className="absolute inset-0 animate-fade-in bg-black/40" onClick={onClose} />
       <div
@@ -41,6 +44,7 @@ export function Sheet({ open, onClose, side = "right", title, children, classNam
         <div className="flex-1 overflow-y-auto">{children}</div>
         {footer && <div className="shrink-0 border-t border-line">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

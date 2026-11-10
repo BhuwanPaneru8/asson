@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useT } from "./i18n-provider";
 
 export type NavItem = { name: string; slug: string; image: string | null; children: { name: string; slug: string }[] };
 export type NavCollection = { name: string; slug: string; image: string | null };
@@ -13,6 +14,7 @@ export function MegaNav({ nav, collections, hasSale = true, hasLooks = false }: 
   const [open, setOpen] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pathname = usePathname();
+  const { t } = useT();
   // close the menu when the route changes (state-from-props pattern, no effect)
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) { setLastPath(pathname); setOpen(null); }
@@ -31,29 +33,29 @@ export function MegaNav({ nav, collections, hasSale = true, hasLooks = false }: 
           </Link>
         </div>
       ))}
-      <Link href="/shop?sort=new" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>New In</Link>
-      {hasLooks && <Link href="/lookbook" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>Lookbook</Link>}
-      {hasSale && <Link href="/shop?sale=1" className="flex items-center px-3.5 text-[14px] font-medium text-accent hover:opacity-80" onMouseEnter={leave}>Sale</Link>}
+      <Link href="/shop?sort=new" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>{t("nav.newIn")}</Link>
+      {hasLooks && <Link href="/lookbook" className="flex items-center px-3.5 text-[14px] font-medium hover:text-accent" onMouseEnter={leave}>{t("nav.lookbook")}</Link>}
+      {hasSale && <Link href="/shop?sale=1" className="flex items-center px-3.5 text-[14px] font-medium text-accent hover:opacity-80" onMouseEnter={leave}>{t("nav.sale")}</Link>}
 
       {active && (
         <div className="absolute inset-x-0 top-full border-b border-line bg-paper shadow-[0_20px_40px_-20px_rgba(0,0,0,0.15)] animate-fade-in" onMouseEnter={() => clearTimeout(timer.current)} onMouseLeave={leave}>
           <div className="container-page grid grid-cols-12 gap-8 py-8">
             <div className="col-span-3">
-              <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Shop {active.name}</p>
+              <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">{t("nav.shopOf", { name: active.name })}</p>
               <ul className="space-y-2.5">
-                <li><Link href={`/c/${active.slug}`} className="text-[15px] font-semibold hover:text-accent">All {active.name}</Link></li>
+                <li><Link href={`/c/${active.slug}`} className="text-[15px] font-semibold hover:text-accent">{t("nav.allOf", { name: active.name })}</Link></li>
                 {active.children.map((c) => (
                   <li key={c.slug}><Link href={`/c/${c.slug}`} className="text-[15px] text-ink-soft hover:text-accent">{c.name}</Link></li>
                 ))}
               </ul>
             </div>
             <div className="col-span-3">
-              <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Highlights</p>
+              <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">{t("nav.highlights")}</p>
               <ul className="space-y-2.5 text-[15px] text-ink-soft">
-                <li><Link href={`/c/${active.slug}?sort=new`} className="hover:text-accent">New arrivals</Link></li>
-                <li><Link href={`/c/${active.slug}?sort=best`} className="hover:text-accent">Best sellers</Link></li>
-                <li><Link href={`/c/${active.slug}?sale=1`} className="hover:text-accent">On sale</Link></li>
-                <li><Link href="/size-guide" className="hover:text-accent">Size guide</Link></li>
+                <li><Link href={`/c/${active.slug}?sort=new`} className="hover:text-accent">{t("nav.newArrivals")}</Link></li>
+                <li><Link href={`/c/${active.slug}?sort=best`} className="hover:text-accent">{t("nav.bestSellers")}</Link></li>
+                <li><Link href={`/c/${active.slug}?sale=1`} className="hover:text-accent">{t("nav.onSale")}</Link></li>
+                <li><Link href="/size-guide" className="hover:text-accent">{t("nav.sizeGuide")}</Link></li>
               </ul>
             </div>
             <div className="col-span-6 grid grid-cols-3 gap-4">

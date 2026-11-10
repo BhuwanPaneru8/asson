@@ -282,6 +282,7 @@ Transitions are defined once in `lib/order-status.ts` and applied by `transition
 - Integer **paisa** everywhere (`Rs. 1 = 100`). Formatted with `formatPrice()` as `Rs. 1,49,900` (lakh grouping).
 - Percentage discounts are rounded down to whole rupees.
 - Times are stored in UTC and displayed in `Asia/Kathmandu` (dashboard SQL uses the same zone).
+- **Storefront language** (English / नेपाली): `src/lib/i18n` holds typed dictionaries (`en.ts` is the source, `ne.ts` must match it), `getT()` for server components, `useT()` (via `I18nProvider` in the root layout) for client ones, and `rich()` for sentences with links. The choice lives in the `asson_lang` cookie (default: browser's first language, else English). Shopper-facing server actions return English and are wrapped in `localiseResult`, which maps each message onto its dictionary template. Prices stay `Rs.` with 0–9 digits in both languages; admin is English only.
 
 ### 8.4 Configuration
 

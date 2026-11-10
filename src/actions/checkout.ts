@@ -22,6 +22,7 @@ import { maxRedeemable, pointsValue } from "@/lib/loyalty-shared";
 import { clientIp } from "@/lib/client-ip";
 import { allocateOrder, StockError } from "@/lib/stock";
 import { resolveReferral } from "@/lib/referrals";
+import { localiseResult } from "@/lib/i18n/server";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -42,7 +43,7 @@ async function pointsFor(userId: string | undefined, bagAfterCoupon: number, wan
 }
 
 /** Live price quote for the checkout summary. Always recomputed on the server. */
-export async function quoteCheckout(input: { couponCode?: string; shippingMethod: string; district?: string; usePoints?: boolean; pickup?: boolean }): Promise<Quote> {
+async function quoteCheckoutImpl(input: { couponCode?: string; shippingMethod: string; district?: string; usePoints?: boolean; pickup?: boolean }): Promise<Quote> {
   const [cart, user] = await Promise.all([getCart(), getCurrentUser()]);
   // click-and-collect has no delivery fee
   const rate = input.pickup ? null : rateFor(await getDeliveryRates(), input.district);
@@ -84,7 +85,7 @@ export type PlaceOrderState = { error?: string; fieldErrors?: Record<string, str
 
 class CheckoutError extends Error {}
 
-export async function placeOrder(input: z.input<typeof orderSchema>): Promise<PlaceOrderState> {
+async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<PlaceOrderState> {
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) return { error: "Please check the highlighted fields.", fieldErrors: fieldErrors(parsed.error) };
   const data = parsed.data;
@@ -217,3 +218,7 @@ export async function placeOrder(input: z.input<typeof orderSchema>): Promise<Pl
   after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
   redirect(`/orders/${orderId}?placed=1`);
 }
+
+// Shoppers see these messages in their language (the logic above stays in English; see lib/i18n localise).
+export async function quoteCheckout(...args: Parameters<typeof quoteCheckoutImpl>) { return localiseResult(await quoteCheckoutImpl(...args)); }
+export async function placeOrder(...args: Parameters<typeof placeOrderImpl>) { return localiseResult(await placeOrderImpl(...args)); }

@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Fraunces } from "next/font/google";
+import { Inter, Fraunces, Noto_Sans_Devanagari, Noto_Serif_Devanagari } from "next/font/google";
 import { Toaster } from "sonner";
 import { store } from "@/lib/config";
 import "./globals.css";
+import { getLocale } from "@/lib/i18n/server";
+import { I18nProvider } from "@/components/site/i18n-provider";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
 const display = Fraunces({ variable: "--font-display-serif", subsets: ["latin"], display: "swap", axes: ["opsz"] });
+// Nepali (Devanagari) letters: Inter and Fraunces have none, so these fill in only for नेपाली text
+const deva = Noto_Sans_Devanagari({ variable: "--font-deva", subsets: ["devanagari"], weight: ["400", "500", "600"], display: "swap", preload: false });
+const devaSerif = Noto_Serif_Devanagari({ variable: "--font-deva-serif", subsets: ["devanagari"], weight: ["400"], display: "swap", preload: false });
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -16,11 +21,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#fbfaf8", width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="en" className={`${inter.variable} ${display.variable} h-full antialiased`}>
+    <html lang={locale === "ne" ? "ne" : "en"} className={`${inter.variable} ${display.variable} ${deva.variable} ${devaSerif.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
-        {children}
+        <I18nProvider locale={locale}>{children}</I18nProvider>
         <Toaster position="top-center" toastOptions={{ className: "!rounded-none !border-ink !font-sans" }} />
       </body>
     </html>

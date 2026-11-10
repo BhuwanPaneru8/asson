@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getRecentlyViewed } from "@/actions/recent";
 import type { ProductCardData } from "@/lib/catalog";
 import { ProductRail } from "./product-rail";
+import { useT } from "@/components/site/i18n-provider";
 
 const KEY = "asson_recent";
 const MAX = 12;
@@ -13,7 +14,8 @@ function read(): string[] {
 }
 
 /** Remembers products this shopper opened (on this device only) and shows them as a rail. */
-export function RecentlyViewed({ currentId, title = "Recently viewed" }: { currentId?: string; title?: string }) {
+export function RecentlyViewed({ currentId, title }: { currentId?: string; title?: string }) {
+  const { t } = useT();
   const [items, setItems] = useState<ProductCardData[]>([]);
   useEffect(() => {
     const prev = read();
@@ -26,5 +28,5 @@ export function RecentlyViewed({ currentId, title = "Recently viewed" }: { curre
     getRecentlyViewed(show).then((r) => { if (live) setItems(r); }).catch(() => {});
     return () => { live = false; };
   }, [currentId]);
-  return <ProductRail title={title} products={items} />;
+  return <ProductRail title={title ?? t("rail.recent")} products={items} />;
 }

@@ -11,11 +11,13 @@ import { store } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
 import { db } from "@/lib/db";
 import { evaluateCoupon } from "@/lib/pricing";
+import { getT } from "@/lib/i18n/server";
+import { rich } from "@/lib/i18n/rich";
 
 const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
 export default async function HomePage() {
-  const [tree, collections, best, fresh, sale, featuredCoupon, looks] = await Promise.all([
+  const [tree, collections, best, fresh, sale, featuredCoupon, looks, { t }] = await Promise.all([
     getCategoryTree(),
     getCollections(),
     getProductRail("best", 8),
@@ -23,6 +25,7 @@ export default async function HomePage() {
     getProductRail("sale", 8),
     db.coupon.findFirst({ where: { showOnHome: true, active: true, isCredit: false }, orderBy: { createdAt: "desc" } }),
     getLookbook(3),
+    getT(),
   ]);
   // the coupon the owner featured (Admin → Coupons → Show on home), only while a shopper could use it
   const offer =
@@ -31,11 +34,14 @@ export default async function HomePage() {
           code: featuredCoupon.code,
           headline:
             featuredCoupon.description ||
-            (featuredCoupon.type === "PERCENT" ? `${featuredCoupon.value}% off your order` : featuredCoupon.type === "FIXED" ? `${formatPrice(featuredCoupon.value)} off your order` : "Free delivery on your order"),
+            (featuredCoupon.type === "PERCENT" ? t("home.offerPercent", { n: featuredCoupon.value }) : featuredCoupon.type === "FIXED" ? t("home.offerFixed", { amount: formatPrice(featuredCoupon.value) }) : t("home.offerFree")),
           eyebrow: featuredCoupon.endsAt
-            ? `Offer ends ${featuredCoupon.endsAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kathmandu" })}`
-            : "Limited time",
-          minimum: featuredCoupon.minSubtotal > 0 ? ` on orders over ${formatPrice(featuredCoupon.minSubtotal)}` : "",
+            ? t("home.offerEnds", { date: featuredCoupon.endsAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Kathmandu" }) })
+            : t("home.limited"),
+          terms:
+            featuredCoupon.minSubtotal > 0
+              ? t("home.useCodeMin", { amount: formatPrice(featuredCoupon.minSubtotal), days: store.returnWindowDays })
+              : t("home.useCode", { days: store.returnWindowDays }),
         }
       : null;
   const shopCats = tree.flatMap((r) => r.children.slice(0, 4).map((c) => ({ ...c, parent: r.name })));
@@ -47,28 +53,28 @@ export default async function HomePage() {
       <section className="relative">
         <div className="grid md:grid-cols-2">
           <Link href="/c/women" className="group relative block aspect-[4/5] overflow-hidden md:aspect-auto md:h-[min(82vh,820px)]">
-            <Image src={U("1483985988355-763728e1935b")} alt="Women's collection" fill priority sizes="(min-width:768px) 50vw, 100vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
+            <Image src={U("1483985988355-763728e1935b")} alt={t("home.altWomen")} fill priority sizes="(min-width:768px) 50vw, 100vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 text-white md:p-12">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">Women</p>
-              <h2 className="mt-2 font-display text-4xl leading-[1.05] md:text-6xl">The season&apos;s<br />easy layers</h2>
-              <span className="mt-5 inline-block border-b border-white pb-0.5 text-[14px] font-medium">Shop women</span>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">{t("g.women")}</p>
+              <h2 className="mt-2 whitespace-pre-line font-display text-4xl leading-[1.05] md:text-6xl">{t("home.heroWomen")}</h2>
+              <span className="mt-5 inline-block border-b border-white pb-0.5 text-[14px] font-medium">{t("home.shopWomen")}</span>
             </div>
           </Link>
           <Link href="/c/men" className="group relative hidden overflow-hidden md:block md:h-[min(82vh,820px)]">
-            <Image src={U("1490114538077-0a7f8cb49891")} alt="Men's collection" fill priority sizes="50vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
+            <Image src={U("1490114538077-0a7f8cb49891")} alt={t("home.altMen")} fill priority sizes="50vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-12 text-white">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">Men</p>
-              <h2 className="mt-2 font-display text-6xl leading-[1.05]">Built for<br />every day</h2>
-              <span className="mt-5 inline-block border-b border-white pb-0.5 text-[14px] font-medium">Shop men</span>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">{t("g.men")}</p>
+              <h2 className="mt-2 whitespace-pre-line font-display text-6xl leading-[1.05]">{t("home.heroMen")}</h2>
+              <span className="mt-5 inline-block border-b border-white pb-0.5 text-[14px] font-medium">{t("home.shopMen")}</span>
             </div>
           </Link>
         </div>
         <div className="flex gap-2 p-4 md:hidden">
-          <Link href="/c/men" className={buttonClass("secondary", "md", "flex-1")}>Shop men</Link>
-          <Link href="/c/women" className={buttonClass("primary", "md", "flex-1")}>Shop women</Link>
-          <Link href="/c/kids" className={buttonClass("secondary", "md", "flex-1")}>Kids</Link>
+          <Link href="/c/men" className={buttonClass("secondary", "md", "flex-1")}>{t("home.shopMen")}</Link>
+          <Link href="/c/women" className={buttonClass("primary", "md", "flex-1")}>{t("home.shopWomen")}</Link>
+          <Link href="/c/kids" className={buttonClass("secondary", "md", "flex-1")}>{t("g.kids")}</Link>
         </div>
       </section>
 
@@ -76,12 +82,12 @@ export default async function HomePage() {
       <section className="border-b border-line">
         <div className="container-page grid grid-cols-2 gap-y-5 py-6 md:grid-cols-4">
           {[
-            [Truck, "Free delivery", `All over Nepal above ${formatPrice(store.shipping.freeThreshold)}`],
-            [RotateCcw, `${store.returnWindowDays}-day returns`, "Easy, no-fuss returns"],
-            [Banknote, "Cash on delivery", "Pay when it arrives"],
+            [Truck, t("home.freeDelivery"), t("home.freeDeliveryBody", { amount: formatPrice(store.shipping.freeThreshold) })],
+            [RotateCcw, t("home.returns", { days: store.returnWindowDays }), t("home.returnsBody")],
+            [Banknote, t("pay.cod"), t("home.codBody")],
             store.onlinePaymentsLive
-              ? [ShieldCheck, "Pay your way", "eSewa, Khalti & cash on delivery"]
-              : [ShieldCheck, "Secure shopping", "Your details stay private"],
+              ? [ShieldCheck, t("home.payWay"), t("home.payWayBody")]
+              : [ShieldCheck, t("home.secure"), t("home.secureBody")],
           ].map(([Icon, t, d]) => {
             const I = Icon as typeof Truck;
             return (
@@ -96,7 +102,7 @@ export default async function HomePage() {
 
       {/* Category tiles */}
       <section className="container-page pt-14">
-        <h2 className="mb-6 font-display text-3xl md:text-[34px]">Shop by category</h2>
+        <h2 className="mb-6 font-display text-3xl md:text-[34px]">{t("home.byCategory")}</h2>
         <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-6 md:px-0">
           {shopCats.slice(0, 12).map((c) => (
             <Link key={c.slug} href={`/c/${c.slug}`} className="group w-32 shrink-0 md:w-auto">
@@ -109,17 +115,17 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <ProductRail eyebrow="Most loved" title="Best sellers" href="/shop?sort=best" products={best} />
+      <ProductRail eyebrow={t("home.mostLoved")} title={t("nav.bestSellers")} href="/shop?sort=best" products={best} viewAll={t("rail.viewAll")} />
 
       {/* Lookbook: styled outfits from our own pieces (only once the owner has published some) */}
       {looks.length > 0 && (
         <section className="container-page py-12">
           <div className="mb-6 flex items-end justify-between gap-4">
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent">Styled by Asson</p>
-              <h2 className="mt-2 font-display text-3xl md:text-4xl">The Lookbook</h2>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-accent">{t("home.styledBy")}</p>
+              <h2 className="mt-2 font-display text-3xl md:text-4xl">{t("home.lookbook")}</h2>
             </div>
-            <Link href="/lookbook" className="shrink-0 text-[14px] font-medium underline underline-offset-4">See all looks</Link>
+            <Link href="/lookbook" className="shrink-0 text-[14px] font-medium underline underline-offset-4">{t("home.allLooks")}</Link>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
             {looks.map((l) => <LookCard key={l.slug} look={l} />)}
@@ -137,15 +143,15 @@ export default async function HomePage() {
               <div className="absolute bottom-0 p-6 text-white md:p-10">
                 <h3 className="font-display text-3xl md:text-4xl">{c.name}</h3>
                 <p className="mt-1 max-w-sm text-[14.5px] text-white/85">{c.description}</p>
-                <span className="mt-4 inline-block border-b border-white pb-0.5 text-[14px] font-medium">Explore</span>
+                <span className="mt-4 inline-block border-b border-white pb-0.5 text-[14px] font-medium">{t("home.explore")}</span>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <ProductRail eyebrow="Just landed" title="New arrivals" href="/shop?sort=new" products={fresh} />
-      <RecentlyViewed title="Pick up where you left off" />
+      <ProductRail eyebrow={t("home.justLanded")} title={t("nav.newArrivals")} href="/shop?sort=new" products={fresh} viewAll={t("rail.viewAll")} />
+      <RecentlyViewed title={t("home.pickUp")} />
 
       <section className="container-page py-8">
         <div className="grid gap-4 md:grid-cols-2">
@@ -157,14 +163,14 @@ export default async function HomePage() {
               <div>
                 <h3 className="font-display text-2xl md:text-3xl">{c.name}</h3>
                 <p className="mt-1 text-[14px] text-muted">{c.description}</p>
-                <span className="mt-3 inline-block text-[14px] font-medium underline underline-offset-4">Shop now</span>
+                <span className="mt-3 inline-block text-[14px] font-medium underline underline-offset-4">{t("home.shopNow")}</span>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      <ProductRail eyebrow="Limited time" title="On sale now" href="/shop?sale=1" products={sale} />
+      <ProductRail eyebrow={t("home.limited")} title={t("home.onSaleNow")} href="/shop?sale=1" products={sale} viewAll={t("rail.viewAll")} />
 
       {offer && (
         <section className="container-page pt-6">
@@ -172,9 +178,9 @@ export default async function HomePage() {
             <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-white/60">{offer.eyebrow}</p>
             <h2 className="mx-auto mt-3 max-w-2xl font-display text-4xl md:text-5xl">{offer.headline}</h2>
             <p className="mx-auto mt-3 max-w-md text-white/75">
-              Use code <span className="font-semibold text-white">{offer.code}</span> at checkout{offer.minimum}. Easy {store.returnWindowDays}-day returns.
+              {rich(offer.terms, { code: <span className="font-semibold text-white">{offer.code}</span> })}
             </p>
-            <Link href="/shop" className={buttonClass("secondary", "lg", "mt-8 border-white")}>Start shopping</Link>
+            <Link href="/shop" className={buttonClass("secondary", "lg", "mt-8 border-white")}>{t("home.startShopping")}</Link>
           </div>
         </section>
       )}

@@ -5,20 +5,23 @@ import { useState } from "react";
 import { Heart, Menu, ShoppingBag, User, ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { useShop } from "./shop-provider";
+import { useT } from "./i18n-provider";
+import { LanguageSwitch } from "./language-switch";
 import type { NavCollection, NavItem } from "./mega-nav";
 
 export function HeaderActions() {
   const { cart, user, openCart, wishlist } = useShop();
+  const { t } = useT();
   return (
     <div className="flex items-center">
-      <Link href={user ? "/account" : "/login"} className="hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={user ? "Your account" : "Sign in"}>
+      <Link href={user ? "/account" : "/login"} className="hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={user ? t("nav.account") : t("nav.signIn")}>
         <User className="h-[21px] w-[21px]" strokeWidth={1.6} />
       </Link>
-      <Link href="/account/wishlist" className="relative hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label="Wishlist">
+      <Link href="/account/wishlist" className="relative hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={t("nav.wishlist")}>
         <Heart className="h-[21px] w-[21px]" strokeWidth={1.6} />
         {wishlist.size > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />}
       </Link>
-      <button onClick={openCart} className="relative p-2.5 hover:bg-cloud" aria-label={`Bag, ${cart.count} items`}>
+      <button onClick={openCart} className="relative p-2.5 hover:bg-cloud" aria-label={t("nav.bag", { n: cart.count })}>
         <ShoppingBag className="h-[21px] w-[21px]" strokeWidth={1.6} />
         {cart.count > 0 && (
           <span className="absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink px-1 text-[10.5px] font-semibold text-white">
@@ -34,15 +37,16 @@ export function MobileNavButton({ nav, collections, hasSale = true, hasLooks = f
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<string | null>(null);
   const { user } = useShop();
+  const { t } = useT();
   const close = () => { setOpen(false); setSection(null); };
   const current = nav.find((n) => n.slug === section);
 
   return (
     <>
-      <button className="-ml-2 p-2 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu">
+      <button className="-ml-2 p-2 lg:hidden" onClick={() => setOpen(true)} aria-label={t("nav.openMenu")}>
         <Menu className="h-6 w-6" strokeWidth={1.6} />
       </button>
-      <Sheet open={open} onClose={close} side="left" title={current ? <button onClick={() => setSection(null)} className="text-muted">← All</button> : "Menu"}>
+      <Sheet open={open} onClose={close} side="left" title={current ? <button onClick={() => setSection(null)} className="text-muted">{t("nav.back")}</button> : t("nav.menu")}>
         {!current ? (
           <div className="flex flex-col">
             {nav.map((n) => (
@@ -50,30 +54,31 @@ export function MobileNavButton({ nav, collections, hasSale = true, hasLooks = f
                 {n.name} <ChevronRight className="h-5 w-5 text-muted" />
               </button>
             ))}
-            <Link onClick={close} href="/shop?sort=new" className="border-b border-line px-5 py-4 text-[17px] font-medium">New In</Link>
-            {hasLooks && <Link onClick={close} href="/lookbook" className="border-b border-line px-5 py-4 text-[17px] font-medium">Lookbook</Link>}
-            {hasSale && <Link onClick={close} href="/shop?sale=1" className="border-b border-line px-5 py-4 text-[17px] font-medium text-accent">Sale</Link>}
+            <Link onClick={close} href="/shop?sort=new" className="border-b border-line px-5 py-4 text-[17px] font-medium">{t("nav.newIn")}</Link>
+            {hasLooks && <Link onClick={close} href="/lookbook" className="border-b border-line px-5 py-4 text-[17px] font-medium">{t("nav.lookbook")}</Link>}
+            {hasSale && <Link onClick={close} href="/shop?sale=1" className="border-b border-line px-5 py-4 text-[17px] font-medium text-accent">{t("nav.sale")}</Link>}
             <div className="px-5 py-6">
-              <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">Collections</p>
+              <p className="mb-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">{t("nav.collections")}</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                 {collections.map((c) => <Link key={c.slug} onClick={close} href={`/collections/${c.slug}`} className="text-[15px] text-ink-soft">{c.name}</Link>)}
               </div>
             </div>
             <div className="mt-auto space-y-3 border-t border-line px-5 py-6 text-[15px]">
-              <Link onClick={close} href={user ? "/account" : "/login"} className="flex items-center gap-3"><User className="h-5 w-5" strokeWidth={1.6} /> {user ? `Hi, ${user.name.split(" ")[0]}` : "Sign in / Create account"}</Link>
-              <Link onClick={close} href="/account/wishlist" className="flex items-center gap-3"><Heart className="h-5 w-5" strokeWidth={1.6} /> Wishlist</Link>
-              <Link onClick={close} href="/track" className="block pl-8 text-muted">Track an order</Link>
-              <Link onClick={close} href="/help" className="block pl-8 text-muted">Help & returns</Link>
+              <Link onClick={close} href={user ? "/account" : "/login"} className="flex items-center gap-3"><User className="h-5 w-5" strokeWidth={1.6} /> {user ? t("nav.hi", { name: user.name.split(" ")[0] }) : t("nav.signInOrCreate")}</Link>
+              <Link onClick={close} href="/account/wishlist" className="flex items-center gap-3"><Heart className="h-5 w-5" strokeWidth={1.6} /> {t("nav.wishlist")}</Link>
+              <Link onClick={close} href="/track" className="block pl-8 text-muted">{t("nav.track")}</Link>
+              <Link onClick={close} href="/help" className="block pl-8 text-muted">{t("nav.help")}</Link>
+              <LanguageSwitch className="pl-7 pt-2 text-[15px]" />
             </div>
           </div>
         ) : (
           <div className="flex flex-col">
-            <Link onClick={close} href={`/c/${current.slug}`} className="border-b border-line px-5 py-4 text-[17px] font-semibold">All {current.name}</Link>
+            <Link onClick={close} href={`/c/${current.slug}`} className="border-b border-line px-5 py-4 text-[17px] font-semibold">{t("nav.allOf", { name: current.name })}</Link>
             {current.children.map((c) => (
               <Link key={c.slug} onClick={close} href={`/c/${c.slug}`} className="border-b border-line px-5 py-4 text-[16px]">{c.name}</Link>
             ))}
-            <Link onClick={close} href={`/c/${current.slug}?sort=new`} className="border-b border-line px-5 py-4 text-[16px] text-muted">New arrivals</Link>
-            {hasSale && <Link onClick={close} href={`/c/${current.slug}?sale=1`} className="border-b border-line px-5 py-4 text-[16px] text-accent">Sale</Link>}
+            <Link onClick={close} href={`/c/${current.slug}?sort=new`} className="border-b border-line px-5 py-4 text-[16px] text-muted">{t("nav.newArrivals")}</Link>
+            {hasSale && <Link onClick={close} href={`/c/${current.slug}?sale=1`} className="border-b border-line px-5 py-4 text-[16px] text-accent">{t("nav.sale")}</Link>}
           </div>
         )}
       </Sheet>
