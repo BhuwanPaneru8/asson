@@ -6,6 +6,7 @@ import { getPickList, pickCounts } from "@/lib/picking";
 import { stockAudit } from "@/lib/job-handlers";
 import { cashierReport, networkAlerts, networkReport } from "@/lib/network";
 import { scorecard } from "@/lib/scorecard";
+import { shopPl } from "@/lib/shop-pl";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -56,6 +57,7 @@ it("hot paths stay within budget at national scale", async () => {
 
   // HQ and nightly
   await time("network: by location, 30 days", REPORT, () => networkReport({ days: 30, scope: { all: true }, group: "location" }));
+  await time("finance: profit by shop, last full month", REPORT, () => shopPl(new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 7)));
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));
   await time("network: by province, 90 days", REPORT, () => networkReport({ days: 90, scope: { all: true }, group: "province" }));
   await time("network: till league", REPORT, () => cashierReport({ days: 30, scope: { all: true } }));
