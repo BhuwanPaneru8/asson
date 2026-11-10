@@ -679,4 +679,11 @@ export const ne: Record<keyof typeof en, string> = {
   "care.err.tooMany": "धेरै सन्देश भए। एक घण्टापछि फेरि प्रयास गर्नुहोस्, वा फोन गर्नुहोस्।",
   "care.err.generic": "पठाउन सकिएन। फेरि प्रयास गर्नुहोस्, वा फोन गर्नुहोस्।",
   "sms.care_reply": "{store}: तपाईंको अनुरोध {ref} मा जवाफ दिइयो। पढ्नुहोस्: {link}",
+  "care.rate.title": "हाम्रो सेवा कस्तो लाग्यो?",
+  "care.rate.comment": "थप केही भन्नु छ? (ऐच्छिक)",
+  "care.rate.send": "मूल्याङ्कन पठाउनुहोस्",
+  "care.rate.thanks": "तपाईंको प्रतिक्रियाका लागि धन्यवाद।",
+  "care.rate.stars": "५ मध्ये {n}",
+  "care.err.rateOnce": "धन्यवाद, तपाईंले यसको मूल्याङ्कन गरिसक्नुभयो।",
+  "care.err.rateResolved": "अनुरोध समाधान भएपछि मात्र मूल्याङ्कन गर्न सकिन्छ।",
 };

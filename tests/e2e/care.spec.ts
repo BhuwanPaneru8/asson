@@ -45,6 +45,12 @@ test("a customer writes in; care replies; the customer answers; care resolves; a
   await expect(owner.getByText("Resolved").first()).toBeVisible();
   await guest.reload();
   await expect(guest.getByText("Resolved")).toBeVisible();
+  await guest.getByRole("radio", { name: "5 out of 5" }).click();
+  await guest.getByLabel("Anything to add? (optional)").fill("Quick and kind, thank you");
+  await guest.getByRole("button", { name: "Send rating" }).click();
+  await expect(guest.getByText("Thank you for your feedback.")).toBeVisible();
+  await owner.reload();
+  await expect(owner.getByText(/rated ★★★★★/)).toBeVisible();
 
   // a phone call, logged by staff
   await owner.goto("/admin/care/new");

@@ -5,7 +5,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { CareError, customerReply, normalisePhone, openCase } from "@/lib/care";
+import { CareError, customerReply, normalisePhone, openCase, rateCase } from "@/lib/care";
 import { clientIp } from "@/lib/client-ip";
 import { reportError } from "@/lib/errors";
 import { getLocale, localiseResult } from "@/lib/i18n/server";
@@ -83,3 +83,17 @@ async function replyImpl(token: string, body: string): Promise<{ ok: true } | { 
 }
 
 export async function replyToCareCase(token: string, body: string) { return localiseResult(await replyImpl(token, body)); }
+
+async function rateImpl(token: string, rating: number, comment: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!rateLimit(`care:rate:${String(token).slice(0, 40)}`, 5, 60 * 60_000)) return { ok: false, error: "Too many messages. Please try again in an hour, or call us." };
+  try {
+    await db.$transaction((tx) => rateCase(tx, String(token), { rating: Number(rating), comment: String(comment ?? "") }));
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof CareError) return { ok: false, error: e.message };
+    after(() => reportError("care.rate", e));
+    return { ok: false, error: "Couldn't send that. Please try again, or call us." };
+  }
+}
+
+export async function rateCareCase(token: string, rating: number, comment: string) { return localiseResult(await rateImpl(token, rating, comment)); }

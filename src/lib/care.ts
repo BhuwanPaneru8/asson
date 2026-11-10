@@ -99,6 +99,18 @@ export async function customerReply(tx: Tx, token: string, body: string, now = n
   });
 }
 
+/** The customer rates a resolved case 1–5 (once per resolution: rating again after a reopen replaces it). */
+export async function rateCase(tx: Tx, token: string, d: { rating: number; comment: string }, now = new Date()) {
+  const found = await tx.careCase.findUnique({ where: { token }, select: { id: true } });
+  if (!found) throw new CareError("Case not found.");
+  const c = await lockById(tx, found.id);
+  if (c.status !== "RESOLVED") throw new CareError("You can rate us once your request is resolved.");
+  if (!Number.isInteger(d.rating) || d.rating < 1 || d.rating > 5) throw new CareError("Choose 1 to 5 stars.");
+  if (c.ratedAt && c.ratedAt >= c.resolvedAt!) throw new CareError("Thanks, you've already rated this.");
+  await tx.careCase.update({ where: { id: c.id }, data: { rating: d.rating, ratingComment: d.comment.trim().slice(0, 1000), ratedAt: now } });
+  if (d.comment.trim()) await tx.careMessage.create({ data: { caseId: c.id, kind: "NOTE", body: `Customer rated ${d.rating}/5: ${d.comment.trim().slice(0, 1000)}`, byName: c.name, createdAt: now } });
+}
+
 /** Reply to the customer (they see it and get an SMS). Default: the ball is now with them (WAITING); or resolve. */
 export async function replyToCustomer(tx: Tx, staff: Actor, id: string, body: string, opts: { resolve?: boolean } = {}, now = new Date()) {
   const c = await lockForStaff(tx, staff, id);
@@ -235,6 +247,7 @@ export async function caseForCustomer(token: string) {
   if (!c) return null;
   return {
     number: c.number, status: c.status, subject: c.subject, createdAt: c.createdAt, resolvedAt: c.resolvedAt, order: c.order,
+    rating: c.ratedAt && c.resolvedAt && c.ratedAt >= c.resolvedAt ? c.rating : null,
     messages: c.messages.map((m) => ({ ...m, byName: m.kind === "REPLY" ? m.byName.split(" ")[0] : m.byName })),
   };
 }
@@ -245,12 +258,15 @@ export const casesForUser = (userId: string) => db.careCase.findMany({ where: { 
 export async function careStats(scope: Scope, userId: string, days = 30, now = new Date()) {
   const since = new Date(now.getTime() - days * 86_400_000);
   const ids = scope.all ? null : scope.storeIds;
-  const [row] = await db.$queryRaw<{ open: number; overdue: number; received: number; resolved: number; median: number | null }[]>`
+  const [row] = await db.$queryRaw<{ open: number; overdue: number; received: number; resolved: number; rated: number; happy: number; avgRating: number | null; median: number | null }[]>`
     SELECT
       COUNT(*) FILTER (WHERE "status" IN ('NEW', 'OPEN'))::int AS "open",
       COUNT(*) FILTER (WHERE "respondBy" < (${now}::timestamptz AT TIME ZONE 'UTC'))::int AS "overdue",
       COUNT(*) FILTER (WHERE "createdAt" >= (${since}::timestamptz AT TIME ZONE 'UTC'))::int AS "received",
       COUNT(*) FILTER (WHERE "createdAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND "status" = 'RESOLVED')::int AS "resolved",
+      COUNT(*) FILTER (WHERE "ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC'))::int AS "rated",
+      COUNT(*) FILTER (WHERE "ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND "rating" >= 4)::int AS "happy",
+      (AVG("rating") FILTER (WHERE "ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC')))::float AS "avgRating",
       (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("firstReplyAt" - "createdAt")) / 3600)
         FILTER (WHERE "createdAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND "firstReplyAt" IS NOT NULL))::float AS "median"
     FROM "CareCase"
@@ -259,5 +275,16 @@ export async function careStats(scope: Scope, userId: string, days = 30, now = n
     SELECT "category", COUNT(*)::int AS "n" FROM "CareCase"
     WHERE "createdAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND (${ids}::text[] IS NULL OR "storeId" = ANY(${ids}::text[]) OR "assigneeId" = ${userId})
     GROUP BY "category" ORDER BY "n" DESC`;
-  return { open: row.open, overdue: row.overdue, received: row.received, resolved: row.resolved, medianFirstReplyHours: row.median, byCategory: byCategory.map((c) => [c.category, c.n] as [CareCategory, number]) };
+  // satisfaction per person who handled it (last 30 days)
+  const byAgent = await db.$queryRaw<{ name: string; rated: number; happy: number; avg: number }[]>`
+    SELECT u."name", COUNT(*)::int AS "rated", COUNT(*) FILTER (WHERE c."rating" >= 4)::int AS "happy", AVG(c."rating")::float AS "avg"
+    FROM "CareCase" c JOIN "User" u ON u."id" = c."assigneeId"
+    WHERE c."ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND (${ids}::text[] IS NULL OR c."storeId" = ANY(${ids}::text[]) OR c."assigneeId" = ${userId})
+    GROUP BY u."name" ORDER BY "rated" DESC, u."name" LIMIT 20`;
+  return {
+    open: row.open, overdue: row.overdue, received: row.received, resolved: row.resolved, medianFirstReplyHours: row.median,
+    rated: row.rated, csat: row.rated ? Math.round((row.happy / row.rated) * 100) : null, avgRating: row.avgRating === null ? null : Math.round(row.avgRating * 10) / 10,
+    byAgent: byAgent.map((a) => ({ ...a, csat: Math.round((a.happy / a.rated) * 100), avg: Math.round(a.avg * 10) / 10 })),
+    byCategory: byCategory.map((c) => [c.category, c.n] as [CareCategory, number]),
+  };
 }

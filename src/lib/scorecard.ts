@@ -21,7 +21,7 @@ export type ScoreRow = {
   displayAvg: number | null; displaysLate: number;
   visitScore: number | null; visitNumber: number | null; daysSinceVisit: number | null; fixesOpen: number; fixesLate: number;
   issuesOpen: number; issuesLate: number;
-  careCases: number; careLate: number;
+  careCases: number; careLate: number; careCsat: number | null;
   opsScore: number | null; flags: string[];
 };
 
@@ -61,9 +61,11 @@ export async function scorecard(opts: { scope: Scope; days?: number; now?: Date 
     db.$queryRaw<{ storeId: string; open: number; late: number }[]>`
       SELECT "storeId", COUNT(*)::int AS "open", COUNT(*) FILTER (WHERE "dueAt" < (${now}::timestamptz AT TIME ZONE 'UTC'))::int AS "late"
       FROM "Issue" WHERE "status" <> 'RESOLVED' GROUP BY "storeId"`,
-    db.$queryRaw<{ storeId: string; cases: number; late: number }[]>`
+    db.$queryRaw<{ storeId: string; cases: number; late: number; rated: number; happy: number }[]>`
       SELECT "storeId", COUNT(*) FILTER (WHERE "createdAt" >= (${since}::timestamptz AT TIME ZONE 'UTC'))::int AS "cases",
-        COUNT(*) FILTER (WHERE "respondBy" < (${now}::timestamptz AT TIME ZONE 'UTC'))::int AS "late"
+        COUNT(*) FILTER (WHERE "respondBy" < (${now}::timestamptz AT TIME ZONE 'UTC'))::int AS "late",
+        COUNT(*) FILTER (WHERE "ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC'))::int AS "rated",
+        COUNT(*) FILTER (WHERE "ratedAt" >= (${since}::timestamptz AT TIME ZONE 'UTC') AND "rating" >= 4)::int AS "happy"
       FROM "CareCase" WHERE "storeId" IS NOT NULL GROUP BY "storeId"`,
   ]);
 
@@ -90,6 +92,7 @@ export async function scorecard(opts: { scope: Scope; days?: number; now?: Date 
       visitScore: v?.score ?? null, visitNumber: v?.number ?? null, daysSinceVisit, fixesOpen: fixM.get(s.id)?.open ?? 0, fixesLate: fixM.get(s.id)?.late ?? 0,
       issuesOpen: issueM.get(s.id)?.open ?? 0, issuesLate: issueM.get(s.id)?.late ?? 0,
       careCases: careM.get(s.id)?.cases ?? 0, careLate: careM.get(s.id)?.late ?? 0,
+      careCsat: careM.get(s.id)?.rated ? Math.round((careM.get(s.id)!.happy / careM.get(s.id)!.rated) * 100) : null,
       opsScore: parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null,
       flags: [],
     };

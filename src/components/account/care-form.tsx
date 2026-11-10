@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { replyToCareCase, submitCareCase } from "@/actions/care";
+import { rateCareCase, replyToCareCase, submitCareCase } from "@/actions/care";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { useT } from "@/components/site/i18n-provider";
@@ -55,6 +55,26 @@ export function CareReply({ token }: { token: string }) {
       {error && <p role="alert" className="bg-[#fbe9e7] p-3 text-[14px] text-danger">{error}</p>}
       <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("care.replyPlaceholder")} aria-label={t("care.replyPlaceholder")} rows={3} />
       <Button type="submit" loading={pending} disabled={body.trim().length < 2}>{t("care.reply")}</Button>
+    </form>
+  );
+}
+
+export function CareRate({ token }: { token: string }) {
+  const { t } = useT();
+  const router = useRouter();
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [error, setError] = useState("");
+  const [pending, start] = useTransition();
+  return (
+    <form className="space-y-3 border border-line bg-white p-5" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await rateCareCase(token, rating, comment); if (r.ok) router.refresh(); else setError(r.error); }); }}>
+      <p className="text-[16px] font-semibold">{t("care.rate.title")}</p>
+      <div className="flex gap-1" role="radiogroup" aria-label={t("care.rate.title")}>{[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" role="radio" aria-checked={rating === n} aria-label={t("care.rate.stars", { n })} onClick={() => setRating(n)} className={`text-[30px] leading-none ${n <= rating ? "text-accent" : "text-muted/50"}`}>★</button>
+      ))}</div>
+      {error && <p role="alert" className="text-[14px] text-danger">{error}</p>}
+      <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("care.rate.comment")} aria-label={t("care.rate.comment")} rows={2} />
+      <Button type="submit" loading={pending} disabled={!rating}>{t("care.rate.send")}</Button>
     </form>
   );
 }

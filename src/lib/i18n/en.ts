@@ -696,4 +696,11 @@ export const en = {
   "care.err.tooMany": "Too many messages. Please try again in an hour, or call us.",
   "care.err.generic": "Couldn't send that. Please try again, or call us.",
   "sms.care_reply": "{store}: we've replied to your request {ref}. Read it: {link}",
+  "care.rate.title": "How did we do?",
+  "care.rate.comment": "Anything to add? (optional)",
+  "care.rate.send": "Send rating",
+  "care.rate.thanks": "Thank you for your feedback.",
+  "care.rate.stars": "{n} out of 5",
+  "care.err.rateOnce": "Thanks, you've already rated this.",
+  "care.err.rateResolved": "You can rate us once your request is resolved.",
 } as const;

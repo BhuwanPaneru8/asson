@@ -1776,6 +1776,10 @@ model CareCase {
   firstReplyAt   DateTime?
   lastCustomerAt DateTime      @default(now())
   resolvedAt     DateTime?
+  /// the customer's rating after it was resolved: 1–5, optional comment
+  rating         Int?
+  ratingComment  String        @default("")
+  ratedAt        DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   messages       CareMessage[]
