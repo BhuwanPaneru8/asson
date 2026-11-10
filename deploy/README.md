@@ -9,12 +9,15 @@ Server: Oracle Always Free, Ubuntu 24.04, Hyderabad. Current host: `asson-micro`
 | `build-bundle.sh` | Builds a standalone bundle for one environment (used by CI). |
 | `with-db.sh` | From the Mac: `deploy/with-db.sh <env> <command>` runs a command with `DATABASE_URL` pointing at that server database through an SSH tunnel (never printed). |
 | `owner-login.sh` | From the Mac: `deploy/owner-login.sh <staging\|production>` opens a DB tunnel and runs `scripts/create-owner.ts` (hidden password prompt). Run it in a real Terminal tab, not a non-interactive shell. |
-| `release.sh` | Runs on the server: migrate → switch `current` → restart → health check → roll back on failure. |
+| `release.sh` | Runs on the server. **Blue/green** (after `server-setup.sh` has installed nginx): migrate → start the new release in the idle slot → check it (and that it is the new build) → nginx switches gracefully → old slot stops after 20 s of draining. A release that fails its checks never gets traffic. Older single-service servers: migrate → switch → restart → check → roll back. Tested on every CI run (`npm run test:deploy`: zero failed requests during an upgrade). |
 
 ## Layout on the server
 ```
 /srv/asson/<env>/releases/<time>-<sha>/   unpacked bundles (4 kept)
-/srv/asson/<env>/current -> releases/…    what systemd runs
+/srv/asson/<env>/current -> releases/…    the live release
+/srv/asson/<env>/slot-a, slot-b -> releases/…   blue/green slots (ports PORT+100 / PORT+200)
+/srv/asson/<env>/active-slot               a or b: which slot nginx sends traffic to
+/etc/nginx/asson/<env>.upstream.conf       nginx upstream (rewritten by release.sh)
 /srv/asson/tools/                          prisma CLI for migrations
 /etc/asson/<env>.env                       settings + secrets (root:asson 640)
 /var/backups/asson/                        nightly pg_dump files (14 days)
@@ -23,15 +26,15 @@ Server: Oracle Always Free, Ubuntu 24.04, Hyderabad. Current host: `asson-micro`
 ## Everyday
 - **Deploy staging:** merge to `main`; CI passes → Deploy workflow runs automatically.
 - **Deploy production:** GitHub → Actions → Deploy → Run workflow → `production` (main only).
-- **Logs:** `ssh asson@HOST journalctl -u asson@staging -f`
+- **Logs:** `ssh ubuntu@HOST sudo asson-ctl staging logs` (follows whichever slot is live)
+- **Restart / stop / start the live app:** `sudo asson-ctl production restart` (a restart is a short outage; deploys are not)
 - **Health:** `curl https://staging-asson.bhuwanpaneru.com/api/health`
 
 ## Roll back by hand
 ```bash
 ssh asson@HOST
 cd /srv/asson/production && ls -1t releases       # pick the previous one
-ln -sfn /srv/asson/production/releases/<id> current.tmp && mv -Tf current.tmp current
-sudo systemctl restart asson@production
+bash releases/<id>/deploy/release.sh production <id>   # blue/green: no downtime; migrations are a no-op
 ```
 Migrations are never rolled back, so migrations must stay backward compatible with the previous release (add first, remove in a later release).
 
@@ -71,9 +74,9 @@ ssh -i ~/.ssh/asson_deploy ubuntu@HOST "sudo -u postgres psql -d asson_staging -
 ## Backups and restore
 Nightly at 02:30 (Nepal time) into `/var/backups/asson`, and **hourly at :15 for production** into `/var/backups/asson/hourly` (24 rotating copies, one per hour of the day, also uploaded off-site as `<host>/asson_production/hourly/…`). At most an hour of orders is at risk. Restore an hourly copy the same way as a nightly one. Restore into an env:
 ```bash
-sudo systemctl stop asson@staging
+sudo asson-ctl staging stop
 sudo -u postgres pg_restore --clean --if-exists -d asson_staging /var/backups/asson/asson_staging-<stamp>.dump
-sudo systemctl start asson@staging
+sudo asson-ctl staging start
 ```
 **Off-site copies:** every dump is also uploaded to the private Oracle Object Storage bucket `asson-backups` (namespace `axyo2zdstaon`, Hyderabad, Always Free 20 GB) as `<host>/<db>/<db>-<stamp>.dump`.
 - The server only holds a **write-only pre-authenticated link** (`/etc/asson/backup.env`, root-only, named `asson-server-upload`, **expires 2029-11-01**: renew before then). It can add files but cannot list, read or delete them (checked: 404), so a compromised server can't wipe the off-site copies.
