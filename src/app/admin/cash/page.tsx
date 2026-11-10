@@ -4,7 +4,7 @@ import { can, type Role } from "@/lib/permissions";
 import { store as storeCfg } from "@/lib/config";
 import { ktmDate } from "@/lib/pos";
 import { scopeFor } from "@/lib/scope";
-import { cashBook, cashPosition, depositRef, depositsToCheck, KIND_LABEL } from "@/lib/cash";
+import { cashBook, cashPosition, codPosition, depositRef, depositsToCheck, KIND_LABEL } from "@/lib/cash";
 import { cn, formatDate, formatDateTime, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { CheckDeposit, CountSafe, PettyCash, RecordDeposit } from "@/components/admin/cash-forms";
@@ -20,7 +20,7 @@ export default async function CashPage({ searchParams }: { searchParams: Promise
   const rows = await cashPosition(scope);
   const want = (await searchParams).store;
   const here = rows.find((r) => r.storeId === want) ?? (rows.length === 1 ? rows[0] : rows.find((r) => r.kind === "SHOP"));
-  const [book, toCheck] = await Promise.all([here ? cashBook(me, here.storeId, 60) : Promise.resolve(null), finance ? depositsToCheck() : Promise.resolve([])]);
+  const [book, toCheck, cod] = await Promise.all([here ? cashBook(me, here.storeId, 60) : Promise.resolve(null), finance ? depositsToCheck() : Promise.resolve([]), finance ? codPosition() : Promise.resolve(null)]);
   const total = rows.reduce((a, r) => a + r.balance + r.inTills, 0);
   const today = ktmDate();
   return (
@@ -31,6 +31,14 @@ export default async function CashPage({ searchParams }: { searchParams: Promise
           <Card key={l}><div className="p-4"><p className="text-[12px] text-muted">{l}</p><p className="mt-1 text-[20px] font-semibold tabular-nums">{v}</p></div></Card>
         ))}
       </div>
+      {cod && (cod.owedTotal > 0 || cod.unseen.count > 0) && (
+        <Card title="Cash on delivery (online orders)" className="mb-4" action={<span className="flex gap-3 text-[13px]"><Link href="/admin/cod" className="underline">COD remittance</Link><Link href="/admin/finance/bank" className="underline">Bank statements</Link></span>}>
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            <div><p className="text-[12px] text-muted">Still with couriers (delivered, not remitted)</p><p className="mt-1 text-[20px] font-semibold tabular-nums">{formatPrice(cod.owedTotal)}</p><ul className="mt-1 text-[13px] text-ink-soft">{cod.owed.map((o) => <li key={o.carrier}>{o.carrier}: {formatPrice(o.amount)} · {o.orders} order{o.orders === 1 ? "" : "s"}{o.oldest ? ` · oldest ${formatDate(o.oldest)}` : ""}</li>)}</ul></div>
+            <div><p className="text-[12px] text-muted">Remitted, not yet seen on a bank statement</p><p className={cn("mt-1 text-[20px] font-semibold tabular-nums", cod.unseen.count > 0 && "text-warn")}>{formatPrice(cod.unseen.amount)}</p><p className="text-[13px] text-ink-soft">{cod.unseen.count} remittance{cod.unseen.count === 1 ? "" : "s"}</p></div>
+          </div>
+        </Card>
+      )}
       <Card title="By location" className="mb-4">
         <div className="overflow-x-auto"><table className="w-full text-[13.5px]">
           <thead className="border-b border-line bg-cloud/40"><tr><th className={cn(th, "text-left")}>Location</th><th className={th}>In the safe</th><th className={th}>In open tills</th><th className={th}>Last count</th><th className={th}>Last deposit</th><th className={th}>To check</th><th className={cn(th, "text-left")}>Needs doing</th></tr></thead>
