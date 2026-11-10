@@ -162,7 +162,10 @@ export async function timesheet(month: string, scope: Scope): Promise<TimesheetR
   const where = scope.all ? {} : { storeId: { in: scope.storeIds } };
   const [entries, leave] = await Promise.all([
     db.attendance.findMany({ where: { ...where, clockIn: { gte: from, lt: next } }, include: { user: { select: { name: true, role: true } } } }),
-    db.leaveRequest.findMany({ where: { status: "APPROVED", fromDate: { lte: `${month}-31` }, toDate: { gte: `${month}-01` } }, select: { userId: true, type: true, fromDate: true, toDate: true } }),
+    db.leaveRequest.findMany({
+      where: { status: "APPROVED", fromDate: { lte: `${month}-31` }, toDate: { gte: `${month}-01` }, ...(scope.all ? {} : { user: { locations: { some: { storeId: { in: scope.storeIds } } } } }) },
+      select: { userId: true, type: true, fromDate: true, toDate: true, user: { select: { name: true, role: true } } },
+    }),
   ]);
   const rows = new Map<string, TimesheetRow & { dayMins: Map<string, number> }>();
   for (const e of entries) {
@@ -173,6 +176,8 @@ export async function timesheet(month: string, scope: Scope): Promise<TimesheetR
     r.dayMins.set(ktmDate(e.clockIn), (r.dayMins.get(ktmDate(e.clockIn)) ?? 0) + m);
     rows.set(e.userId, r);
   }
+  // people on leave who never clocked in this month still belong on the sheet (and on the payroll)
+  for (const l of leave) if (!rows.has(l.userId)) rows.set(l.userId, { userId: l.userId, name: l.user.name, role: l.user.role, days: 0, minutes: 0, entries: 0, toFix: 0, leaveDays: 0, unpaidLeaveDays: 0, dayMins: new Map() });
   for (const r of rows.values()) {
     r.days = [...r.dayMins.values()].filter((m) => m >= cfg().presentMinutes).length;
     for (const l of leave.filter((x) => x.userId === r.userId)) {

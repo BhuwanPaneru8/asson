@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { ktmDate } from "@/lib/pos";
 import { balances, leaveNo, leaveType, minutesOf } from "@/lib/people";
 import { scopeFor, storeFilter } from "@/lib/scope";
-import { formatDateTime, now } from "@/lib/utils";
+import Link from "next/link";
+import { formatDateTime, formatPrice, now } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { ClockCard, LeaveForm, WithdrawButton } from "@/components/admin/people-forms";
 
@@ -16,12 +17,13 @@ export default async function MyTimePage() {
   const scope = await scopeFor(me);
   const today = ktmDate();
   const monthStart = new Date(`${today.slice(0, 7)}-01T00:00:00+05:45`);
-  const [locations, open, entries, bal, requests] = await Promise.all([
+  const [locations, open, entries, bal, requests, slips] = await Promise.all([
     db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
     db.attendance.findFirst({ where: { userId: me.id, clockOut: null }, include: { store: { select: { name: true } } } }),
     db.attendance.findMany({ where: { userId: me.id, clockIn: { gte: monthStart } }, orderBy: { clockIn: "desc" }, include: { store: { select: { code: true } } } }),
     balances(db, me.id, today),
     db.leaveRequest.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" }, take: 20 }),
+    db.payslip.findMany({ where: { userId: me.id, run: { status: "PAID" } }, orderBy: { run: { month: "desc" } }, take: 12, select: { id: true, net: true, run: { select: { month: true } } } }),
   ]);
   const t = now();
   const month = entries.reduce((s, e) => s + (e.clockOut ? minutesOf(e) : 0), 0);
@@ -47,6 +49,11 @@ export default async function MyTimePage() {
         </div>
         <div className="space-y-4">
           <LeaveForm types={bal.map((b) => ({ key: b.key, label: b.label, left: b.left }))} today={today} />
+          {slips.length > 0 && (
+            <Card title="My payslips">
+              <ul className="divide-y divide-line text-[13.5px]">{slips.map((p) => <li key={p.id}><Link href={`/admin/payroll/slip/${p.id}`} className="flex justify-between px-5 py-2.5 hover:bg-cloud/40"><span className="font-medium">{p.run.month}</span><span className="tabular-nums">{formatPrice(p.net)} net</span></Link></li>)}</ul>
+            </Card>
+          )}
           {requests.length > 0 && (
             <Card title="My requests">
               <ul className="divide-y divide-line text-[13.5px]">{requests.map((r) => (
