@@ -57,3 +57,11 @@ export function etaText(t: T, rate: { etaMinDays: number; etaMaxDays: number }) 
   if (rate.etaMinDays === rate.etaMaxDays) return t(rate.etaMinDays === 1 ? "ship.day1" : "ship.days", { n: rate.etaMinDays });
   return t("ship.daysRange", { a: rate.etaMinDays, b: rate.etaMaxDays });
 }
+
+/** Catalogue text the owner may also have written in Nepali (product, category, collection names): the Nepali
+ *  version when the shopper reads Nepali and one exists, otherwise the English. */
+export function pick(locale: Locale, english: string, nepali?: string | null): string;
+export function pick(locale: Locale, english: string | null, nepali?: string | null): string | null;
+export function pick(locale: Locale, english: string | null, nepali?: string | null) {
+  return locale === "ne" && nepali?.trim() ? nepali.trim() : english;
+}

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const PAGES = ["/", "/c/women", "/p/floral-midi-wrap-dress", "/cart", "/help"];
+const PAGES = ["/", "/c/women", "/p/floral-midi-wrap-dress", "/cart", "/help", "/login", "/size-guide", "/lookbook"];
 
 for (const lang of ["en", "ne"]) {
   for (const path of PAGES) {

@@ -228,29 +228,33 @@ model Address {
 }
 
 model Category {
-  id          String     @id @default(cuid())
-  name        String
-  slug        String     @unique
-  description String?
-  image       String?
-  sortOrder   Int        @default(0)
-  parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Category[] @relation("CategoryTree")
-  products    Product[]
+  id            String     @id @default(cuid())
+  name          String
+  slug          String     @unique
+  description   String?
+  nameNe        String? // Nepali name for the storefront (blank = English shown)
+  descriptionNe String?
+  image         String?
+  sortOrder     Int        @default(0)
+  parentId      String?
+  parent        Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      Category[] @relation("CategoryTree")
+  products      Product[]
 
   @@index([parentId])
 }
 
 model Collection {
-  id          String    @id @default(cuid())
-  name        String
-  slug        String    @unique
-  description String?
-  image       String?
-  featured    Boolean   @default(false)
-  sortOrder   Int       @default(0)
-  products    Product[]
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  description   String?
+  nameNe        String? // Nepali name for the storefront (blank = English shown)
+  descriptionNe String?
+  image         String?
+  featured      Boolean   @default(false)
+  sortOrder     Int       @default(0)
+  products      Product[]
 }
 
 model Product {
@@ -258,6 +262,8 @@ model Product {
   name           String
   slug           String        @unique
   description    String
+  nameNe         String? // Nepali name for the storefront (blank = English shown)
+  descriptionNe  String?
   details        String[] // bullet points
   brand          String
   gender         Gender
@@ -416,6 +422,7 @@ model Order {
   user                 User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   email                String
   phone                String
+  locale               String           @default("en") // shopper's language at checkout: SMS go out in it
   status               OrderStatus      @default(PENDING)
   paymentStatus        PaymentStatus    @default(PENDING)
   paymentMethod        PaymentMethod

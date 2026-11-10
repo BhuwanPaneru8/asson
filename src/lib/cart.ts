@@ -14,7 +14,7 @@ const cartInclude = {
         include: {
           product: {
             select: {
-              id: true, name: true, slug: true, price: true, compareAtPrice: true, status: true, brand: true,
+              id: true, name: true, nameNe: true, slug: true, price: true, compareAtPrice: true, status: true, brand: true,
               images: { orderBy: { position: "asc" as const }, select: { url: true, color: true } },
             },
           },
@@ -29,6 +29,7 @@ export type CartLine = {
   variantId: string;
   productId: string;
   name: string;
+  nameNe: string | null;
   brand: string;
   slug: string;
   color: string;
@@ -69,6 +70,7 @@ export const getCart = cache(async (): Promise<CartView> => {
       variantId: it.variantId,
       productId: p.id,
       name: p.name,
+      nameNe: p.nameNe,
       brand: p.brand,
       slug: p.slug,
       color: it.variant.color,

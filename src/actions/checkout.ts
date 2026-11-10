@@ -22,7 +22,7 @@ import { maxRedeemable, pointsValue } from "@/lib/loyalty-shared";
 import { clientIp } from "@/lib/client-ip";
 import { allocateOrder, StockError } from "@/lib/stock";
 import { resolveReferral } from "@/lib/referrals";
-import { localiseResult } from "@/lib/i18n/server";
+import { getLocale, localiseResult } from "@/lib/i18n/server";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -90,6 +90,7 @@ async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<Place
   if (!parsed.success) return { error: "Please check the highlighted fields.", fieldErrors: fieldErrors(parsed.error) };
   const data = parsed.data;
   const user = await getCurrentUser();
+  const locale = await getLocale(); // order SMS can follow the shopper's language
 
   const h = await headers();
   const ip = clientIp(h);
@@ -158,6 +159,7 @@ async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<Place
       const order = await tx.order.create({
         data: {
           userId: user?.id,
+          locale,
           pointsRedeemed: points.used,
           pointsDiscount: totals.pointsDiscount,
           email: data.email,

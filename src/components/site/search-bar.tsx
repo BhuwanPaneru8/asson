@@ -7,10 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { Search, X, Clock, TrendingUp, ArrowUpRight } from "lucide-react";
 import { cn, formatPrice } from "@/lib/utils";
 import { useT } from "./i18n-provider";
+import { pick } from "@/lib/i18n";
 
 type Suggest = {
-  products: { name: string; slug: string; brand: string; price: number; compareAtPrice: number | null; image: string | null }[];
-  categories: { name: string; slug: string; parent: string | null }[];
+  products: { name: string; nameNe: string | null; slug: string; brand: string; price: number; compareAtPrice: number | null; image: string | null }[];
+  categories: { name: string; nameNe: string | null; slug: string; parent: string | null; parentNe: string | null }[];
 };
 
 const POPULAR = ["Linen shirt", "Jeans", "Kurta", "Hoodie", "Dresses", "Oversized tee"];
@@ -29,7 +30,7 @@ function saveRecent(q: string) {
 export function SearchBar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { t } = useT();
+  const { t, locale } = useT();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [result, setResult] = useState<{ term: string; data: Suggest } | null>(null);
@@ -148,7 +149,7 @@ export function SearchBar() {
                   <div className="border-b border-line px-3 pb-3 pt-2">
                     {data.categories.map((c) => (
                       <Link key={c.slug} href={`/c/${c.slug}`} onClick={() => setOpen(false)} className="flex items-center justify-between py-1.5 text-[15px] hover:text-accent">
-                        <span>{c.parent ? <span className="text-muted">{c.parent} / </span> : null}{c.name}</span>
+                        <span>{c.parent ? <span className="text-muted">{pick(locale, c.parent, c.parentNe)} / </span> : null}{pick(locale, c.name, c.nameNe)}</span>
                         <ArrowUpRight className="h-4 w-4 text-muted" />
                       </Link>
                     ))}
@@ -161,7 +162,7 @@ export function SearchBar() {
                         <Link href={`/p/${p.slug}`} onClick={() => { saveRecent(q.trim()); setOpen(false); }} className={cn("flex items-center gap-3 px-3 py-2 hover:bg-cloud", active === i && "bg-cloud")}>
                           <div className="relative h-14 w-11 shrink-0 overflow-hidden bg-cloud">{p.image && <Image src={p.image} alt="" fill sizes="44px" className="object-cover" />}</div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[14.5px] font-medium">{p.name}</p>
+                            <p className="truncate text-[14.5px] font-medium">{pick(locale, p.name, p.nameNe)}</p>
                             <p className="text-[12.5px] text-muted">{p.brand}</p>
                           </div>
                           <span className="text-[14px] font-medium">{formatPrice(p.price)}</span>

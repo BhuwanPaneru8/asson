@@ -13,11 +13,12 @@ import { db } from "@/lib/db";
 import { evaluateCoupon } from "@/lib/pricing";
 import { getT } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
+import { pick } from "@/lib/i18n";
 
 const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
 export default async function HomePage() {
-  const [tree, collections, best, fresh, sale, featuredCoupon, looks, { t }] = await Promise.all([
+  const [tree, collections, best, fresh, sale, featuredCoupon, looks, { t, locale }] = await Promise.all([
     getCategoryTree(),
     getCollections(),
     getProductRail("best", 8),
@@ -44,8 +45,8 @@ export default async function HomePage() {
               : t("home.useCode", { days: store.returnWindowDays }),
         }
       : null;
-  const shopCats = tree.flatMap((r) => r.children.slice(0, 4).map((c) => ({ ...c, parent: r.name })));
-  const featured = collections.filter((c) => c.featured);
+  const shopCats = tree.flatMap((r) => r.children.slice(0, 4).map((c) => ({ ...c, name: pick(locale, c.name, c.nameNe), parent: pick(locale, r.name, r.nameNe) })));
+  const featured = collections.filter((c) => c.featured).map((c) => ({ ...c, name: pick(locale, c.name, c.nameNe), description: pick(locale, c.description, c.descriptionNe) }));
 
   return (
     <>
@@ -128,7 +129,7 @@ export default async function HomePage() {
             <Link href="/lookbook" className="shrink-0 text-[14px] font-medium underline underline-offset-4">{t("home.allLooks")}</Link>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 md:gap-6">
-            {looks.map((l) => <LookCard key={l.slug} look={l} />)}
+            {looks.map((l) => <LookCard key={l.slug} look={l} t={t} />)}
           </div>
         </section>
       )}

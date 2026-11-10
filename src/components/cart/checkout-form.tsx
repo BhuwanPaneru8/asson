@@ -9,7 +9,7 @@ import { placeOrder, quoteCheckout, type Quote } from "@/actions/checkout";
 import type { CartView } from "@/lib/cart";
 import { provinceOf, store } from "@/lib/config";
 import { deliveryFee, rateFor, type RateMap } from "@/lib/delivery-shared";
-import { etaText } from "@/lib/i18n";
+import { etaText, pick } from "@/lib/i18n";
 import { rich } from "@/lib/i18n/rich";
 import { useT } from "@/components/site/i18n-provider";
 import { DistrictSelect } from "@/components/ui/district-select";
@@ -21,7 +21,7 @@ type PickupPoint = { id: string; name: string; address: string; hours: string | 
 type Addr = { id: string; fullName: string; phone: string; line1: string; line2: string | null; city: string; district: string; state: string; postalCode: string | null; isDefault: boolean };
 
 export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pickupPoints, initialCode }: { cart: CartView; user: { name: string; email: string; phone: string | null } | null; addresses: Addr[]; onlineEnabled: boolean; rates: RateMap; pickupPoints: PickupPoint[]; initialCode?: string }) {
-  const { t, l } = useT();
+  const { t, l, locale } = useT();
   const [fulfil, setFulfil] = useState<"delivery" | "pickup">("delivery");
   const [pickupId, setPickupId] = useState(pickupPoints.find((p) => p.readyNow)?.id ?? pickupPoints[0]?.id ?? "");
   const [pickupName, setPickupName] = useState(user?.name ?? "");
@@ -230,7 +230,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
                     {l.image && <Image src={l.image} alt="" fill sizes="64px" className="object-cover" />}
                     <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] text-white">{l.quantity}</span>
                   </div>
-                  <div className="min-w-0 flex-1 text-[13.5px]"><p className="line-clamp-1 font-medium">{l.name}</p><p className="text-muted">{l.color} · {l.size}</p></div>
+                  <div className="min-w-0 flex-1 text-[13.5px]"><p className="line-clamp-1 font-medium">{pick(locale, l.name, l.nameNe)}</p><p className="text-muted">{l.color} · {l.size}</p></div>
                   <p className="text-[13.5px] font-medium">{formatPrice(l.unitPrice * l.quantity)}</p>
                 </li>
               ))}

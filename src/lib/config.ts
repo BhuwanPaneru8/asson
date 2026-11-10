@@ -39,6 +39,9 @@ export const store = {
   },
   /** Online payments (eSewa/Khalti) stay hidden until the integration is finished and approved. */
   onlinePaymentsLive: false,
+  // Order SMS in Nepali for shoppers who ordered in Nepali. Devanagari SMS are Unicode: 70 characters per
+  // segment instead of 160, so each message costs about 2–3× more. Off until the owner decides.
+  smsInNepali: false,
   codMaxOrder: 3000000, // COD allowed up to Rs 30,000
   returnWindowDays: 7,
   loyalty: {

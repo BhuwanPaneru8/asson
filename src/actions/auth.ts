@@ -12,6 +12,7 @@ import { phoneSchema } from "@/lib/validators";
 import { homeFor, isStaffRole } from "@/lib/permissions";
 import { clientIp } from "@/lib/client-ip";
 import { audit } from "@/lib/audit";
+import { localiseResult } from "@/lib/i18n/server";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -28,7 +29,7 @@ async function clientKey(prefix: string, id: string) {
 
 const loginSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1) });
 
-export async function login(_: AuthState, form: FormData): Promise<AuthState> {
+async function loginImpl(_: AuthState, form: FormData): Promise<AuthState> {
   const parsed = loginSchema.safeParse({ email: form.get("email"), password: form.get("password") });
   if (!parsed.success) return { error: "Enter a valid email and password." };
   const { email, password } = parsed.data;
@@ -60,7 +61,7 @@ const registerSchema = z.object({
   password: z.string().min(8, "Use at least 8 characters").max(128).regex(/[A-Za-z]/, "Include a letter").regex(/\d/, "Include a number"),
 });
 
-export async function register(_: AuthState, form: FormData): Promise<AuthState> {
+async function registerImpl(_: AuthState, form: FormData): Promise<AuthState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -93,7 +94,7 @@ export async function logout() {
 
 const pwSchema = z.object({ current: z.string().min(1), next: z.string().min(8).regex(/[A-Za-z]/).regex(/\d/) });
 
-export async function changePassword(_: AuthState, form: FormData): Promise<AuthState & { ok?: boolean }> {
+async function changePasswordImpl(_: AuthState, form: FormData): Promise<AuthState & { ok?: boolean }> {
   const me = await getCurrentUser();
   if (!me) return { error: "Please sign in again." };
   const parsed = pwSchema.safeParse({ current: form.get("current"), next: form.get("next") });
@@ -106,3 +107,8 @@ export async function changePassword(_: AuthState, form: FormData): Promise<Auth
   if (isStaffRole(me.role)) await audit(db, me, { action: "auth.password_changed", entity: ["User", me.id], summary: `${me.name} changed their password (other devices signed out)` });
   return { ok: true };
 }
+
+// Shoppers see these messages in their language (see lib/i18n localise).
+export async function login(...args: Parameters<typeof loginImpl>) { return localiseResult(await loginImpl(...args)); }
+export async function register(...args: Parameters<typeof registerImpl>) { return localiseResult(await registerImpl(...args)); }
+export async function changePassword(...args: Parameters<typeof changePasswordImpl>) { return localiseResult(await changePasswordImpl(...args)); }

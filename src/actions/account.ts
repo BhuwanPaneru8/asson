@@ -9,10 +9,11 @@ import { CUSTOMER_CANCELLABLE, TransitionError, transitionOrder } from "@/lib/or
 import { store } from "@/lib/config";
 import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
+import { localiseResult } from "@/lib/i18n/server";
 
 type R = { ok: boolean; error?: string; fieldErrors?: Record<string, string> };
 
-export async function saveAddress(input: unknown, id?: string): Promise<R & { id?: string }> {
+async function saveAddressImpl(input: unknown, id?: string): Promise<R & { id?: string }> {
   const user = await requireUser();
   const parsed = addressFields.extend({ isDefault: z.boolean().optional() }).transform(withProvince).safeParse(input);
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
@@ -32,7 +33,7 @@ export async function saveAddress(input: unknown, id?: string): Promise<R & { id
   return { ok: true, id: saved.id };
 }
 
-export async function deleteAddress(id: string): Promise<R> {
+async function deleteAddressImpl(id: string): Promise<R> {
   const user = await requireUser();
   const a = await db.address.findFirst({ where: { id, userId: user.id } });
   if (!a) return { ok: false, error: "Address not found." };
@@ -45,7 +46,7 @@ export async function deleteAddress(id: string): Promise<R> {
   return { ok: true };
 }
 
-export async function setDefaultAddress(id: string): Promise<R> {
+async function setDefaultAddressImpl(id: string): Promise<R> {
   const user = await requireUser();
   await db.$transaction([
     db.address.updateMany({ where: { userId: user.id }, data: { isDefault: false } }),
@@ -62,7 +63,7 @@ const profileSchema = z.object({
   birthday: z.string().regex(/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, "Choose a valid day").refine((d) => !["02-30", "02-31", "04-31", "06-31", "09-31", "11-31"].includes(d), "Choose a valid day").optional().or(z.literal("")),
 });
 
-export async function updateProfile(input: unknown): Promise<R> {
+async function updateProfileImpl(input: unknown): Promise<R> {
   const user = await requireUser();
   const parsed = profileSchema.safeParse(input);
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
@@ -80,7 +81,7 @@ async function ownOrder(orderId: string) {
   return { order, actor: user?.email ?? order.email };
 }
 
-export async function cancelOrder(orderId: string, reason?: string): Promise<R> {
+async function cancelOrderImpl(orderId: string, reason?: string): Promise<R> {
   const o = await ownOrder(orderId);
   if (!o) return { ok: false, error: "Order not found." };
   if (!CUSTOMER_CANCELLABLE.includes(o.order.status)) return { ok: false, error: "This order has already been packed and can't be cancelled. You can return it after delivery." };
@@ -95,7 +96,7 @@ export async function cancelOrder(orderId: string, reason?: string): Promise<R> 
   return { ok: true };
 }
 
-export async function requestReturn(orderId: string, reason: string): Promise<R> {
+async function requestReturnImpl(orderId: string, reason: string): Promise<R> {
   const o = await ownOrder(orderId);
   if (!o) return { ok: false, error: "Order not found." };
   if (o.order.status !== "DELIVERED") return { ok: false, error: "Only delivered orders can be returned." };
@@ -118,7 +119,7 @@ const reviewSchema = z.object({
   fit: z.enum(["Runs small", "True to size", "Runs large"]).optional(),
 });
 
-export async function submitReview(input: unknown): Promise<R> {
+async function submitReviewImpl(input: unknown): Promise<R> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Please sign in to write a review." };
   const parsed = reviewSchema.safeParse(input);
@@ -138,3 +139,12 @@ export async function submitReview(input: unknown): Promise<R> {
   refresh();
   return { ok: true };
 }
+
+// Shoppers see these messages in their language (see lib/i18n localise).
+export async function saveAddress(...args: Parameters<typeof saveAddressImpl>) { return localiseResult(await saveAddressImpl(...args)); }
+export async function deleteAddress(...args: Parameters<typeof deleteAddressImpl>) { return localiseResult(await deleteAddressImpl(...args)); }
+export async function setDefaultAddress(...args: Parameters<typeof setDefaultAddressImpl>) { return localiseResult(await setDefaultAddressImpl(...args)); }
+export async function updateProfile(...args: Parameters<typeof updateProfileImpl>) { return localiseResult(await updateProfileImpl(...args)); }
+export async function cancelOrder(...args: Parameters<typeof cancelOrderImpl>) { return localiseResult(await cancelOrderImpl(...args)); }
+export async function requestReturn(...args: Parameters<typeof requestReturnImpl>) { return localiseResult(await requestReturnImpl(...args)); }
+export async function submitReview(...args: Parameters<typeof submitReviewImpl>) { return localiseResult(await submitReviewImpl(...args)); }

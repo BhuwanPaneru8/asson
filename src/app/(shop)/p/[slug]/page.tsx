@@ -16,6 +16,7 @@ import { store } from "@/lib/config";
 import { getDeliveryRates } from "@/lib/delivery";
 import { absoluteImageUrl } from "@/lib/media-url";
 import { getT } from "@/lib/i18n/server";
+import { pick } from "@/lib/i18n";
 
 const siteBase = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -40,7 +41,7 @@ export default async function ProductPage({ params }: Props) {
   if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
   const inLooks = await getLookbookForProduct(product.id);
 
-  const [stock, related, reviews, user, rates, look, { t }] = await Promise.all([
+  const [stock, related, reviews, user, rates, look, { t, locale }] = await Promise.all([
     getLiveStock(product.id),
     getRelated(product.id, product.categoryId, product.gender),
     getReviews(product.id),
@@ -73,17 +74,17 @@ export default async function ProductPage({ params }: Props) {
       <div className="container-page pt-4 md:pt-6">
         <nav aria-label="Breadcrumb" className="mb-4 hidden flex-wrap items-center gap-1 text-[13px] text-muted md:flex">
           <Link href="/" className="hover:text-ink">{t("cat.home")}</Link>
-          {cat.parent && <><ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.parent.slug}`} className="hover:text-ink">{cat.parent.name}</Link></>}
-          <ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.slug}`} className="hover:text-ink">{cat.name}</Link>
-          <ChevronRight className="h-3.5 w-3.5" /><span className="text-ink">{product.name}</span>
+          {cat.parent && <><ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.parent.slug}`} className="hover:text-ink">{pick(locale, cat.parent.name, cat.parent.nameNe)}</Link></>}
+          <ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.slug}`} className="hover:text-ink">{pick(locale, cat.name, cat.nameNe)}</Link>
+          <ChevronRight className="h-3.5 w-3.5" /><span className="text-ink">{pick(locale, product.name, product.nameNe)}</span>
         </nav>
         <ProductExperience
           rates={rates}
           fitSummary={topFit}
           product={{
-            id: product.id, name: product.name, brand: product.brand, price: product.price, compareAtPrice: product.compareAtPrice,
-            ratingAvg: product.ratingAvg, ratingCount: product.ratingCount, description: product.description, details: product.details,
-            material: product.material, care: product.care, fit: product.fit, categoryName: cat.name,
+            id: product.id, name: pick(locale, product.name, product.nameNe), brand: product.brand, price: product.price, compareAtPrice: product.compareAtPrice,
+            ratingAvg: product.ratingAvg, ratingCount: product.ratingCount, description: pick(locale, product.description, product.descriptionNe), details: product.details,
+            material: product.material, care: product.care, fit: product.fit, categoryName: pick(locale, cat.name, cat.nameNe),
             images: product.images.map((i) => ({ url: i.url, alt: i.alt, color: i.color })), variants,
           }}
         />
@@ -96,7 +97,7 @@ export default async function ProductPage({ params }: Props) {
       )}
       <div className={look.length ? "" : "mt-16"}><ProductRail title={t("pdp.alsoLike")} products={related.filter((r) => !lookIds.has(r.id))} /></div>
       <RecentlyViewed currentId={product.id} />
-      <Reviews productId={product.id} avg={product.ratingAvg} count={product.ratingCount} data={reviews} canReview={!!user} />
+      <Reviews productId={product.id} avg={product.ratingAvg} count={product.ratingCount} data={reviews} canReview={!!user} t={t} locale={locale} />
     </>
   );
 }

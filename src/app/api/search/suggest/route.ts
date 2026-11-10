@@ -9,19 +9,21 @@ const suggest = unstable_cache(
   async (q: string) => {
     const ids = (await searchProductIds(q, 6));
     const [rows, tree] = await Promise.all([
-      db.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, slug: true, price: true, compareAtPrice: true, brand: true, images: { take: 1, orderBy: { position: "asc" }, select: { url: true } } } }),
+      db.product.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, nameNe: true, slug: true, price: true, compareAtPrice: true, brand: true, images: { take: 1, orderBy: { position: "asc" }, select: { url: true } } } }),
       getCategoryTree(),
     ]);
     const order = new Map(ids.map((id, i) => [id, i]));
-    const products = rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!).map((p) => ({ name: p.name, slug: p.slug, brand: p.brand, price: p.price, compareAtPrice: p.compareAtPrice, image: p.images[0]?.url ?? null }));
+    const products = rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!).map((p) => ({ name: p.name, nameNe: p.nameNe, slug: p.slug, brand: p.brand, price: p.price, compareAtPrice: p.compareAtPrice, image: p.images[0]?.url ?? null }));
     // categories: every meaningful word must appear in "Parent Name" (e.g. "men jeans" -> Men / Jeans)
     const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 2).map((w) => w.replace(/s$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const categories = tree
-      .flatMap((r) => [{ name: r.name, slug: r.slug, parent: null as string | null }, ...r.children.map((c) => ({ name: c.name, slug: c.slug, parent: r.name }))])
+      .flatMap((r) => [{ name: r.name, nameNe: r.nameNe, slug: r.slug, parent: null as string | null, parentNe: null as string | null }, ...r.children.map((c) => ({ name: c.name, nameNe: c.nameNe, slug: c.slug, parent: r.name, parentNe: r.nameNe }))])
       .filter((c) => {
-        const hay = `${c.parent ?? ""} ${c.name}`.toLowerCase();
-        const own = c.name.toLowerCase();
-        return words.length > 0 && words.every((w) => new RegExp(`\\b${w}`).test(hay)) && words.some((w) => new RegExp(`\\b${w}`).test(own));
+        const hay = `${c.parent ?? ""} ${c.parentNe ?? ""} ${c.name} ${c.nameNe ?? ""}`.toLowerCase();
+        const own = `${c.name} ${c.nameNe ?? ""}`.toLowerCase();
+        // Devanagari has no \b word boundaries in JS regexes, so Nepali words match as substrings
+        const has = (text: string, w: string) => (/[\u0900-\u097F]/.test(w) ? text.includes(w) : new RegExp(`\\b${w}`).test(text));
+        return words.length > 0 && words.every((w) => has(hay, w)) && words.some((w) => has(own, w));
       })
       .slice(0, 4);
     return { products, categories };

@@ -28,7 +28,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
       categories={categories.map((c) => ({ id: c.id, label: `${c.parent?.name} / ${c.name}` }))}
       collections={collections.map((c) => ({ id: c.id, name: c.name }))}
       initial={{
-        id: p.id, name: p.name, slug: p.slug, brand: p.brand, description: p.description, details: p.details, gender: p.gender, status: p.status,
+        id: p.id, name: p.name, nameNe: p.nameNe ?? "", slug: p.slug, brand: p.brand, description: p.description, descriptionNe: p.descriptionNe ?? "", details: p.details, gender: p.gender, status: p.status,
         categoryId: p.categoryId, price: String(p.price / 100), compareAtPrice: p.compareAtPrice ? String(p.compareAtPrice / 100) : "",
         material: p.material ?? "", fit: p.fit ?? "", care: p.care ?? "", tags: p.tags, featured: p.featured,
         collectionIds: p.collections.map((c) => c.id),

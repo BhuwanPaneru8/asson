@@ -25,6 +25,9 @@ const productSchema = z.object({
   slug: z.string().trim().max(140).optional().or(z.literal("")),
   brand: z.string().trim().min(1).max(60),
   description: z.string().trim().min(10, "Write at least a sentence").max(5000),
+  // Nepali storefront text (optional; blank shows the English)
+  nameNe: z.string().trim().max(120).optional(),
+  descriptionNe: z.string().trim().max(5000).optional(),
   details: z.array(z.string().trim().max(200)).max(20),
   gender: z.enum(["MEN", "WOMEN", "KIDS", "UNISEX"]),
   status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]),
@@ -71,14 +74,14 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
   if (skuClash) return { ok: false, error: `SKU ${skuClash.sku} is already used by another product.` };
 
   const base = {
-    name: d.name, slug, brand: d.brand, description: d.description, details: d.details.filter(Boolean),
+    name: d.name, nameNe: d.nameNe || null, slug, brand: d.brand, description: d.description, descriptionNe: d.descriptionNe || null, details: d.details.filter(Boolean),
     gender: d.gender, status: d.status, categoryId: d.categoryId, price: d.price, compareAtPrice: d.compareAtPrice ?? null,
     material: d.material || null, fit: d.fit || null, care: d.care || null, tags: [...new Set(d.tags.filter(Boolean))], featured: d.featured,
   };
 
   try {
     const productId = await db.$transaction(async (tx) => {
-      const before = id ? await tx.product.findUnique({ where: { id }, select: { name: true, slug: true, brand: true, description: true, details: true, gender: true, status: true, categoryId: true, price: true, compareAtPrice: true, material: true, fit: true, care: true, tags: true, featured: true } }) : null;
+      const before = id ? await tx.product.findUnique({ where: { id }, select: { name: true, nameNe: true, slug: true, brand: true, description: true, descriptionNe: true, details: true, gender: true, status: true, categoryId: true, price: true, compareAtPrice: true, material: true, fit: true, care: true, tags: true, featured: true } }) : null;
       const vCount = { added: 0, removed: 0, cost: [] as [string, number | null, number | null][] };
       const p = id
         ? await tx.product.update({ where: { id }, data: { ...base, collections: { set: d.collectionIds.map((cid) => ({ id: cid })) } } })
@@ -117,7 +120,7 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
           }
         }
       }
-      const fields = ["name", "slug", "brand", "description", "details", "gender", "status", "categoryId", "price", "compareAtPrice", "material", "fit", "care", "tags", "featured"] as const;
+      const fields = ["name", "nameNe", "slug", "brand", "description", "descriptionNe", "details", "gender", "status", "categoryId", "price", "compareAtPrice", "material", "fit", "care", "tags", "featured"] as const;
       const { changes, text: rawText } = before ? diff(before, base, [...fields]) : { changes: {}, text: "" };
       let text = rawText;
       if (changes.categoryId) {

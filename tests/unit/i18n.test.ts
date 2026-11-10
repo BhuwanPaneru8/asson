@@ -40,3 +40,13 @@ describe("storefront languages", () => {
     expect(etaText(t, { etaMinDays: 3, etaMaxDays: 5 })).toBe("3–5 दिन");
   });
 });
+
+describe("catalogue names", () => {
+  it("shows the Nepali name only to Nepali readers, and only when there is one", async () => {
+    const { pick } = await import("@/lib/i18n");
+    expect(pick("ne", "Linen Shirt", "लिनेन सर्ट")).toBe("लिनेन सर्ट");
+    expect(pick("en", "Linen Shirt", "लिनेन सर्ट")).toBe("Linen Shirt");
+    expect(pick("ne", "Linen Shirt", "  ")).toBe("Linen Shirt");
+    expect(pick("ne", "Linen Shirt", null)).toBe("Linen Shirt");
+  });
+});

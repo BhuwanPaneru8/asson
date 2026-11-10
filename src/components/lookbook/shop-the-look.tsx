@@ -8,6 +8,7 @@ import { addToCart } from "@/actions/cart";
 import { useShop } from "@/components/site/shop-provider";
 import { Button } from "@/components/ui/button";
 import { cn, formatPrice } from "@/lib/utils";
+import { useT } from "@/components/site/i18n-provider";
 
 type Piece = {
   id: string; name: string; slug: string; price: number; compareAtPrice: number | null; note: string | null;
@@ -20,6 +21,7 @@ type Pick = { on: boolean; color: string; size: string | null };
 /** Choose a colour and size for each piece, then put the whole outfit in the bag in one go. */
 export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
   const { openCart } = useShop();
+  const { t } = useT();
   const [pending, start] = useTransition();
   const [picks, setPicks] = useState<Record<string, Pick>>(() =>
     Object.fromEntries(pieces.map((p) => [p.id, { on: p.variants.some((v) => v.stock > 0), color: p.variants.find((v) => v.stock > 0)?.color ?? p.colors[0]?.name ?? "", size: null }])),
@@ -30,8 +32,8 @@ export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
   const total = useMemo(() => chosen.reduce((s, p) => s + p.price, 0), [chosen]);
 
   const add = () => {
-    if (!chosen.length) return void toast("Tick at least one piece");
-    if (missing.length) return void toast.error(`Choose a size for ${missing.map((p) => p.name).join(" and ")}`);
+    if (!chosen.length) return void toast(t("look.tick"));
+    if (missing.length) return void toast.error(t("look.chooseFor", { names: missing.map((p) => p.name).join(t("look.and")) }));
     start(async () => {
       let added = 0;
       for (const p of chosen) {
@@ -41,7 +43,7 @@ export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
         const r = await addToCart({ variantId: v.id });
         if (r.ok) added++; else toast.error(`${p.name}: ${r.error}`);
       }
-      if (added) { toast.success(`${added} piece${added > 1 ? "s" : ""} added to your bag`); openCart(); }
+      if (added) { toast.success(added > 1 ? t("look.addedN", { n: added }) : t("look.added1")); openCart(); }
     });
   };
 
@@ -64,17 +66,17 @@ export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
                   <p className="shrink-0 text-[15px] tabular-nums">{p.compareAtPrice && <span className="mr-1.5 text-[13px] text-muted line-through">{formatPrice(p.compareAtPrice)}</span>}{formatPrice(p.price)}</p>
                 </div>
                 {p.note && <p className="mt-0.5 text-[13px] italic text-muted">{p.note}</p>}
-                {soldOut ? <p className="mt-2 text-[13px] text-danger">Sold out</p> : (
+                {soldOut ? <p className="mt-2 text-[13px] text-danger">{t("pc.soldOut")}</p> : (
                   <>
                     {p.colors.length > 1 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Colour for ${p.name}`}>
+                      <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("look.colourFor", { name: p.name })}>
                         {p.colors.map((c) => (
                           <button key={c.name} type="button" role="radio" aria-checked={pick.color === c.name} aria-label={c.name} title={c.name} onClick={() => set(p.id, { color: c.name, size: null })}
                             className={cn("h-6 w-6 rounded-full border", pick.color === c.name ? "ring-1 ring-ink ring-offset-2" : "border-black/10")} style={{ background: c.hex }} />
                         ))}
                       </div>
                     )}
-                    <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Size for ${p.name}`}>
+                    <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={t("look.sizeFor", { name: p.name })}>
                       {sizes.map((v) => (
                         <button key={v.id} type="button" role="radio" aria-checked={pick.size === v.size} disabled={v.stock <= 0} onClick={() => set(p.id, { size: v.size, on: true })}
                           className={cn("h-9 min-w-10 border px-2.5 text-[13px] tabular-nums", pick.size === v.size ? "border-ink bg-ink text-white" : "border-line bg-white hover:border-ink", v.stock <= 0 && "cursor-not-allowed text-muted line-through hover:border-line")}>
@@ -83,7 +85,7 @@ export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
                       ))}
                     </div>
                     <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[13px] text-muted">
-                      <input type="checkbox" checked={pick.on} onChange={(e) => set(p.id, { on: e.target.checked })} aria-label={`Include ${p.name} in my bag`} className="h-4 w-4 accent-ink" /> Include in my bag
+                      <input type="checkbox" checked={pick.on} onChange={(e) => set(p.id, { on: e.target.checked })} aria-label={t("look.includeAria", { name: p.name })} className="h-4 w-4 accent-ink" /> {t("look.include")}
                     </label>
                   </>
                 )}
@@ -93,8 +95,8 @@ export function ShopTheLook({ pieces }: { pieces: Piece[] }) {
         })}
       </ul>
       <div className="mt-5 flex items-center justify-between gap-4">
-        <div><p className="text-[13px] text-muted">{chosen.length} of {pieces.length} pieces</p><p className="font-display text-2xl tabular-nums">{formatPrice(total)}</p></div>
-        <Button size="lg" onClick={add} loading={pending} disabled={!chosen.length}>{missing.length ? "Choose sizes" : `Add ${chosen.length > 1 ? `all ${chosen.length}` : "it"} to bag`}</Button>
+        <div><p className="text-[13px] text-muted">{t("look.count", { n: chosen.length, total: pieces.length })}</p><p className="font-display text-2xl tabular-nums">{formatPrice(total)}</p></div>
+        <Button size="lg" onClick={add} loading={pending} disabled={!chosen.length}>{missing.length ? t("look.chooseSizes") : chosen.length > 1 ? t("look.addAll", { n: chosen.length }) : t("look.addIt")}</Button>
       </div>
     </div>
   );

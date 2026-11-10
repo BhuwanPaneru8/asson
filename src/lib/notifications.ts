@@ -3,6 +3,7 @@ import type { NotificationChannel, OrderStatus, Prisma, PrismaClient } from "@pr
 import { db } from "./db";
 import { store } from "./config";
 import { formatOrderNumber, formatPrice } from "./utils";
+import { makeT, type Locale } from "./i18n";
 
 /**
  * Customer notifications use an OUTBOX: the message is written in the same transaction as the event
@@ -22,30 +23,29 @@ const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:300
 
 type OrderForMessage = { id: string; number: number; phone: string; total: number; paymentMethod: string; paymentStatus?: string; carrier: string | null; trackingNumber: string | null; shippingAddress: unknown };
 
-/** SMS copy: short (aim for one 160-char segment), specific, with the order link. */
-export function renderSms(notice: OrderNotice, o: OrderForMessage, extra: { amount?: number } = {}) {
-  const n = formatOrderNumber(o.number);
+/** SMS copy: short (aim for one 160-char segment in English), specific, with the order link. Text lives in
+ *  lib/i18n (sms.*); Nepali only when `store.smsInNepali` is on (Unicode SMS cost more, see config). */
+export function renderSms(notice: OrderNotice, o: OrderForMessage, extra: { amount?: number } = {}, locale: Locale = "en") {
+  const t = makeT(locale);
   const name = ((o.shippingAddress as { fullName?: string })?.fullName ?? "").split(" ")[0];
-  const hi = name ? `Hi ${name}, ` : "";
-  const link = `${siteUrl()}/orders/${o.id}`;
-  const cod = o.paymentMethod === "COD" ? ` Please keep ${formatPrice(o.total)} ready.` : "";
-  switch (notice) {
-    case "placed": return `${hi}thanks for shopping with ${store.name}! Order ${n} (${formatPrice(o.total)}) is placed. We'll call to confirm shortly. ${link}`;
-    case "ready_for_pickup": {
-      const p = o.shippingAddress as { store?: string; storeAddress?: string; hours?: string | null };
-      const due = o.paymentStatus === "PAID" ? "" : ` Pay ${formatPrice(o.total)} at the counter.`;
-      return `${store.name}: order ${n} is ready for pickup at ${p.store}, ${p.storeAddress}${p.hours ? ` (${p.hours})` : ""}.${due} Show this SMS. We hold it ${store.pickup.holdDays} days.`;
-    }
-    case "collected": return `${store.name}: thanks for collecting ${n}! Love it? Leave a review: ${link} Size swap? Bring it back within ${store.returnWindowDays} days.`;
-    case "confirmed": return `${store.name}: order ${n} is confirmed and being packed. Track: ${link}`;
-    case "shipped": return `${store.name}: order ${n} is on its way${o.carrier ? ` with ${o.carrier}` : ""}${o.trackingNumber ? ` (${o.trackingNumber})` : ""}.${cod} ${link}`;
-    case "out_for_delivery": return `${store.name}: order ${n} is out for delivery today.${cod} Rider will call you.`;
-    case "delivered": return `${store.name}: order ${n} delivered. Love it? Leave a review: ${link} Need a size swap? Returns within ${store.returnWindowDays} days.`;
-    case "cancelled": return `${store.name}: order ${n} has been cancelled. If you paid online, the refund is on its way. Questions? ${store.supportPhone}`;
-    case "return_requested": return `${store.name}: return for ${n} received. We'll arrange pickup and update you. ${link}`;
-    case "returned": return `${store.name}: your return for ${n} is complete. ${link}`;
-    case "refund": return `${store.name}: refund of ${formatPrice(extra.amount ?? 0)} for ${n} has been issued. Thank you for shopping with us.`;
-  }
+  const p = o.shippingAddress as { store?: string; storeAddress?: string; hours?: string | null };
+  return t(`sms.${notice}`, {
+    store: store.name,
+    n: formatOrderNumber(o.number),
+    hi: name ? t("sms.hi", { name }) : "",
+    link: `${siteUrl()}/orders/${o.id}`,
+    total: formatPrice(o.total),
+    cod: o.paymentMethod === "COD" ? t("sms.cod", { amount: formatPrice(o.total) }) : "",
+    shop: p?.store ?? "",
+    address: p?.storeAddress ?? "",
+    hours: p?.hours ? ` (${p.hours})` : "",
+    due: o.paymentStatus === "PAID" ? "" : t("sms.due", { amount: formatPrice(o.total) }),
+    days: notice === "ready_for_pickup" ? store.pickup.holdDays : store.returnWindowDays,
+    carrier: o.carrier ? t("sms.with", { carrier: o.carrier }) : "",
+    tracking: o.trackingNumber ? ` (${o.trackingNumber})` : "",
+    phone: store.supportPhone,
+    amount: formatPrice(extra.amount ?? 0),
+  });
 }
 
 export const NOTICE_FOR_STATUS: Partial<Record<OrderStatus, OrderNotice>> = {
@@ -60,13 +60,13 @@ type Tx = Prisma.TransactionClient | PrismaClient;
 
 /** Write the message to the outbox (inside the caller's transaction when given). Store sales are skipped. */
 export async function queueOrderNotice(tx: Tx, orderId: string, notice: OrderNotice, extra: { amount?: number } = {}) {
-  const o = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, phone: true, total: true, paymentMethod: true, paymentStatus: true, carrier: true, trackingNumber: true, shippingAddress: true, channel: true } });
+  const o = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, number: true, phone: true, locale: true, total: true, paymentMethod: true, paymentStatus: true, carrier: true, trackingNumber: true, shippingAddress: true, channel: true } });
   if (!o || (o.channel === "STORE" && notice !== "refund")) return;
   const valid = /^9[678]\d{8}$/.test(o.phone);
   await tx.notification.create({
     data: {
       orderId: o.id, channel: "SMS", template: notice, to: o.phone,
-      body: renderSms(notice, o, extra),
+      body: renderSms(notice, o, extra, store.smsInNepali && o.locale === "ne" ? "ne" : "en"),
       status: valid ? "QUEUED" : "SKIPPED",
       error: valid ? null : "No valid Nepali mobile number",
     },

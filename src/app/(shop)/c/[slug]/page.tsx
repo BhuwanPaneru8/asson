@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { CatalogView } from "@/components/catalog/catalog-view";
 import { parseFilters, type SearchParams } from "@/components/catalog/parse";
 import { getCategoryBySlug } from "@/lib/catalog";
+import { getT } from "@/lib/i18n/server";
+import { pick } from "@/lib/i18n";
 
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<SearchParams> };
 
@@ -18,12 +20,13 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const c = await getCategoryBySlug(slug);
   if (!c) notFound();
   const filters = parseFilters(await searchParams, { category: slug });
-  const crumbs = c.parent ? [{ label: c.parent.name, href: `/c/${c.parent.slug}` }] : [];
-  const siblings = c.node.children.length ? c.node.children : [];
+  const { locale } = await getT();
+  const crumbs = c.parent ? [{ label: pick(locale, c.parent.name, c.parent.nameNe), href: `/c/${c.parent.slug}` }] : [];
+  const siblings = c.node.children.map((s) => ({ name: pick(locale, s.name, s.nameNe), slug: s.slug }));
   return (
     <CatalogView
-      title={c.node.name}
-      description={c.node.description}
+      title={pick(locale, c.node.name, c.node.nameNe)}
+      description={pick(locale, c.node.description, c.node.descriptionNe)}
       filters={filters}
       crumbs={crumbs}
       subcategories={siblings}

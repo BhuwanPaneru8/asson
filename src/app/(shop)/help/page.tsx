@@ -2,34 +2,43 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { store, whatsappUrl } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
+import { getT } from "@/lib/i18n/server";
+import { rich } from "@/lib/i18n/rich";
+import { localise, type T } from "@/lib/i18n";
 
 export const metadata: Metadata = { title: "Help & FAQs" };
 
 const Z = store.shipping.zones;
-const FAQ = [
-  { id: "shipping", title: "Shipping & delivery", items: [
-    ["Do you deliver all over Nepal?", "Yes — to all 77 districts. Choose your district at checkout and we'll show the delivery fee and estimated time."],
-    ["How long will delivery take?", `${Z.VALLEY.label}: ${Z.VALLEY.etaMinDays}–${Z.VALLEY.etaMaxDays} days. ${Z.OUTSIDE.label}: ${Z.OUTSIDE.etaMinDays}–${Z.OUTSIDE.etaMaxDays} days. ${Z.REMOTE.label} (e.g. Humla, Dolpa, Mustang): ${Z.REMOTE.etaMinDays}–${Z.REMOTE.etaMaxDays} days. Same/next-day express is available inside the Valley.`],
-    ["How much does delivery cost?", `It depends on your district — choose it on any product page or in your bag to see the exact fee. Free on orders over ${formatPrice(store.shipping.freeThreshold)} anywhere in Nepal. Typical fees: ${formatPrice(Z.VALLEY.fee)} inside Kathmandu Valley, ${formatPrice(Z.OUTSIDE.fee)} outside the Valley and ${formatPrice(Z.REMOTE.fee)} for remote districts. Express (Valley only) is ${formatPrice(store.shipping.express.fee)}.`],
-  ]},
-  { id: "returns", title: "Returns & exchanges", items: [
-    ["What is your return policy?", `You can return unworn items with tags attached within ${store.returnWindowDays} days of delivery.`],
-    ["How do I start a return?", "Go to Account → Orders, open the order and choose “Return items”. We’ll arrange a pickup or you can drop it at our partner courier branch."],
-    ["When will I get my refund?", "Online payments are refunded to the same wallet or card. Cash on delivery orders are refunded to your eSewa/Khalti wallet or bank account within 3–5 working days of the return reaching us."],
-  ]},
-  { id: "payments", title: "Payments", items: [
-    ["Which payment methods do you accept?", store.onlinePaymentsLive ? "Online: cash on delivery, eSewa and Khalti. In our store: cash, Fonepay QR and cards." : "Online orders are cash on delivery for now. In our store we take cash, Fonepay QR and cards."],
-    ["Is Cash on Delivery available?", `Yes, everywhere we deliver, for orders up to ${formatPrice(store.codMaxOrder)}. You can also pay the rider by QR.`],
-    ["Are prices inclusive of VAT?", "Yes, all prices include 13% VAT."],
-  ]},
-];
+const days = (z: { etaMinDays: number; etaMaxDays: number }) => `${z.etaMinDays}–${z.etaMaxDays}`;
 
-export default function HelpPage() {
+function faq(t: T, l: (s: string) => string) {
+  return [
+    { id: "shipping", title: t("footer.shipping"), items: [
+      [t("help.q.everywhere"), t("help.a.everywhere")],
+      [t("help.q.howLong"), t("help.a.howLong", { valley: l(Z.VALLEY.label), v: days(Z.VALLEY), outside: l(Z.OUTSIDE.label), o: days(Z.OUTSIDE), remote: l(Z.REMOTE.label), r: days(Z.REMOTE) })],
+      [t("help.q.cost"), t("help.a.cost", { free: formatPrice(store.shipping.freeThreshold), valley: formatPrice(Z.VALLEY.fee), outside: formatPrice(Z.OUTSIDE.fee), remote: formatPrice(Z.REMOTE.fee), express: formatPrice(store.shipping.express.fee) })],
+    ]},
+    { id: "returns", title: t("footer.returns"), items: [
+      [t("help.q.policy"), t("help.a.policy", { days: store.returnWindowDays })],
+      [t("help.q.start"), t("help.a.start")],
+      [t("help.q.refund"), t("help.a.refund")],
+    ]},
+    { id: "payments", title: t("help.payments"), items: [
+      [t("help.q.methods"), store.onlinePaymentsLive ? t("help.a.methodsLive") : t("help.a.methods")],
+      [t("help.q.cod"), t("help.a.cod", { amount: formatPrice(store.codMaxOrder) })],
+      [t("help.q.vat"), t("help.a.vat")],
+    ]},
+  ];
+}
+
+export default async function HelpPage() {
+  const { t, locale } = await getT();
+  const FAQ = faq(t, (s) => localise(locale, s));
   return (
     <div className="container-page max-w-3xl py-12">
-      <h1 className="font-display text-5xl">How can we help?</h1>
-      <p className="mt-3 text-muted">Quick answers to common questions. Can&apos;t find what you need? <a href="#contact" className="underline">Contact us</a>.</p>
-      <div className="mt-6 flex flex-wrap gap-2"><Link href="/track" className="border border-ink px-4 py-2 text-[14px] font-medium">Track an order</Link><Link href="/account/orders" className="border border-line bg-white px-4 py-2 text-[14px]">Start a return</Link><Link href="/size-guide" className="border border-line bg-white px-4 py-2 text-[14px]">Size guide</Link></div>
+      <h1 className="font-display text-5xl">{t("help.title")}</h1>
+      <p className="mt-3 text-muted">{rich(t("help.intro"), { link: <a href="#contact" className="underline">{t("footer.contactUs")}</a> })}</p>
+      <div className="mt-6 flex flex-wrap gap-2"><Link href="/track" className="border border-ink px-4 py-2 text-[14px] font-medium">{t("nav.track")}</Link><Link href="/account/orders" className="border border-line bg-white px-4 py-2 text-[14px]">{t("help.startReturn")}</Link><Link href="/size-guide" className="border border-line bg-white px-4 py-2 text-[14px]">{t("nav.sizeGuide")}</Link></div>
       {FAQ.map((s) => (
         <section key={s.id} id={s.id} className="mt-12 scroll-mt-24">
           <h2 className="mb-4 text-[20px] font-semibold">{s.title}</h2>
@@ -44,11 +53,15 @@ export default function HelpPage() {
         </section>
       ))}
       <section id="contact" className="mt-12 scroll-mt-24 bg-cloud p-6">
-        <h2 className="text-[20px] font-semibold">Contact us</h2>
-        <p className="mt-2 text-[14.5px] text-ink-soft">Call <a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="underline hover:text-accent">{store.supportPhone}</a>, WhatsApp <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">{store.supportWhatsApp}</a> (Sun–Fri, 10am–7pm) or email <a href={`mailto:${store.supportEmail}`} className="underline hover:text-accent">{store.supportEmail}</a>. We reply within 24 hours.</p>
+        <h2 className="text-[20px] font-semibold">{t("footer.contactUs")}</h2>
+        <p className="mt-2 text-[14.5px] text-ink-soft">{rich(t("help.contactBody"), {
+          phone: <a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="underline hover:text-accent">{store.supportPhone}</a>,
+          whatsapp: <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">{store.supportWhatsApp}</a>,
+          email: <a href={`mailto:${store.supportEmail}`} className="underline hover:text-accent">{store.supportEmail}</a>,
+        })}</p>
       </section>
-      <section id="privacy" className="mt-12 scroll-mt-24"><h2 className="text-[20px] font-semibold">Privacy</h2><p className="mt-2 text-[14.5px] text-ink-soft">We only use your details to fulfil orders and, if you opt in, to send offers. We never sell your data. Replace this with your full privacy policy.</p></section>
-      <section id="terms" className="mt-8 scroll-mt-24"><h2 className="text-[20px] font-semibold">Terms</h2><p className="mt-2 text-[14.5px] text-ink-soft">Replace this with your terms of sale.</p></section>
+      <section id="privacy" className="mt-12 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.privacy")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">{t("help.privacyBody")} Replace this with your full privacy policy.</p></section>
+      <section id="terms" className="mt-8 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.terms")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">Replace this with your terms of sale.</p></section>
     </div>
   );
 }
