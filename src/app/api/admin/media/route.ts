@@ -24,7 +24,8 @@ const json = (body: unknown, status = 200) => NextResponse.json(body, { status, 
 
 /**
  * Upload one photo (already resized by the browser into every MEDIA_WIDTHS version, form fields
- * "w480", "w960", "w1600"). Owner-only (catalog.edit). Returns the URL to store on the product.
+ * "w480", "w960", "w1600"). Catalogue photos are owner-only (catalog.edit); with purpose=issue any staff
+ * member can attach a photo to an issue report (tighter hourly limit).
  */
 export async function POST(req: NextRequest) {
   // same-origin only: the session cookie is SameSite=Lax, and this blocks any other site posting here
@@ -33,8 +34,9 @@ export async function POST(req: NextRequest) {
   }
   const user = await getCurrentUser();
   if (!user) return json({ ok: false, error: "Sign in again" }, 401);
-  if (!can(user.role, "catalog.edit")) return json({ ok: false, error: "Only the owner can add photos" }, 403);
-  if (!rateLimit(`media:${user.id}`, 300, 60 * 60_000)) return json({ ok: false, error: "Too many uploads — try again in an hour" }, 429);
+  const forIssue = req.nextUrl.searchParams.get("purpose") === "issue";
+  if (forIssue ? !can(user.role, "self.time") : !can(user.role, "catalog.edit")) return json({ ok: false, error: "Only the owner can add photos" }, 403);
+  if (!rateLimit(`media:${forIssue ? "issue:" : ""}${user.id}`, forIssue ? 40 : 300, 60 * 60_000)) return json({ ok: false, error: "Too many uploads — try again in an hour" }, 429);
 
   const length = Number(req.headers.get("content-length") ?? 0);
   if (length > MAX_FILE_BYTES * MEDIA_WIDTHS.length + 64 * 1024) return json({ ok: false, error: "Photo file is too large" }, 413);

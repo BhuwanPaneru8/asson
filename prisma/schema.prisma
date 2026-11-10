@@ -207,6 +207,8 @@ model User {
   leaveRequests      LeaveRequest[]
   employment         Employment?
   payslips           Payslip[]
+  issuesReported     Issue[]         @relation("IssueReporter")
+  issuesAssigned     Issue[]         @relation("IssueAssignee")
 
   @@index([role])
   @@index([createdAt])
@@ -535,6 +537,7 @@ model Store {
   attendances      Attendance[]
   commissionRules  CommissionRule[]
   checklistRuns    ChecklistRun[]
+  issues           Issue[]
 
   @@index([active, priority])
 }
@@ -1640,4 +1643,73 @@ model ChecklistRun {
 
   @@unique([templateId, storeId, date])
   @@index([storeId, date])
+}
+
+enum IssueCategory {
+  EQUIPMENT // till, printer, scanner, rails, mirrors
+  BUILDING // lights, AC, shutter, water, leaks
+  IT // internet, phone, POS app
+  SAFETY // fire, theft, injury
+  STOCK // damaged delivery, wrong items
+  OTHER
+}
+
+enum IssuePriority {
+  LOW
+  NORMAL
+  URGENT
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD // waiting for a part, landlord, supplier
+  RESOLVED
+}
+
+/// A problem a location reports to HQ (broken equipment, maintenance, safety). Has a due time from its
+/// priority, an assignee, and a timeline. Only people at the location or with ops.manage over it see it.
+model Issue {
+  id          String        @id @default(cuid())
+  number      Int           @unique @default(autoincrement())
+  storeId     String
+  store       Store         @relation(fields: [storeId], references: [id])
+  category    IssueCategory
+  priority    IssuePriority @default(NORMAL)
+  status      IssueStatus   @default(OPEN)
+  title       String
+  description String
+  photos      String[]
+  createdById String
+  createdBy   User          @relation("IssueReporter", fields: [createdById], references: [id])
+  assigneeId  String?
+  assignee    User?         @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  dueAt       DateTime
+  respondedAt DateTime? // first action by someone other than the reporter
+  resolvedAt  DateTime?
+  escalatedAt DateTime? // passed its due time while still open
+  /// what the repair cost, paisa (recorded here; post it in Finance → Expenses)
+  cost        Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  events      IssueEvent[]
+
+  @@index([status, dueAt])
+  @@index([storeId, createdAt])
+  @@index([assigneeId, status])
+}
+
+model IssueEvent {
+  id        String       @id @default(cuid())
+  issueId   String
+  issue     Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  byId      String?
+  byName    String
+  /// set when the status changed
+  status    IssueStatus?
+  message   String
+  photos    String[]
+  createdAt DateTime     @default(now())
+
+  @@index([issueId, createdAt])
 }

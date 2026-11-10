@@ -89,6 +89,11 @@ export const store = {
     ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
   },
   /** Own production (Admin → Production). Owner to confirm. */
+  /** Shop issue reports (Admin → Issues): how long HQ has to fix each priority before it's overdue. */
+  issues: {
+    dueHours: { URGENT: 4, NORMAL: 48, LOW: 168 },
+    repeatWindowDays: 30, // "3rd equipment issue at this shop in 30 days"
+  },
   production: {
     wastagePercent: 3, // extra fabric/trims issued on top of the bill of materials for cutting loss
   },
