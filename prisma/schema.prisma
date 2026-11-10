@@ -1244,3 +1244,20 @@ model StaffLocation {
   @@id([userId, storeId])
   @@index([storeId])
 }
+
+/// Something in the system that went wrong and (maybe) recovered: opened and closed by the watchdog
+/// (lib/health.ts, every 5 minutes). Doubles as the uptime history on Admin → System.
+model Incident {
+  id              String    @id @default(cuid())
+  check           String // health check key, e.g. "backups", "worker"
+  critical        Boolean // critical ones text the owner (ALERT_PHONES)
+  detail          String
+  startedAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  resolvedAt      DateTime?
+  alertedAt       DateTime?
+  recoveryAlertAt DateTime?
+
+  @@index([check, resolvedAt])
+  @@index([startedAt])
+}

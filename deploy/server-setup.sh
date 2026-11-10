@@ -110,6 +110,10 @@ EOF
   fi
   # settings added after the first install (kept idempotent for existing servers)
   grep -q '^MEDIA_DIR=' "$f" || echo "MEDIA_DIR=/srv/asson/$e/media" >> "$f"
+  # deep health URL for the uptime monitor: https://<host>/api/health/deep?key=<HEALTH_KEY>
+  grep -q '^HEALTH_KEY=' "$f" || echo "HEALTH_KEY=$(openssl rand -hex 24)" >> "$f"
+  # owner's mobile number(s) for critical alerts, comma-separated (texted only once an SMS gateway is set up)
+  grep -q '^ALERT_PHONES=' "$f" || echo "ALERT_PHONES=" >> "$f"
   chown root:asson "$f" && chmod 640 "$f"
 done
 
@@ -154,13 +158,29 @@ curl -fsS -m 50 -H "Authorization: Bearer $secret" "http://127.0.0.1:$port$p" >/
 EOF
 cat > /usr/local/bin/asson-backup <<'EOF'
 #!/usr/bin/env bash
-# Nightly compressed dumps of every Asson database: 14 days kept locally, and each dump is
+# Nightly compressed dumps of every Asson database (and hourly production copies, see below): 14 days kept locally, and each dump is
 # copied off the server through a write-only Oracle Object Storage link (BACKUP_UPLOAD_URL in
 # /etc/asson/backup.env, root-only). The link can add files but not list, read or delete them.
 set -euo pipefail
 d=/var/backups/asson; ts=$(date +%Y%m%d-%H%M); host=$(hostname -s)
 [ -f /etc/asson/backup.env ] && . /etc/asson/backup.env
 failed=0
+# `asson-backup hourly`: production only, at most an hour of orders at risk. 24 rotating copies (one per
+# hour of the day) locally and off-site, so storage stays bounded; the nightly run below keeps 14 days of
+# uniquely named dumps. The app's health check reads .last-hourly-ok and alerts if it gets old.
+if [ "${1:-}" = hourly ]; then
+  db=asson_production
+  sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw "$db" || exit 0
+  install -d -o asson -g asson -m 750 "$d/hourly"
+  f="$d/hourly/$db-$(date +%H).dump"
+  sudo -u postgres pg_dump -Fc "$db" > "$f.tmp" && mv "$f.tmp" "$f" && chown asson:asson "$f"
+  if [ -n "${BACKUP_UPLOAD_URL:-}" ]; then
+    curl -fsS -m 300 --retry 3 -T "$f" "${BACKUP_UPLOAD_URL}$host/$db/hourly/$(basename "$f")" >/dev/null \
+      || { logger -p user.err -t asson-backup "HOURLY UPLOAD FAILED $(basename "$f")"; exit 1; }
+  fi
+  date -Is > "$d/.last-hourly-ok"; chmod 644 "$d/.last-hourly-ok"
+  exit 0
+fi
 for e in staging production; do
   db=asson_$e
   sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw "$db" || continue
@@ -192,7 +212,7 @@ for e in staging production; do
 done
 chown asson:asson "$d"/*.dump 2>/dev/null || true
 find "$d" -name '*.dump' -mtime +14 -delete
-if [ "$failed" = 0 ] && [ -n "${BACKUP_UPLOAD_URL:-}" ]; then date -Is > "$d/.last-offsite-ok"; fi
+if [ "$failed" = 0 ] && [ -n "${BACKUP_UPLOAD_URL:-}" ]; then date -Is > "$d/.last-offsite-ok"; chmod 644 "$d/.last-offsite-ok"; fi
 exit "$failed"
 EOF
 chmod 755 /usr/local/bin/asson-cron /usr/local/bin/asson-backup
@@ -202,6 +222,7 @@ SHELL=/bin/bash
 * * * * * asson /usr/local/bin/asson-cron production /api/cron/jobs
 */2 * * * * asson /usr/local/bin/asson-cron staging /api/cron/jobs
 30 2 * * * root /usr/local/bin/asson-backup
+15 * * * * root /usr/local/bin/asson-backup hourly
 EOF
 
 step "Prisma CLI for migrations"

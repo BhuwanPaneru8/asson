@@ -7,6 +7,7 @@ import { EVERY_LABEL, HANDLERS, RECURRING, type JobType } from "@/lib/job-handle
 import { cn, formatDateTime, now } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { ResolveErrorButton, RetryJobButton, RunJobsNowButton } from "@/components/admin/system-actions";
+import { alertsConfigured, runChecks } from "@/lib/health";
 
 export const metadata = { title: "System" };
 
@@ -24,7 +25,9 @@ export default async function SystemPage({ searchParams }: { searchParams: Promi
   const dbMs = now() - t0;
   const dayAgo = new Date(now() - 86_400_000);
 
-  const [byStatus, overdue, lastDone, dead, errors, openErrors, sms, sent24, audit] = await Promise.all([
+  const [checks, incidents, byStatus, overdue, lastDone, dead, errors, openErrors, sms, sent24, audit] = await Promise.all([
+    runChecks(),
+    db.incident.findMany({ where: { startedAt: { gte: new Date(now() - 30 * 86_400_000) } }, orderBy: { startedAt: "desc" }, take: 30 }),
     db.job.groupBy({ by: ["status"], _count: { _all: true } }),
     db.job.count({ where: { status: "QUEUED", runAt: { lt: new Date(now() - 5 * 60_000) } } }),
     Promise.all(RECURRING.map((r) => db.job.findFirst({ where: { type: r.type, status: "DONE" }, orderBy: { finishedAt: "desc" }, select: { finishedAt: true, result: true } }))),
@@ -52,6 +55,33 @@ export default async function SystemPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader title="System" description="Is everything running? Background jobs, errors, the SMS outbox and the nightly stock check, in one place." actions={<RunJobsNowButton />} />
+
+      <Card title={checks.some((c) => !c.ok && c.critical) ? "Health: needs attention now" : checks.some((c) => !c.ok) ? "Health: a few things to look at" : "Health: all good"} className="mb-4"
+        action={<span className="text-[12.5px] text-muted">{alertsConfigured() ? "Owner is texted when something critical breaks" : "Text alerts off: set ALERT_PHONES and an SMS gateway"}</span>}>
+        <ul className="grid divide-y divide-line sm:grid-cols-2 sm:divide-y-0">
+          {checks.map((c) => (
+            <li key={c.key} className="flex items-start gap-2.5 px-5 py-2.5 text-[13.5px]">
+              {c.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label="OK" /> : <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", c.critical ? "text-danger" : "text-warn")} aria-label={c.critical ? "Critical" : "Warning"} />}
+              <span><span className="font-medium">{c.label}</span> <span className={cn(c.ok ? "text-muted" : c.critical ? "text-danger" : "text-warn")}>— {c.detail}</span></span>
+            </li>
+          ))}
+        </ul>
+        {incidents.length > 0 && (
+          <details className="border-t border-line px-5 py-3 text-[13px]">
+            <summary className="cursor-pointer font-medium">Incidents in the last 30 days ({incidents.length})</summary>
+            <ul className="mt-2 space-y-1.5">
+              {incidents.map((i) => (
+                <li key={i.id} className="flex flex-wrap gap-x-2">
+                  <Pill tone={i.resolvedAt ? "neutral" : i.critical ? "danger" : "warn"}>{i.resolvedAt ? "resolved" : "open"}</Pill>
+                  <span className="font-mono text-[12px]">{i.check}</span>
+                  <span>{i.detail}</span>
+                  <span className="text-muted">· {formatDateTime(i.startedAt)}{i.resolvedAt ? ` → ${formatDateTime(i.resolvedAt)}` : ""}{i.alertedAt ? " · owner texted" : ""}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         {tile("Release", process.env.ASSON_RELEASE || "dev", `database ${dbMs} ms`)}
