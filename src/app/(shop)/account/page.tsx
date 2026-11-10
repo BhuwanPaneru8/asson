@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { careRef, casesForUser } from "@/lib/care";
 import { Package } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -25,6 +26,7 @@ export default async function AccountHome() {
     db.pointsEntry.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     spendLast12Months(db, user.id),
   ]);
+  const requests = await casesForUser(user.id);
   const [code, friends, referralPoints] = await Promise.all([
     ensureReferralCode(user.id),
     db.order.count({ where: { referrerId: user.id, status: { not: "CANCELLED" } } }),
@@ -52,6 +54,14 @@ export default async function AccountHome() {
         <div className="mb-4 flex items-center justify-between"><h2 className="text-[18px] font-semibold">{t("acc.recent")}</h2>{count > 3 && <Link href="/account/orders" className="text-[14px] underline underline-offset-4">{t("rail.viewAll")}</Link>}</div>
         {orders.length ? <OrderList orders={orders} t={t} /> : <EmptyState icon={<Package className="h-10 w-10" strokeWidth={1.2} />} title={t("acc.noOrders")} body={t("acc.noOrdersBody")} action={<Link href="/shop" className={buttonClass()}>{t("home.startShopping")}</Link>} />}
       </section>
+      {requests.length > 0 && (
+        <section>
+          <h2 className="mb-4 text-[18px] font-semibold">{t("care.yourRequests")}</h2>
+          <ul className="divide-y divide-line border-y border-line">{requests.map((r) => (
+            <li key={r.number}><Link href={`/help/case/${r.token}`} className="flex items-center justify-between gap-3 py-3 text-[14.5px] hover:text-accent"><span className="min-w-0 truncate"><span className="text-muted">{careRef(r.number)}</span> {r.subject}</span><span className="shrink-0 text-[13px] text-muted">{t(`care.status.${r.status}`)}</span></Link></li>
+          ))}</ul>
+        </section>
+      )}
     </div>
   );
 }

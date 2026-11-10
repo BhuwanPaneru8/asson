@@ -89,6 +89,11 @@ export const store = {
     ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
   },
   /** Own production (Admin → Production). Owner to confirm. */
+  /** Customer care queue (Admin → Customer care). First reply due within these hours. */
+  care: {
+    replyHours: { URGENT: 2, NORMAL: 8, LOW: 24 },
+    reopenDays: 14, // a customer reply within this many days of "resolved" reopens the case; later starts a new one
+  },
   /** Shop issue reports (Admin → Issues): how long HQ has to fix each priority before it's overdue. */
   issues: {
     dueHours: { URGENT: 4, NORMAL: 48, LOW: 168 },
