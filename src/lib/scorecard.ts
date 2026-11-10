@@ -2,6 +2,9 @@ import "server-only";
 import { db } from "./db";
 import { provinceOf, store as storeCfg } from "./config";
 import { salesByLocation } from "./network";
+import { monthBounds } from "./finance";
+import { netSalesAt } from "./shop-pl";
+import { monthProgress } from "./budgets";
 import { ktmDate } from "./pos";
 import type { Scope } from "./scope";
 
@@ -22,6 +25,8 @@ export type ScoreRow = {
   visitScore: number | null; visitNumber: number | null; daysSinceVisit: number | null; fixesOpen: number; fixesLate: number;
   issuesOpen: number; issuesLate: number;
   careCases: number; careLate: number; careCsat: number | null;
+  /** this calendar month against the sales target, if there is one */
+  targetPct: number | null; targetPace: "ahead" | "on track" | "behind" | null;
   opsScore: number | null; flags: string[];
 };
 
@@ -69,6 +74,17 @@ export async function scorecard(opts: { scope: Scope; days?: number; now?: Date 
       FROM "CareCase" WHERE "storeId" IS NOT NULL GROUP BY "storeId"`,
   ]);
 
+  // this month's sales against target (cheap: no company P&L)
+  const month = today.slice(0, 7);
+  const budgets = await db.shopBudget.findMany({ where: { month, storeId: { in: shops.map((x) => x.id) }, sales: { gt: 0 } } });
+  const { start: mStart } = monthBounds(month);
+  const mtd = budgets.length ? await netSalesAt(mStart, now, budgets.map((b) => b.storeId)) : new Map<string, number>();
+  const prog = monthProgress(month, now);
+  const targetM = new Map(budgets.map((b) => {
+    const actual = mtd.get(b.storeId) ?? 0, forecast = prog > 0 ? actual / prog : 0;
+    return [b.storeId, { pct: Math.round((actual / b.sales) * 100), pace: (forecast >= b.sales ? "ahead" : forecast >= b.sales * 0.9 ? "on track" : "behind") as ScoreRow["targetPace"] }];
+  }));
+
   // checklist cells due per shop: each active template, each finished day since it existed
   const due = templates.reduce((n, t) => {
     const from = ktmDate(t.createdAt) > firstDay ? ktmDate(t.createdAt) : firstDay;
@@ -93,6 +109,7 @@ export async function scorecard(opts: { scope: Scope; days?: number; now?: Date 
       issuesOpen: issueM.get(s.id)?.open ?? 0, issuesLate: issueM.get(s.id)?.late ?? 0,
       careCases: careM.get(s.id)?.cases ?? 0, careLate: careM.get(s.id)?.late ?? 0,
       careCsat: careM.get(s.id)?.rated ? Math.round((careM.get(s.id)!.happy / careM.get(s.id)!.rated) * 100) : null,
+      targetPct: targetM.get(s.id)?.pct ?? null, targetPace: targetM.get(s.id)?.pace ?? null,
       opsScore: parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null,
       flags: [],
     };
@@ -101,6 +118,7 @@ export async function scorecard(opts: { scope: Scope; days?: number; now?: Date 
     if (row.careLate) row.flags.push(`${row.careLate} customer${row.careLate > 1 ? "s" : ""} waiting too long`);
     if (row.displaysLate) row.flags.push(`${row.displaysLate} display brief${row.displaysLate > 1 ? "s" : ""} late`);
     if (daysSinceVisit === null || daysSinceVisit > storeCfg.visits.everyDays) row.flags.push(daysSinceVisit === null ? "never visited" : `not visited for ${daysSinceVisit} days`);
+    if (row.targetPace === "behind") row.flags.push(`behind this month's sales target (${row.targetPct}%)`);
     if (checklistPct !== null && checklistPct < 80) row.flags.push(`checklists ${checklistPct}% done`);
     return row;
   });

@@ -5,6 +5,8 @@ import { announcementsFor, checklistsAt } from "@/lib/ops";
 import { issueRef, openIssuesAt, STATUS_LABEL } from "@/lib/issues";
 import { vmRef, vmToDo } from "@/lib/vm";
 import { visitRef, visitToDo } from "@/lib/visits";
+import { targetProgress } from "@/lib/budgets";
+import { formatPrice } from "@/lib/utils";
 import { scopeFor, storeFilter } from "@/lib/scope";
 import { formatDateTime } from "@/lib/utils";
 import { Card, PageHeader } from "@/components/admin/ui";
@@ -18,7 +20,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const locations = await db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } });
   const want = (await searchParams).store;
   const here = locations.find((l) => l.id === want) ?? locations[0];
-  const [news, lists, issues, displays, visits] = await Promise.all([announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] })]);
+  const [news, lists, issues, displays, visits, target] = await Promise.all([announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
   const unread = news.filter((a) => a.requiresAck && !a.readAt);
   return (
     <>
@@ -29,6 +31,15 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           {!here ? <p className="text-[14px] text-muted">You aren&apos;t assigned to a location yet.</p>
             : !lists.length ? <Card><p className="p-5 text-[14px] text-muted">No checklists for {here.name} today.</p></Card>
             : lists.map((c) => <ChecklistCard key={c.templateId} templateId={c.templateId} storeId={here.id} name={c.name} dueBy={c.dueBy} items={c.items} completed={!!c.completedAt} />)}
+          {target && (
+            <Card title="This month's sales target">
+              <div className="space-y-2 p-5">
+                <p className="text-[14px]"><span className="text-[22px] font-semibold tabular-nums">{formatPrice(target.actual)}</span> <span className="text-muted">of {formatPrice(target.target)} · {target.achieved}%</span></p>
+                <div className="relative h-2.5 overflow-hidden rounded-full bg-cloud"><div className={`h-full rounded-full ${target.pace === "behind" ? "bg-danger" : "bg-success"}`} style={{ width: `${Math.min(100, target.achieved)}%` }} /><div className="absolute top-0 h-full w-0.5 bg-ink/60" style={{ left: `${Math.min(100, Math.round((target.expectedByNow / target.target) * 100))}%` }} title="where we should be by now" /></div>
+                <p className={`text-[13px] ${target.pace === "behind" ? "font-medium text-danger" : "text-muted"}`}>{target.pace === "ahead" ? "Ahead of target" : target.pace === "on track" ? "Close to target" : "Behind target"}: heading for {formatPrice(target.forecast)} by month-end.</p>
+              </div>
+            </Card>
+          )}
           {(visits.actions.length > 0 || visits.toAck.length > 0) && (
             <Card title={`From store visits · ${visits.actions.length} to fix`}>
               <ul className="divide-y divide-line">
