@@ -162,6 +162,8 @@ async function main() {
     throw new Error("Refusing to seed: this wipes all data. Set SEED_FORCE=1 to override.");
   }
   console.log("Resetting data…");
+  // the cash book is append-only (a trigger blocks DELETE); TRUNCATE empties it for a fresh seed
+  await db.$executeRawUnsafe(`TRUNCATE "CashEntry", "BankDeposit"`);
   await db.$transaction([
     // own production first: it points at products, suppliers and locations
     db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),

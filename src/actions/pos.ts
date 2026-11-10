@@ -9,6 +9,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requirePermission, verifyPassword, getCurrentUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { onShiftClose, onShiftOpen } from "@/lib/cash";
 import { can, discountLimitPercent, type Role } from "@/lib/permissions";
 import { buildDaySummary, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
 import { allocateOrder, StockError, stockByLocation } from "@/lib/stock";
@@ -47,6 +48,7 @@ export async function openShift(openingFloatRupees: number, storeId?: string): P
   if (await isDayLocked(store.id, ktmDate())) return { ok: false, error: `Today has already been closed and locked at ${store.name}. Ask the owner to reopen tomorrow.` };
   await db.$transaction(async (tx) => {
     const s = await tx.shift.create({ data: { storeId: store.id, cashierId: me.id, openingFloat: float } });
+    await onShiftOpen(tx, s, me); // the float leaves the shop's safe
     await audit(tx, me, { action: "shift.open", entity: ["Shift", s.id], summary: `${me.name} opened a shift at ${store.name} with ${formatPrice(float)} in the drawer` });
   });
   refresh();
@@ -62,12 +64,18 @@ export async function closeShift(countedCashRupees: number, note?: string): Prom
   const expected = await expectedCashForShift(shift.id);
   const difference = counted - expected;
   if (difference !== 0 && !note?.trim()) return { ok: false, error: `Cash is ${difference > 0 ? "over" : "short"} by ${formatPrice(Math.abs(difference))}. Add a note explaining why.` };
-  const res = await db.shift.updateMany({
-    where: { id: shift.id, status: "OPEN" },
-    data: { status: "CLOSED", closedAt: new Date(), expectedCash: expected, countedCash: counted, difference, closeNote: note?.trim().slice(0, 300) || null, closedById: me.id },
+  // close, put the counted cash back in the safe's book, and log it: all or nothing
+  const closed = await db.$transaction(async (tx) => {
+    const res = await tx.shift.updateMany({
+      where: { id: shift.id, status: "OPEN" },
+      data: { status: "CLOSED", closedAt: new Date(), expectedCash: expected, countedCash: counted, difference, closeNote: note?.trim().slice(0, 300) || null, closedById: me.id },
+    });
+    if (!res.count) return false;
+    await onShiftClose(tx, shift, counted, me);
+    await audit(tx, me, { action: "shift.close", entity: ["Shift", shift.id], summary: `${me.name} closed the shift: counted ${formatPrice(counted)}, expected ${formatPrice(expected)}${difference ? ` — ${difference > 0 ? "over" : "SHORT"} ${formatPrice(Math.abs(difference))}: ${note?.trim().slice(0, 120)}` : " — balanced"}`, changes: { expected, counted, difference } });
+    return true;
   });
-  if (!res.count) return { ok: false, error: "This shift was already closed." };
-  await audit(db, me, { action: "shift.close", entity: ["Shift", shift.id], summary: `${me.name} closed the shift: counted ${formatPrice(counted)}, expected ${formatPrice(expected)}${difference ? ` — ${difference > 0 ? "over" : "SHORT"} ${formatPrice(Math.abs(difference))}: ${note?.trim().slice(0, 120)}` : " — balanced"}`, changes: { expected, counted, difference } });
+  if (!closed) return { ok: false, error: "This shift was already closed." };
   refresh();
   return { ok: true, expected, counted, difference };
 }

@@ -19,7 +19,7 @@ const PRIORITIES = [["URGENT", "Urgent: can't trade or unsafe"], ["NORMAL", "Nor
 const STATUSES = [["OPEN", "Open"], ["IN_PROGRESS", "Being fixed"], ["ON_HOLD", "On hold"], ["RESOLVED", "Resolved"]] as const;
 
 /** Take or choose photos (phone camera opens directly); each is resized in the browser, then uploaded. */
-export function IssuePhotos({ value, onChange, max = 6, purpose = "issue", label = "Add photo" }: { value: string[]; onChange: (v: string[]) => void; max?: number; purpose?: "issue" | "vm" | "visit"; label?: string }) {
+export function IssuePhotos({ value, onChange, max = 6, purpose = "issue", label = "Add photo" }: { value: string[]; onChange: (v: string[]) => void; max?: number; purpose?: "issue" | "vm" | "visit" | "cash"; label?: string }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   async function add(files: FileList) {

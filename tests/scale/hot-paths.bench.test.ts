@@ -8,6 +8,7 @@ import { cashierReport, networkAlerts, networkReport } from "@/lib/network";
 import { scorecard } from "@/lib/scorecard";
 import { shopPl } from "@/lib/shop-pl";
 import { budgetReport, targetProgress } from "@/lib/budgets";
+import { cashPosition } from "@/lib/cash";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -66,6 +67,21 @@ it("hot paths stay within budget at national scale", async () => {
     const month = new Date().toISOString().slice(0, 7);
     await db.shopBudget.upsert({ where: { storeId_month: { storeId: busy.storeId, month } }, create: { storeId: busy.storeId, month, sales: 500_000_00, costs: 0, updatedById: "scale-bench" }, update: {} });
     await time("today: busiest shop's target progress", 300, async () => { if (!(await targetProgress(busy.storeId))) throw new Error("no plan"); });
+  }
+  {
+    // two years of cash book per location (scratch DB): ~2,000 entries and ~240 deposits each, one open shift
+    if (!(await db.cashEntry.count())) {
+      await db.$executeRawUnsafe(`INSERT INTO "CashEntry" ("id", "storeId", "kind", "amount", "note", "byId", "byName", "createdAt")
+        SELECT 'ce_' || s."id" || '_' || g, s."id", (CASE WHEN g % 3 = 0 THEN 'DEPOSIT' WHEN g % 3 = 1 THEN 'SHIFT_IN' ELSE 'FLOAT_OUT' END)::"CashKind",
+          CASE WHEN g % 3 = 0 THEN -2500000 WHEN g % 3 = 1 THEN 3000000 ELSE -500000 END, '', 'bench', 'Bench', NOW() - (g || ' hours')::interval * 8
+        FROM "Store" s CROSS JOIN generate_series(1, 2000) g`);
+      await db.$executeRawUnsafe(`INSERT INTO "BankDeposit" ("id", "storeId", "amount", "bank", "slipNo", "depositedOn", "status", "byId", "byName", "checkedAt")
+        SELECT 'bd_' || s."id" || '_' || g, s."id", 2500000, 'Bench Bank', s."id" || '-' || g, to_char(NOW() - (g * 3 || ' days')::interval, 'YYYY-MM-DD'),
+          (CASE WHEN g > 2 THEN 'VERIFIED' ELSE 'RECORDED' END)::"DepositStatus", 'bench', 'Bench', CASE WHEN g > 2 THEN NOW() END
+        FROM "Store" s CROSS JOIN generate_series(1, 240) g`);
+    }
+    if (!(await db.shift.count({ where: { status: "OPEN" } }))) await db.$executeRawUnsafe(`INSERT INTO "Shift" ("id", "storeId", "cashierId", "status", "openingFloat") SELECT 'sh_' || s."id", s."id", 'bench', 'OPEN', 500000 FROM "Store" s`);
+    await time("cash: position of every location", REPORT, () => cashPosition({ all: true }));
   }
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));
   await time("network: by province, 90 days", REPORT, () => networkReport({ days: 90, scope: { all: true }, group: "province" }));

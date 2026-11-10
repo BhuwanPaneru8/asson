@@ -547,6 +547,8 @@ model Store {
   expenses         Expense[]
   recurringCosts   RecurringCost[]
   budgets          ShopBudget[]
+  cashEntries      CashEntry[]
+  deposits         BankDeposit[]
 
   @@index([active, priority])
 }
@@ -2001,4 +2003,62 @@ model ShopBudget {
 
   @@unique([storeId, month])
   @@index([month])
+}
+
+enum CashKind {
+  OPENING // the safe's balance when the cash book started
+  FLOAT_OUT // a till float taken out of the safe when a shift opened
+  SHIFT_IN // a closed shift's counted cash put into the safe
+  DEPOSIT // taken to the bank
+  DEPOSIT_FIX // a deposit the bank didn't confirm (or confirmed for a different amount): put back
+  PETTY // spent from the safe (also an expense)
+  COUNT // a safe count found a difference
+}
+
+/// The cash book of one location's safe. Append-only: every movement is an entry; the balance is the sum.
+model CashEntry {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  kind      CashKind
+  /// paisa, + into the safe, − out of it
+  amount    Int
+  note      String   @default("")
+  /// what posted it, e.g. "shift-open:<id>", "deposit:<id>" (unique: posted once)
+  source    String?  @unique
+  byId      String
+  byName    String
+  createdAt DateTime @default(now())
+
+  @@index([storeId, createdAt])
+}
+
+enum DepositStatus {
+  RECORDED // the shop says it's at the bank
+  VERIFIED // finance has seen it on the bank statement
+  DISPUTED // the bank shows a different amount (or nothing): the difference went back into the cash book
+}
+
+model BankDeposit {
+  id          String        @id @default(cuid())
+  number      Int           @unique @default(autoincrement())
+  storeId     String
+  store       Store         @relation(fields: [storeId], references: [id])
+  amount      Int
+  bank        String
+  slipNo      String
+  slipPhoto   String?
+  depositedOn String // YYYY-MM-DD
+  status      DepositStatus @default(RECORDED)
+  /// what the bank statement showed (for disputes)
+  bankAmount  Int?
+  checkNote   String        @default("")
+  byId        String
+  byName      String
+  checkedById String?
+  checkedAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@unique([bank, slipNo])
+  @@index([storeId, status])
 }

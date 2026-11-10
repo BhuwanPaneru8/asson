@@ -89,6 +89,12 @@ export const store = {
     ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
   },
   /** Own production (Admin → Production). Owner to confirm. */
+  /** Cash per location (Finance → Cash). */
+  cash: {
+    holdLimit: 200_000_00, // more than this in a safe: deposit it
+    depositEveryDays: 3, // flag a shop that hasn't banked cash for longer
+    pettyMax: 5_000_00, // one petty-cash spend; bigger costs go through Finance → Expenses
+  },
   /** Store visit audits (Admin → Store visits). */
   visits: {
     everyDays: 30, // a shop not visited for longer is flagged
