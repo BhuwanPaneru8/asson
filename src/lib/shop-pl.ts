@@ -56,18 +56,17 @@ export type PlRow = {
 
 type Money = { revenue: number; cogs: number; refunds: number; costBack: number };
 
-export async function shopPl(month: string, opts: { storeIds?: string[] | null } = {}) {
-  if (!MONTH.test(month)) throw new CostError("Months are YYYY-MM.");
-  const { start, end, next } = monthBounds(month);
-  const from = `${month}-01`, to = `${next}-01`;
-  const [company, sold, back, full, expenses, stores] = await Promise.all([
-    profitAndLoss(start, end, from, to),
+/** Sales, cost of goods, refunds and cost back per location for a period (the P&L's rules, split by allocation). */
+export async function locationMoney(start: Date, end: Date, storeIds: string[] | null = null) {
+  const ids = storeIds;
+  const [sold, back, full] = await Promise.all([
     db.$queryRaw<{ storeId: string; revenue: number; cogs: number }[]>`
       SELECT a."storeId",
         SUM(a."quantity" * oi."unitPrice" * CASE WHEN o."subtotal" > 0 THEN (o."subtotal" - o."discount" - o."pointsDiscount")::numeric / o."subtotal" ELSE 1 END)::float AS "revenue",
         SUM(a."quantity" * COALESCE(oi."unitCost", 0))::float AS "cogs"
       FROM "OrderAllocation" a JOIN "OrderItem" oi ON oi."id" = a."orderItemId" JOIN "Order" o ON o."id" = a."orderId"
       WHERE o."status" <> 'CANCELLED' AND o."createdAt" >= (${start}::timestamptz AT TIME ZONE 'UTC') AND o."createdAt" < (${end}::timestamptz AT TIME ZONE 'UTC')
+        AND (${ids}::text[] IS NULL OR a."storeId" = ANY(${ids}::text[]))
       GROUP BY a."storeId"`,
     // till/online partial returns in the period, shared over the locations that sold the line
     db.$queryRaw<{ storeId: string; refunds: number; costBack: number }[]>`
@@ -76,6 +75,7 @@ export async function shopPl(month: string, opts: { storeIds?: string[] | null }
         SUM(CASE WHEN ri."condition" = 'RESELLABLE' THEN COALESCE(oi."unitCost", 0) * ri."quantity" * a."quantity"::numeric / NULLIF(oi."quantity", 0) ELSE 0 END)::float AS "costBack"
       FROM "ReturnItem" ri JOIN "Return" r ON r."id" = ri."returnId" JOIN "OrderItem" oi ON oi."id" = ri."orderItemId" JOIN "OrderAllocation" a ON a."orderItemId" = oi."id"
       WHERE r."createdAt" >= (${start}::timestamptz AT TIME ZONE 'UTC') AND r."createdAt" < (${end}::timestamptz AT TIME ZONE 'UTC')
+        AND (${ids}::text[] IS NULL OR a."storeId" = ANY(${ids}::text[]))
       GROUP BY a."storeId"`,
     // whole orders returned through the admin workflow
     db.$queryRaw<{ storeId: string; refunds: number; costBack: number }[]>`
@@ -85,15 +85,33 @@ export async function shopPl(month: string, opts: { storeIds?: string[] | null }
       FROM "OrderAllocation" a JOIN "OrderItem" oi ON oi."id" = a."orderItemId" JOIN "Order" o ON o."id" = a."orderId"
       WHERE o."status" = 'RETURNED' AND o."updatedAt" >= (${start}::timestamptz AT TIME ZONE 'UTC') AND o."updatedAt" < (${end}::timestamptz AT TIME ZONE 'UTC')
         AND NOT EXISTS (SELECT 1 FROM "Return" r WHERE r."orderId" = o."id")
+        AND (${ids}::text[] IS NULL OR a."storeId" = ANY(${ids}::text[]))
       GROUP BY a."storeId"`,
-    db.expense.groupBy({ by: ["storeId", "category"], where: { date: { gte: from, lt: to } }, _sum: { amount: true } }),
-    db.store.findMany({ where: { active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true, kind: true } }),
   ]);
-
   const money = new Map<string, Money>();
   const get = (id: string) => money.get(id) ?? (money.set(id, { revenue: 0, cogs: 0, refunds: 0, costBack: 0 }), money.get(id)!);
   for (const r of sold) { const m = get(r.storeId); m.revenue += r.revenue; m.cogs += r.cogs; }
   for (const r of [...back, ...full]) { const m = get(r.storeId); m.refunds += r.refunds ?? 0; m.costBack += r.costBack ?? 0; }
+  return money;
+}
+
+/** Net sales for some locations so far in a period (fast: no company P&L), e.g. for target progress. */
+export async function netSalesAt(start: Date, end: Date, storeIds: string[]) {
+  const m = await locationMoney(start, end, storeIds);
+  return new Map(storeIds.map((id) => { const x = m.get(id); return [id, x ? Math.round(x.revenue - x.refunds) : 0]; }));
+}
+
+export async function shopPl(month: string, opts: { storeIds?: string[] | null } = {}) {
+  if (!MONTH.test(month)) throw new CostError("Months are YYYY-MM.");
+  const { start, end, next } = monthBounds(month);
+  const from = `${month}-01`, to = `${next}-01`;
+  const [company, money, expenses, stores] = await Promise.all([
+    profitAndLoss(start, end, from, to),
+    locationMoney(start, end),
+    db.expense.groupBy({ by: ["storeId", "category"], where: { date: { gte: from, lt: to } }, _sum: { amount: true } }),
+    db.store.findMany({ where: { active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true, kind: true } }),
+  ]);
+
   const cost = new Map<string | null, { staff: number; rent: number; other: number }>();
   for (const e of expenses) {
     const c = cost.get(e.storeId) ?? { staff: 0, rent: 0, other: 0 };

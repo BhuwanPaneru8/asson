@@ -546,6 +546,7 @@ model Store {
   visits           StoreVisit[]
   expenses         Expense[]
   recurringCosts   RecurringCost[]
+  budgets          ShopBudget[]
 
   @@index([active, priority])
 }
@@ -1978,4 +1979,26 @@ model VisitAction {
 
   @@unique([visitId, itemIndex])
   @@index([storeId, status, dueAt])
+}
+
+/// A location's plan for one month: the sales target and what it may spend. Set by the owner.
+model ShopBudget {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  /// YYYY-MM
+  month       String
+  /// paisa, same basis as the P&L (net sales incl. VAT)
+  sales       Int
+  /// target gross margin, tenths of a percent (e.g. 520 = 52.0%); null = no target
+  marginPm    Int?
+  /// paisa: staff, rent and everything else the location may spend
+  costs       Int      @default(0)
+  note        String   @default("")
+  updatedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, month])
+  @@index([month])
 }
