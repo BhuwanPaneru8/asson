@@ -8,12 +8,13 @@ import { store } from "@/lib/config";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { isBot, recordFunnel } from "@/lib/funnel";
+import { localiseResult } from "@/lib/i18n/server";
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 
 const addSchema = z.object({ variantId: z.string().min(1), quantity: z.number().int().min(1).max(store.maxQtyPerItem) });
 
-export async function addToCart(input: { variantId: string; quantity?: number }): Promise<Result> {
+async function addToCartImpl(input: { variantId: string; quantity?: number }): Promise<Result> {
   const parsed = addSchema.safeParse({ quantity: 1, ...input });
   if (!parsed.success) return { ok: false, error: "Invalid item." };
   const { variantId, quantity } = parsed.data;
@@ -38,7 +39,7 @@ export async function addToCart(input: { variantId: string; quantity?: number })
   return { ok: true };
 }
 
-export async function updateCartItem(itemId: string, quantity: number): Promise<Result> {
+async function updateCartItemImpl(itemId: string, quantity: number): Promise<Result> {
   const cart = await getCart();
   const line = cart.lines.find((l) => l.id === itemId);
   if (!line) return { ok: false, error: "Item not found in your bag." };
@@ -54,12 +55,12 @@ export async function updateCartItem(itemId: string, quantity: number): Promise<
   return { ok: true };
 }
 
-export async function removeCartItem(itemId: string): Promise<Result> {
+async function removeCartItemImpl(itemId: string): Promise<Result> {
   return updateCartItem(itemId, 0);
 }
 
 /** Change size/colour of a line in place. */
-export async function swapCartVariant(itemId: string, newVariantId: string): Promise<Result> {
+async function swapCartVariantImpl(itemId: string, newVariantId: string): Promise<Result> {
   const cart = await getCart();
   const line = cart.lines.find((l) => l.id === itemId);
   if (!line || !cart.id) return { ok: false, error: "Item not found." };
@@ -77,3 +78,9 @@ export async function swapCartVariant(itemId: string, newVariantId: string): Pro
   refresh();
   return { ok: true };
 }
+
+// Shoppers see these messages in their language (the logic above stays in English; see lib/i18n localise).
+export async function addToCart(...args: Parameters<typeof addToCartImpl>) { return localiseResult(await addToCartImpl(...args)); }
+export async function updateCartItem(...args: Parameters<typeof updateCartItemImpl>) { return localiseResult(await updateCartItemImpl(...args)); }
+export async function removeCartItem(...args: Parameters<typeof removeCartItemImpl>) { return localiseResult(await removeCartItemImpl(...args)); }
+export async function swapCartVariant(...args: Parameters<typeof swapCartVariantImpl>) { return localiseResult(await swapCartVariantImpl(...args)); }

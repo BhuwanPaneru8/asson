@@ -70,6 +70,9 @@ Swatch hexes are product data (`Variant.colorHex`), not UI tokens. Light swatche
 |---|---|---|
 | **Fraunces** (variable, optical size) | `font-display` | Headlines, product names on the product page, prices in large display, the wordmark |
 | **Inter** | `font-sans` (default) | Everything else: UI, body, forms, admin |
+| **Noto Serif / Noto Sans Devanagari** | fall-backs inside `font-display` / `font-sans` | Nepali letters only (Inter and Fraunces have none); loaded on demand, so English pages don't download them |
+
+Nepali text: no letter-spacing (it breaks Devanagari clusters, so tracking is switched off under `lang="ne"`), keep labels short because buttons don't stretch (prefer "पुरुषका लुगा" over a long phrase), and check phone widths in Nepali, which runs about 20–30% longer than English.
 
 ### Type scale
 

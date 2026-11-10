@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/misc";
 import { buttonClass } from "@/components/ui/button";
 import { FilterPanel, ActiveFilters, SortSelect, MobileFilterButton, ResultsShell, FilterProvider } from "./filters";
 import { Pagination } from "./pagination";
+import { getT } from "@/lib/i18n/server";
 
 export async function CatalogView({
   title,
@@ -24,16 +25,16 @@ export async function CatalogView({
   subcategories?: Pick<CategoryNode, "name" | "slug">[];
   basePath: string;
 }) {
-  const [result, facets] = await Promise.all([listProducts(filters), getFacets(filters)]);
+  const [result, facets, { t }] = await Promise.all([listProducts(filters), getFacets(filters), getT()]);
   // what shoppers look for (and don't find) — written after the response, never slows the page
   if (isPlainSearch(filters)) after(() => recordSearch(filters.q!, result.total));
-  const sorts = filters.q ? [{ id: "relevance", label: "Most relevant" }, ...SORTS] : [...SORTS];
+  const sorts = [...(filters.q ? [{ id: "relevance" as const }] : []), ...SORTS].map((s) => ({ id: s.id, label: t(`sort.${s.id}`) }));
 
   return (
     <FilterProvider>
     <div className="container-page pb-8 pt-6">
       <nav aria-label="Breadcrumb" className="mb-4 flex flex-wrap items-center gap-1 text-[13px] text-muted">
-        <Link href="/" className="hover:text-ink">Home</Link>
+        <Link href="/" className="hover:text-ink">{t("cat.home")}</Link>
         {crumbs.map((c) => (
           <span key={c.href} className="flex items-center gap-1"><ChevronRight className="h-3.5 w-3.5" /><Link href={c.href} className="hover:text-ink">{c.label}</Link></span>
         ))}
@@ -54,7 +55,7 @@ export async function CatalogView({
       )}
 
       <div className="sticky top-16 z-20 -mx-4 mb-6 flex items-center justify-between gap-3 border-y border-line bg-paper/95 px-4 py-3 backdrop-blur md:mx-0 md:px-0 lg:static lg:border-x-0 lg:bg-transparent">
-        <p className="text-[14px] text-muted"><span className="font-medium text-ink">{result.total.toLocaleString("en-IN" /* lakh grouping, as used in Nepal */)}</span> {result.total === 1 ? "product" : "products"}{filters.q && <> for “<span className="text-ink">{filters.q}</span>”</>}</p>
+        <p className="text-[14px] text-muted">{t(result.total === 1 ? "cat.count1" : "cat.countN", { n: result.total.toLocaleString("en-IN" /* lakh grouping, as used in Nepal */) })}{filters.q && <> {t("cat.for", { q: filters.q })}</>}</p>
         <div className="flex items-center gap-2">
           <MobileFilterButton facets={facets} filters={filters} total={result.total} />
           <SortSelect sorts={sorts} value={filters.sort ?? "featured"} />
@@ -73,9 +74,9 @@ export async function CatalogView({
             {result.products.length === 0 ? (
               <EmptyState
                 icon={<SearchX className="h-10 w-10" strokeWidth={1.2} />}
-                title={filters.q ? `No results for “${filters.q}”` : "Nothing matches those filters"}
-                body={filters.q ? "Check the spelling, try a more general word, or browse our categories." : "Try removing a filter or two to see more styles."}
-                action={<Link href={basePath} className={buttonClass("secondary")}>Clear all filters</Link>}
+                title={filters.q ? t("cat.noResultsFor", { q: filters.q }) : t("cat.noMatch")}
+                body={filters.q ? t("cat.noResultsBody") : t("cat.noMatchBody")}
+                action={<Link href={basePath} className={buttonClass("secondary")}>{t("cat.clearFilters")}</Link>}
               />
             ) : (
               <>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { CatalogView } from "@/components/catalog/catalog-view";
 import { parseFilters, type SearchParams } from "@/components/catalog/parse";
 import { getCategoryTree } from "@/lib/catalog";
+import { getT } from "@/lib/i18n/server";
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<SearchParams> }): Promise<Metadata> {
   const f = parseFilters(await searchParams);
@@ -11,12 +12,12 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 
 export default async function ShopPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const filters = parseFilters(await searchParams);
-  const tree = await getCategoryTree();
-  const title = filters.q ? "Search results" : filters.sale ? "Sale" : filters.sort === "new" ? "New arrivals" : filters.sort === "best" ? "Best sellers" : "Shop all";
+  const [tree, { t }] = await Promise.all([getCategoryTree(), getT()]);
+  const title = t(filters.q ? "shop.search" : filters.sale ? "nav.sale" : filters.sort === "new" ? "nav.newArrivals" : filters.sort === "best" ? "nav.bestSellers" : "shop.all");
   return (
     <CatalogView
       title={title}
-      description={filters.sale ? "Limited-time prices on wardrobe favourites." : undefined}
+      description={filters.sale ? t("shop.saleBody") : undefined}
       filters={filters}
       subcategories={filters.q ? [] : tree.map((c) => ({ name: c.name, slug: c.slug }))}
       basePath={filters.q ? `/shop?q=${encodeURIComponent(filters.q)}` : "/shop"}

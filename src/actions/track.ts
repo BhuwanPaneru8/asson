@@ -7,8 +7,9 @@ import { rateLimit } from "@/lib/rate-limit";
 import { parseOrderNumber } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/auth";
 import { clientIp } from "@/lib/client-ip";
+import { localiseResult } from "@/lib/i18n/server";
 
-export async function trackOrder(_: { error?: string } | undefined, form: FormData): Promise<{ error?: string }> {
+async function trackOrderImpl(_: { error?: string } | undefined, form: FormData): Promise<{ error?: string }> {
   const ip = clientIp(await headers());
   if (!rateLimit(`track:${ip}`, 15, 15 * 60_000)) return { error: "Too many attempts. Please try again in a few minutes." };
   const n = parseOrderNumber(String(form.get("number") ?? ""));
@@ -22,3 +23,6 @@ export async function trackOrder(_: { error?: string } | undefined, form: FormDa
   }
   redirect(`/orders/${order.id}`);
 }
+
+// Shoppers see these messages in their language (the logic above stays in English; see lib/i18n localise).
+export async function trackOrder(...args: Parameters<typeof trackOrderImpl>) { return localiseResult(await trackOrderImpl(...args)); }

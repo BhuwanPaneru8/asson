@@ -48,3 +48,14 @@ test("ops staff confirm the new order", async ({ page }) => {
   await expect(page.getByText(/Order updated/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Mark as packed" })).toBeVisible();
 });
+
+test("a shopper switches to Nepali and it sticks", async ({ page }) => {
+  await page.goto("/c/women");
+  await page.getByRole("button", { name: "नेपाली" }).first().click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ne");
+  await expect(page.getByRole("link", { name: "गृहपृष्ठ" })).toBeVisible();
+  await page.goto("/p/floral-midi-wrap-dress");
+  await expect(page.getByRole("button", { name: /झोलामा थप्नुहोस्|सकियो/ }).first()).toBeVisible();
+  await page.getByRole("button", { name: "English" }).first().click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+});

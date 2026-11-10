@@ -9,10 +9,13 @@ import { removeCartItem, updateCartItem } from "@/actions/cart";
 import type { CartLine as Line } from "@/lib/cart";
 import { store } from "@/lib/config";
 import { cn, formatPrice } from "@/lib/utils";
+import { rich } from "@/lib/i18n/rich";
+import { useT } from "@/components/site/i18n-provider";
 
 export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate?: () => void; compact?: boolean }) {
   const [pending, start] = useTransition();
   const [qty, setQty] = useOptimistic(line.quantity);
+  const { t } = useT();
 
   const change = (q: number) =>
     start(async () => {
@@ -32,7 +35,7 @@ export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <Link href={`/p/${line.slug}`} onClick={onNavigate} className="line-clamp-2 text-[14.5px] font-medium leading-snug hover:text-accent">{line.name}</Link>
-            <p className="mt-1 text-[13px] text-muted">{line.color} · Size {line.size}</p>
+            <p className="mt-1 text-[13px] text-muted">{t("line.variant", { color: line.color, size: line.size })}</p>
           </div>
           <div className="text-right">
             <p className="text-[14.5px] font-semibold">{formatPrice(line.unitPrice * qty)}</p>
@@ -40,17 +43,17 @@ export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate
           </div>
         </div>
         {!line.available && (
-          <p className="mt-1.5 text-[13px] font-medium text-danger">{line.stock === 0 ? "Sold out — please remove" : `Only ${line.stock} left — reduce quantity`}</p>
+          <p className="mt-1.5 text-[13px] font-medium text-danger">{line.stock === 0 ? t("line.soldOutRemove") : t("line.onlyReduce", { n: line.stock })}</p>
         )}
-        {line.available && line.stock <= 3 && <p className="mt-1.5 text-[12.5px] font-medium text-warn">Only {line.stock} left</p>}
+        {line.available && line.stock <= 3 && <p className="mt-1.5 text-[12.5px] font-medium text-warn">{t("line.only", { n: line.stock })}</p>}
         <div className="mt-auto flex items-center justify-between pt-3">
           <div className="flex h-9 items-center border border-line bg-white">
-            <button onClick={() => change(qty - 1)} disabled={pending} className="flex h-full w-9 items-center justify-center hover:bg-cloud" aria-label="Decrease quantity"><Minus className="h-3.5 w-3.5" /></button>
+            <button onClick={() => change(qty - 1)} disabled={pending} className="flex h-full w-9 items-center justify-center hover:bg-cloud" aria-label={t("line.dec")}><Minus className="h-3.5 w-3.5" /></button>
             <span className="w-8 text-center text-[14px] font-medium tabular-nums" aria-live="polite">{qty}</span>
-            <button onClick={() => change(qty + 1)} disabled={pending || qty >= max} className="flex h-full w-9 items-center justify-center hover:bg-cloud disabled:opacity-30" aria-label="Increase quantity"><Plus className="h-3.5 w-3.5" /></button>
+            <button onClick={() => change(qty + 1)} disabled={pending || qty >= max} className="flex h-full w-9 items-center justify-center hover:bg-cloud disabled:opacity-30" aria-label={t("line.inc")}><Plus className="h-3.5 w-3.5" /></button>
           </div>
-          <button onClick={() => change(0)} disabled={pending} className="flex items-center gap-1.5 text-[13px] text-muted hover:text-danger" aria-label={`Remove ${line.name}`}>
-            <Trash2 className="h-3.5 w-3.5" /> Remove
+          <button onClick={() => change(0)} disabled={pending} className="flex items-center gap-1.5 text-[13px] text-muted hover:text-danger" aria-label={t("line.removeName", { name: line.name })}>
+            <Trash2 className="h-3.5 w-3.5" /> {t("line.remove")}
           </button>
         </div>
       </div>
@@ -62,10 +65,11 @@ export function FreeShippingBar({ subtotal }: { subtotal: number }) {
   const goal = store.shipping.freeThreshold;
   const pct = Math.min(100, (subtotal / goal) * 100);
   const left = goal - subtotal;
+  const { t } = useT();
   return (
     <div>
       <p className="text-[13.5px]">
-        {left > 0 ? <>You&apos;re <span className="font-semibold">{formatPrice(left)}</span> away from free delivery anywhere in Nepal</> : <span className="font-medium text-success">✓ You&apos;ve unlocked free delivery</span>}
+        {left > 0 ? rich(t("bag.away"), { amount: <span className="font-semibold">{formatPrice(left)}</span> }) : <span className="font-medium text-success">{t("bag.unlocked")}</span>}
       </p>
       <div className="mt-2 h-1 w-full bg-line"><div className={cn("h-full transition-all duration-500", left > 0 ? "bg-ink" : "bg-success")} style={{ width: `${pct}%` }} /></div>
     </div>

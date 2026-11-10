@@ -7,20 +7,21 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewOrder } from "@/lib/order-access";
 import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
-import { statusLabel } from "@/lib/order-status";
 import { store } from "@/lib/config";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
 import { OrderProgress } from "@/components/account/order-timeline";
 import { OrderActions } from "@/components/account/order-actions";
 import { Badge } from "@/components/ui/misc";
 import { buttonClass } from "@/components/ui/button";
+import { getT } from "@/lib/i18n/server";
+import { rich } from "@/lib/i18n/rich";
 
 export const metadata: Metadata = { title: "Order details", robots: { index: false } };
 
 type Addr = { pickup?: boolean; store?: string; storeAddress?: string; hours?: string | null; storePhone?: string | null; fullName: string; phone: string; line1: string; line2?: string | null; city: string; district?: string; state: string; postalCode?: string | null; zone?: string; etaMaxDays?: number };
 
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ placed?: string }> }) {
-  const [{ id }, { placed }, user] = await Promise.all([params, searchParams, getCurrentUser()]);
+  const [{ id }, { placed }, user, { t }] = await Promise.all([params, searchParams, getCurrentUser(), getT()]);
   const order = await db.order.findUnique({ where: { id }, include: { items: true, events: { orderBy: { createdAt: "asc" } } } });
   // Account orders are private to their owner (and staff); guest orders are reachable via their unguessable link.
   if (!order || !canViewOrder(order, user)) notFound();
@@ -37,48 +38,48 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       {placed && (
         <div className="mb-10 flex flex-col items-center text-center">
           <CheckCircle2 className="h-14 w-14 text-success" strokeWidth={1.3} />
-          <h1 className="mt-4 font-display text-4xl">Thank you{a?.fullName ? `, ${a.fullName.split(" ")[0]}` : ""}!</h1>
-          <p className="mt-2 max-w-md text-[15px] text-muted">Your order <b className="text-ink">{formatOrderNumber(order.number)}</b> is confirmed. We&apos;ve sent the details to {order.email}.</p>
-          {!order.userId && <p className="mt-3 max-w-md text-[13.5px] text-muted">Bookmark this page to track your order, or <Link href="/register" className="underline">create an account</Link> to keep all your orders in one place.</p>}
+          <h1 className="mt-4 font-display text-4xl">{a?.fullName ? t("ord.thanksName", { name: a.fullName.split(" ")[0] }) : t("ord.thanks")}</h1>
+          <p className="mt-2 max-w-md text-[15px] text-muted">{rich(t("ord.confirmed", { email: order.email }), { number: <b className="text-ink">{formatOrderNumber(order.number)}</b> })}</p>
+          {!order.userId && <p className="mt-3 max-w-md text-[13.5px] text-muted">{rich(t("ord.guest"), { link: <Link href="/register" className="underline">{t("ord.createAccount")}</Link> })}</p>}
         </div>
       )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {!placed && <h1 className="font-display text-3xl">Order {formatOrderNumber(order.number)}</h1>}
-          <p className="mt-1 text-[14px] text-muted">Placed on {formatDate(order.createdAt)} · {order.items.reduce((s, i) => s + i.quantity, 0)} items</p>
+          {!placed && <h1 className="font-display text-3xl">{t("ord.title", { number: formatOrderNumber(order.number) })}</h1>}
+          <p className="mt-1 text-[14px] text-muted">{t("ord.placedOn", { date: formatDate(order.createdAt), n: order.items.reduce((s, i) => s + i.quantity, 0) })}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "success" : "neutral"}>{statusLabel(order.status, pickup)}</Badge>
-          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? (pickup ? "Pay at the shop" : "Cash on delivery") : "Prepaid"} · {order.paymentStatus.toLowerCase()}</Badge>
+          <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "success" : "neutral"}>{t(pickup && order.status === "PACKED" ? "status.readyForPickup" : pickup && order.status === "DELIVERED" ? "status.collected" : `status.${order.status}`)}</Badge>
+          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? (pickup ? t("co.payAtShop") : t("pay.cod")) : t("ord.prepaid")} · {t(`paystatus.${order.paymentStatus}`)}</Badge>
         </div>
       </div>
 
       <div className="mt-8 border border-line bg-white p-5 md:p-8">
-        <OrderProgress status={order.status} events={order.events} pickup={pickup} />
+        <OrderProgress status={order.status} events={order.events} pickup={pickup} t={t} />
         {pickup && order.status === "PACKED" && (
-          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>Ready at <b>{a.store}</b>. Show your order number at the counter{order.paymentStatus !== "PAID" ? ` and pay ${formatPrice(order.total)}` : ""}.</span></p>
+          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>{rich(order.paymentStatus !== "PAID" ? t("ord.readyAtPay", { amount: formatPrice(order.total) }) : t("ord.readyAt"), { store: <b>{a.store}</b> })}</span></p>
         )}
         {pickup && ["PENDING", "CONFIRMED"].includes(order.status) && (
-          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>We&apos;ll text you when it&apos;s ready to collect at <b>{a.store}</b>.</span></p>
+          <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>{rich(t("ord.willText"), { store: <b>{a.store}</b> })}</span></p>
         )}
         {!pickup && !["DELIVERED", "CANCELLED", "RETURNED", "RETURN_REQUESTED"].includes(order.status) && (
-          <p className="mt-6 flex items-center gap-2 text-[14px]"><Truck className="h-4 w-4" /> Estimated delivery by <b>{formatDate(eta)}</b></p>
+          <p className="mt-6 flex items-center gap-2 text-[14px]"><Truck className="h-4 w-4" /> <span>{rich(t("ord.eta"), { date: <b>{formatDate(eta)}</b> })}</span></p>
         )}
         {order.trackingNumber && <p className="mt-2 flex items-center gap-2 text-[14px] text-muted"><Package className="h-4 w-4" /> {order.carrier} · AWB {order.trackingNumber}</p>}
       </div>
 
       <div className="mt-8 grid gap-8 md:grid-cols-12">
         <div className="md:col-span-7">
-          <h2 className="mb-4 text-[16px] font-semibold">Items</h2>
+          <h2 className="mb-4 text-[16px] font-semibold">{t("ord.items")}</h2>
           <ul className="divide-y divide-line border-y border-line">
             {order.items.map((it) => (
               <li key={it.id} className="flex gap-4 py-4">
                 <Link href={`/p/${it.slug}`} className="relative h-24 w-[72px] shrink-0 bg-cloud">{it.image && <Image src={it.image} alt="" fill sizes="72px" className="object-cover" />}</Link>
                 <div className="flex-1 text-[14px]">
                   <Link href={`/p/${it.slug}`} className="font-medium hover:text-accent">{it.name}</Link>
-                  <p className="text-muted">{it.color} · Size {it.size} · Qty {it.quantity}</p>
-                  {order.status === "DELIVERED" && <Link href={`/p/${it.slug}#reviews`} className="mt-1 inline-block text-[13px] underline underline-offset-4">Write a review</Link>}
+                  <p className="text-muted">{t("ord.itemLine", { color: it.color, size: it.size, qty: it.quantity })}</p>
+                  {order.status === "DELIVERED" && <Link href={`/p/${it.slug}#reviews`} className="mt-1 inline-block text-[13px] underline underline-offset-4">{t("ord.review")}</Link>}
                 </div>
                 <p className="text-[14px] font-medium">{formatPrice(it.unitPrice * it.quantity)}</p>
               </li>
@@ -88,24 +89,24 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </div>
         <div className="space-y-6 md:col-span-5">
           <div className="border border-line bg-white p-5">
-            <h3 className="mb-2 text-[14px] font-semibold">{pickup ? "Pickup at" : "Delivery address"}</h3>
-            {pickup && <p className="text-[14px] leading-relaxed text-ink-soft"><b className="text-ink">{a.store}</b><br />{a.storeAddress}{a.hours && <><br />{a.hours}</>}{a.storePhone && <><br />{a.storePhone}</>}<br /><span className="text-muted">Collecting: {a.fullName}</span></p>}
+            <h3 className="mb-2 text-[14px] font-semibold">{pickup ? t("ord.pickupAt") : t("co.address")}</h3>
+            {pickup && <p className="text-[14px] leading-relaxed text-ink-soft"><b className="text-ink">{a.store}</b><br />{a.storeAddress}{a.hours && <><br />{a.hours}</>}{a.storePhone && <><br />{a.storePhone}</>}<br /><span className="text-muted">{t("ord.collecting", { name: a.fullName })}</span></p>}
             {!pickup && a && <p className="text-[14px] leading-relaxed text-ink-soft">{a.fullName}<br />{addressLines(a).map((l) => <span key={l}>{l}<br /></span>)}{a.phone}</p>}
           </div>
           <div className="border border-line bg-white p-5">
-            <h3 className="mb-3 text-[14px] font-semibold">Payment summary</h3>
+            <h3 className="mb-3 text-[14px] font-semibold">{t("ord.paySummary")}</h3>
             <dl className="space-y-2 text-[14px]">
-              <div className="flex justify-between"><dt>Subtotal</dt><dd>{formatPrice(order.subtotal)}</dd></div>
-              {order.discount > 0 && <div className="flex justify-between text-success"><dt>Discount {order.couponCode && `(${order.couponCode})`}</dt><dd>−{formatPrice(order.discount)}</dd></div>}
-              {order.pointsDiscount > 0 && <div className="flex justify-between text-success"><dt>Asson points ({order.pointsRedeemed})</dt><dd>−{formatPrice(order.pointsDiscount)}</dd></div>}
-              <div className="flex justify-between"><dt>{pickup ? "Pickup" : "Delivery"}</dt><dd>{order.shippingFee ? formatPrice(order.shippingFee) : "Free"}</dd></div>
-              <div className="flex justify-between border-t border-line pt-2 text-[15px] font-semibold"><dt>Total</dt><dd>{formatPrice(order.total)}</dd></div>
+              <div className="flex justify-between"><dt>{t("bag.subtotal")}</dt><dd>{formatPrice(order.subtotal)}</dd></div>
+              {order.discount > 0 && <div className="flex justify-between text-success"><dt>{order.couponCode ? t("ord.discountCode", { code: order.couponCode }) : t("sum.discount")}</dt><dd>−{formatPrice(order.discount)}</dd></div>}
+              {order.pointsDiscount > 0 && <div className="flex justify-between text-success"><dt>{t("ord.points", { n: order.pointsRedeemed })}</dt><dd>−{formatPrice(order.pointsDiscount)}</dd></div>}
+              <div className="flex justify-between"><dt>{pickup ? t("sum.pickup") : t("sum.delivery")}</dt><dd>{order.shippingFee ? formatPrice(order.shippingFee) : t("ship.free")}</dd></div>
+              <div className="flex justify-between border-t border-line pt-2 text-[15px] font-semibold"><dt>{t("sum.total")}</dt><dd>{formatPrice(order.total)}</dd></div>
             </dl>
           </div>
-          <p className="text-[13px] text-muted">Need help? Call {store.supportPhone} or email {store.supportEmail} with your order number.</p>
+          <p className="text-[13px] text-muted">{t("ord.help", { phone: store.supportPhone, email: store.supportEmail })}</p>
         </div>
       </div>
-      {placed && <div className="mt-12 text-center"><Link href="/shop" className={buttonClass("secondary")}>Continue shopping</Link></div>}
+      {placed && <div className="mt-12 text-center"><Link href="/shop" className={buttonClass("secondary")}>{t("bag.continue")}</Link></div>}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { ProductRail } from "@/components/product/product-rail";
 import { store } from "@/lib/config";
 import { getDeliveryRates } from "@/lib/delivery";
 import { absoluteImageUrl } from "@/lib/media-url";
+import { getT } from "@/lib/i18n/server";
 
 const siteBase = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -39,13 +40,14 @@ export default async function ProductPage({ params }: Props) {
   if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
   const inLooks = await getLookbookForProduct(product.id);
 
-  const [stock, related, reviews, user, rates, look] = await Promise.all([
+  const [stock, related, reviews, user, rates, look, { t }] = await Promise.all([
     getLiveStock(product.id),
     getRelated(product.id, product.categoryId, product.gender),
     getReviews(product.id),
     getCurrentUser(),
     getDeliveryRates(),
     getLook(product.id),
+    getT(),
   ]);
   const lookIds = new Set(look.map((l) => l.id));
   const variants = product.variants.map((v) => ({ id: v.id, color: v.color, colorHex: v.colorHex, size: v.size, stock: stock[v.id] ?? v.stock }));
@@ -70,7 +72,7 @@ export default async function ProductPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="container-page pt-4 md:pt-6">
         <nav aria-label="Breadcrumb" className="mb-4 hidden flex-wrap items-center gap-1 text-[13px] text-muted md:flex">
-          <Link href="/" className="hover:text-ink">Home</Link>
+          <Link href="/" className="hover:text-ink">{t("cat.home")}</Link>
           {cat.parent && <><ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.parent.slug}`} className="hover:text-ink">{cat.parent.name}</Link></>}
           <ChevronRight className="h-3.5 w-3.5" /><Link href={`/c/${cat.slug}`} className="hover:text-ink">{cat.name}</Link>
           <ChevronRight className="h-3.5 w-3.5" /><span className="text-ink">{product.name}</span>
@@ -86,13 +88,13 @@ export default async function ProductPage({ params }: Props) {
           }}
         />
       </div>
-      {look.length > 0 && <div className="mt-16"><ProductRail eyebrow="Styled by Asson" title="Complete the look" products={look} /></div>}
+      {look.length > 0 && <div className="mt-16"><ProductRail eyebrow={t("home.styledBy")} title={t("pdp.completeLook")} products={look} /></div>}
       {inLooks.length > 0 && (
         <p className="mt-6 text-[14px] text-ink-soft">
-          Seen in the Lookbook: {inLooks.map((l, i) => <span key={l.slug}>{i > 0 && " · "}<Link href={`/lookbook/${l.slug}`} className="font-medium underline underline-offset-4">{l.title}</Link></span>)}
+          {t("pdp.inLookbook")} {inLooks.map((l, i) => <span key={l.slug}>{i > 0 && " · "}<Link href={`/lookbook/${l.slug}`} className="font-medium underline underline-offset-4">{l.title}</Link></span>)}
         </p>
       )}
-      <div className={look.length ? "" : "mt-16"}><ProductRail title="You may also like" products={related.filter((r) => !lookIds.has(r.id))} /></div>
+      <div className={look.length ? "" : "mt-16"}><ProductRail title={t("pdp.alsoLike")} products={related.filter((r) => !lookIds.has(r.id))} /></div>
       <RecentlyViewed currentId={product.id} />
       <Reviews productId={product.id} avg={product.ratingAvg} count={product.ratingCount} data={reviews} canReview={!!user} />
     </>

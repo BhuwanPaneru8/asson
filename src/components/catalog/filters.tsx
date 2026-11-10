@@ -7,6 +7,8 @@ import type { ProductFilters } from "@/lib/catalog";
 import { Sheet } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn, formatNumber, formatPrice } from "@/lib/utils";
+import { useT } from "@/components/site/i18n-provider";
+import type { T } from "@/lib/i18n";
 
 type Facets = { colors: { name: string; hex: string }[]; sizes: string[]; brands: { name: string; count: number }[]; priceMin: number; priceMax: number };
 
@@ -57,15 +59,16 @@ function Section({ title, children, defaultOpen = true, count }: { title: string
   );
 }
 
-const PRICE_BANDS = [
-  { label: "Under Rs. 1,500", min: undefined, max: 1499 },
+const priceBands = (t: T) => [
+  { label: t("f.under", { amount: "Rs. 1,500" }), min: undefined, max: 1499 },
   { label: "Rs. 1,500 – 3,000", min: 1500, max: 3000 },
   { label: "Rs. 3,000 – 6,000", min: 3000, max: 6000 },
-  { label: "Over Rs. 6,000", min: 6000, max: undefined },
+  { label: t("f.over", { amount: "Rs. 6,000" }), min: 6000, max: undefined },
 ];
 
 export function FilterPanel({ facets, filters }: { facets: Facets; filters: ProductFilters }) {
   const { update } = useFilters();
+  const { t } = useT();
   const [min, setMin] = useState(filters.minPrice ? String(filters.minPrice / 100) : "");
   const [max, setMax] = useState(filters.maxPrice ? String(filters.maxPrice / 100) : "");
   const minR = filters.minPrice ? filters.minPrice / 100 : undefined;
@@ -75,17 +78,17 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
     <div>
       <div className="space-y-3 border-b border-line pb-4">
         <label className="flex cursor-pointer items-center justify-between text-[14px]">
-          <span>In stock only</span>
+          <span>{t("f.inStock")}</span>
           <Toggle on={!!filters.inStock} onClick={() => update((p) => (filters.inStock ? p.delete("stock") : p.set("stock", "1")))} />
         </label>
         <label className="flex cursor-pointer items-center justify-between text-[14px]">
-          <span>On sale</span>
+          <span>{t("nav.onSale")}</span>
           <Toggle on={!!filters.sale} onClick={() => update((p) => (filters.sale ? p.delete("sale") : p.set("sale", "1")))} />
         </label>
       </div>
 
       {facets.sizes.length > 0 && (
-        <Section title="Size" count={filters.sizes?.length}>
+        <Section title={t("f.size")} count={filters.sizes?.length}>
           <div className="grid grid-cols-4 gap-1.5">
             {facets.sizes.map((s) => {
               const on = filters.sizes?.includes(s);
@@ -96,7 +99,7 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
       )}
 
       {facets.colors.length > 0 && (
-        <Section title="Colour" count={filters.colors?.length}>
+        <Section title={t("f.colour")} count={filters.colors?.length}>
           <div className="grid grid-cols-2 gap-x-2 gap-y-2">
             {facets.colors.map((c) => {
               const on = filters.colors?.includes(c.name);
@@ -113,9 +116,9 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
         </Section>
       )}
 
-      <Section title="Price">
+      <Section title={t("f.price")}>
         <div className="space-y-2">
-          {PRICE_BANDS.map((b) => {
+          {priceBands(t).map((b) => {
             const on = minR === b.min && maxR === b.max;
             return (
               <button key={b.label} onClick={() => update((p) => { if (on) { p.delete("min"); p.delete("max"); } else { if (b.min) p.set("min", String(b.min)); else p.delete("min"); if (b.max) p.set("max", String(b.max)); else p.delete("max"); } })} className="flex w-full items-center gap-2.5 text-left text-[14px]">
@@ -126,15 +129,15 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
           })}
         </div>
         <form className="mt-3 flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); update((p) => { if (min) p.set("min", min); else p.delete("min"); if (max) p.set("max", max); else p.delete("max"); }); }}>
-          <input value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder={`Rs ${Math.floor(facets.priceMin / 100)}`} className="h-9 w-full border border-line bg-white px-2 text-[13px] outline-none focus:border-ink" aria-label="Minimum price" />
+          <input value={min} onChange={(e) => setMin(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder={`Rs ${Math.floor(facets.priceMin / 100)}`} className="h-9 w-full border border-line bg-white px-2 text-[13px] outline-none focus:border-ink" aria-label={t("f.min")} />
           <span className="text-muted">–</span>
-          <input value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder={`Rs ${Math.ceil(facets.priceMax / 100)}`} className="h-9 w-full border border-line bg-white px-2 text-[13px] outline-none focus:border-ink" aria-label="Maximum price" />
-          <button className="h-9 shrink-0 border border-ink px-3 text-[13px] font-medium hover:bg-ink hover:text-white">Go</button>
+          <input value={max} onChange={(e) => setMax(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder={`Rs ${Math.ceil(facets.priceMax / 100)}`} className="h-9 w-full border border-line bg-white px-2 text-[13px] outline-none focus:border-ink" aria-label={t("f.max")} />
+          <button className="h-9 shrink-0 border border-ink px-3 text-[13px] font-medium hover:bg-ink hover:text-white">{t("f.go")}</button>
         </form>
       </Section>
 
       {facets.brands.length > 1 && (
-        <Section title="Brand" count={filters.brands?.length}>
+        <Section title={t("f.brand")} count={filters.brands?.length}>
           <div className="space-y-2">
             {facets.brands.map((b) => {
               const on = filters.brands?.includes(b.name);
@@ -169,14 +172,15 @@ function isLight(hex: string) {
 
 export function ActiveFilters({ filters }: { filters: ProductFilters }) {
   const { update } = useFilters();
+  const { t } = useT();
   const chips: { label: string; remove: (p: URLSearchParams) => void }[] = [];
-  filters.sizes?.forEach((s) => chips.push({ label: `Size ${s}`, remove: (p) => toggleList(p, "size", s) }));
+  filters.sizes?.forEach((s) => chips.push({ label: t("f.sizeChip", { s }), remove: (p) => toggleList(p, "size", s) }));
   filters.colors?.forEach((c) => chips.push({ label: c, remove: (p) => toggleList(p, "color", c) }));
   filters.brands?.forEach((b) => chips.push({ label: b, remove: (p) => toggleList(p, "brand", b) }));
   if (filters.minPrice || filters.maxPrice)
-    chips.push({ label: `${filters.minPrice ? formatPrice(filters.minPrice) : "Rs. 0"} – ${filters.maxPrice ? formatPrice(filters.maxPrice) : "any"}`, remove: (p) => { p.delete("min"); p.delete("max"); } });
-  if (filters.sale) chips.push({ label: "On sale", remove: (p) => p.delete("sale") });
-  if (filters.inStock) chips.push({ label: "In stock", remove: (p) => p.delete("stock") });
+    chips.push({ label: `${filters.minPrice ? formatPrice(filters.minPrice) : "Rs. 0"} – ${filters.maxPrice ? formatPrice(filters.maxPrice) : t("f.any")}`, remove: (p) => { p.delete("min"); p.delete("max"); } });
+  if (filters.sale) chips.push({ label: t("nav.onSale"), remove: (p) => p.delete("sale") });
+  if (filters.inStock) chips.push({ label: t("f.inStockChip"), remove: (p) => p.delete("stock") });
   if (!chips.length) return null;
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -185,16 +189,17 @@ export function ActiveFilters({ filters }: { filters: ProductFilters }) {
           {c.label} <X className="h-3.5 w-3.5" />
         </button>
       ))}
-      <button onClick={() => update((p) => ["size", "color", "brand", "min", "max", "sale", "stock"].forEach((k) => p.delete(k)))} className="px-2 text-[13px] font-medium underline underline-offset-4">Clear all</button>
+      <button onClick={() => update((p) => ["size", "color", "brand", "min", "max", "sale", "stock"].forEach((k) => p.delete(k)))} className="px-2 text-[13px] font-medium underline underline-offset-4">{t("f.clearAll")}</button>
     </div>
   );
 }
 
 export function SortSelect({ sorts, value }: { sorts: { id: string; label: string }[]; value: string }) {
   const { update } = useFilters();
+  const { t } = useT();
   return (
     <label className="relative flex items-center">
-      <span className="sr-only">Sort by</span>
+      <span className="sr-only">{t("f.sortBy")}</span>
       <select value={value} onChange={(e) => update((p) => p.set("sort", e.target.value))} className="h-10 appearance-none border border-line bg-white pl-3 pr-9 text-[14px] outline-none hover:border-ink focus:border-ink">
         {sorts.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
       </select>
@@ -206,13 +211,14 @@ export function SortSelect({ sorts, value }: { sorts: { id: string; label: strin
 export function MobileFilterButton({ facets, filters, total }: { facets: Facets; filters: ProductFilters; total: number }) {
   const [open, setOpen] = useState(false);
   const { pending } = useFilters();
+  const { t } = useT();
   const n = (filters.sizes?.length ?? 0) + (filters.colors?.length ?? 0) + (filters.brands?.length ?? 0) + (filters.minPrice || filters.maxPrice ? 1 : 0) + (filters.sale ? 1 : 0) + (filters.inStock ? 1 : 0);
   return (
     <>
       <button onClick={() => setOpen(true)} className="flex h-10 items-center gap-2 border border-line bg-white px-3 text-[14px] lg:hidden">
-        <SlidersHorizontal className="h-4 w-4" /> Filter{n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] text-white">{n}</span>}
+        <SlidersHorizontal className="h-4 w-4" /> {t("f.filter")}{n > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] text-white">{n}</span>}
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} side="bottom" title="Filter" footer={<div className="p-4"><Button className="w-full" size="lg" loading={pending} onClick={() => setOpen(false)}>Show {formatNumber(total)} results</Button></div>}>
+      <Sheet open={open} onClose={() => setOpen(false)} side="bottom" title={t("f.filter")} footer={<div className="p-4"><Button className="w-full" size="lg" loading={pending} onClick={() => setOpen(false)}>{t("f.show", { n: formatNumber(total) })}</Button></div>}>
         <div className="px-5"><FilterPanel facets={facets} filters={filters} /></div>
       </Sheet>
     </>

@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
+import { localiseResult } from "@/lib/i18n/server";
 
 const schema = z.object({ variantId: z.string().min(1).max(40), phone: z.string().trim().regex(/^9[678]\d{8}$/, "Enter a 10-digit Nepali mobile number") });
 
-export async function subscribeStockAlert(input: { variantId: string; phone: string }): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+async function subscribeStockAlertImpl(input: { variantId: string; phone: string }): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the number." };
   const { variantId, phone } = parsed.data;
@@ -26,3 +27,6 @@ export async function subscribeStockAlert(input: { variantId: string; phone: str
   });
   return { ok: true, message: "Done — we'll text you as soon as it's back." };
 }
+
+// Shoppers see these messages in their language (the logic above stays in English; see lib/i18n localise).
+export async function subscribeStockAlert(...args: Parameters<typeof subscribeStockAlertImpl>) { return localiseResult(await subscribeStockAlertImpl(...args)); }

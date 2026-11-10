@@ -13,8 +13,8 @@
   --color-warn: #8f5a0f; /* 5.5:1 on paper — AA for small text */
   --color-danger: #b42318;
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-display-serif), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), var(--font-deva), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-serif), var(--font-deva-serif), ui-serif, Georgia, serif;
 
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-in-right: slide-in-right 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -47,3 +47,7 @@
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
+
+/* Devanagari joins letters into clusters; letter-spacing (our tracked eyebrow labels) pulls them apart.
+   Uppercase does nothing to Nepali, so the labels simply sit at normal spacing. */
+html:lang(ne) [class*="tracking-"] { letter-spacing: normal; }
