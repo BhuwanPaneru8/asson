@@ -23,7 +23,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, perm: "catalog.view", badgeKey: "stock" },
   { href: "/admin/production", label: "Production", icon: Factory, perm: "production" },
   { href: "/admin/people", label: "People", icon: UsersRound, perm: "people" },
-  { href: "/admin/me", label: "My time", icon: Clock, perm: "self.time" },
+  { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time" },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers" },
   { href: "/admin/replenishment", label: "Replenishment", icon: RefreshCw, perm: "transfers" },
   { href: "/admin/counts", label: "Stock counts", icon: ClipboardCheck, perm: "stock.count" },

@@ -3,7 +3,7 @@ import { signIn } from "./helpers";
 
 test("cashier clocks in and asks for leave; the manager sees them working and approves", async ({ browser }) => {
   const cashier = await (await browser.newContext()).newPage();
-  await signIn(cashier, "cashier", "/admin/me");
+  await signIn(cashier, "cashier", "/admin/time");
   await cashier.getByRole("button", { name: /Clock in/ }).click();
   await expect(cashier.getByText(/Clocked in at/).first()).toBeVisible();
   await cashier.getByLabel("Type").selectOption("SICK");
