@@ -89,6 +89,12 @@ export const store = {
     ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
   },
   /** Own production (Admin → Production). Owner to confirm. */
+  /** Store visit audits (Admin → Store visits). */
+  visits: {
+    everyDays: 30, // a shop not visited for longer is flagged
+    fixDays: 7, // a failed item must be fixed within this many days
+    criticalFixDays: 2, // ... or this many if it's critical (safety, cash, legal)
+  },
   /** Customer care queue (Admin → Customer care). First reply due within these hours. */
   care: {
     replyHours: { URGENT: 2, NORMAL: 8, LOW: 24 },

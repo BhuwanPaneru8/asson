@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { announcementsFor, checklistsAt } from "@/lib/ops";
 import { issueRef, openIssuesAt, STATUS_LABEL } from "@/lib/issues";
 import { vmRef, vmToDo } from "@/lib/vm";
+import { visitRef, visitToDo } from "@/lib/visits";
 import { scopeFor, storeFilter } from "@/lib/scope";
 import { formatDateTime } from "@/lib/utils";
 import { Card, PageHeader } from "@/components/admin/ui";
@@ -17,7 +18,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const locations = await db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } });
   const want = (await searchParams).store;
   const here = locations.find((l) => l.id === want) ?? locations[0];
-  const [news, lists, issues, displays] = await Promise.all([announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([])]);
+  const [news, lists, issues, displays, visits] = await Promise.all([announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] })]);
   const unread = news.filter((a) => a.requiresAck && !a.readAt);
   return (
     <>
@@ -28,6 +29,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           {!here ? <p className="text-[14px] text-muted">You aren&apos;t assigned to a location yet.</p>
             : !lists.length ? <Card><p className="p-5 text-[14px] text-muted">No checklists for {here.name} today.</p></Card>
             : lists.map((c) => <ChecklistCard key={c.templateId} templateId={c.templateId} storeId={here.id} name={c.name} dueBy={c.dueBy} items={c.items} completed={!!c.completedAt} />)}
+          {(visits.actions.length > 0 || visits.toAck.length > 0) && (
+            <Card title={`From store visits · ${visits.actions.length} to fix`}>
+              <ul className="divide-y divide-line">
+                {visits.toAck.map((v) => <li key={`ack-${v.number}`}><Link href={`/admin/visits/${v.number}`} className="flex items-center justify-between gap-3 px-5 py-3 text-[14px] hover:bg-cloud/40"><span><span className="text-muted">{visitRef(v.number)}</span> New visit report{v.score != null ? ` · ${v.score}%` : ""}</span><span className="shrink-0 text-[12.5px] font-medium">read and acknowledge</span></Link></li>)}
+                {visits.actions.map((a) => <li key={a.id}><Link href={`/admin/visits/${a.visit.number}`} className="flex items-center justify-between gap-3 px-5 py-3 text-[14px] hover:bg-cloud/40"><span className="min-w-0 truncate">{a.critical && <span className="mr-1 text-danger">●</span>}{a.text}</span><span className={`shrink-0 text-[12.5px] ${a.overdue ? "font-medium text-danger" : "text-muted"}`}>{a.overdue ? "overdue" : `by ${formatDateTime(a.dueAt)}`}</span></Link></li>)}
+              </ul>
+            </Card>
+          )}
           {displays.length > 0 && (
             <Card title={`Display photos to send · ${displays.length}`}>
               <ul className="divide-y divide-line">{displays.map((v) => (

@@ -543,6 +543,7 @@ model Store {
   issues           Issue[]
   careCases        CareCase[]
   vmSubmissions    VmSubmission[]
+  visits           StoreVisit[]
 
   @@index([active, priority])
 }
@@ -1872,4 +1873,80 @@ model VmEvent {
   createdAt    DateTime     @default(now())
 
   @@index([submissionId, createdAt])
+}
+
+/// What an area manager checks on a store visit: sections of yes/no items, some critical.
+model VisitTemplate {
+  id        String       @id @default(cuid())
+  name      String
+  /// [{ name, items: [{ text, critical? }] }]
+  sections  Json
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  visits    StoreVisit[]
+}
+
+enum VisitStatus {
+  DRAFT // being filled in during the walk-through
+  SUBMITTED // done; waiting for the shop to acknowledge
+  ACKNOWLEDGED // the shop has read it
+}
+
+/// One walk-through of a shop. Items are a snapshot of the template, so editing it never rewrites old visits.
+model StoreVisit {
+  id            String        @id @default(cuid())
+  number        Int           @unique @default(autoincrement())
+  templateId    String
+  template      VisitTemplate @relation(fields: [templateId], references: [id])
+  storeId       String
+  store         Store         @relation(fields: [storeId], references: [id])
+  auditorId     String
+  auditorName   String
+  status        VisitStatus   @default(DRAFT)
+  /// [{ section, text, critical, result?: PASS|FAIL|NA, note?, photos? }]
+  items         Json
+  summary       String        @default("")
+  score         Int?
+  criticalFails Int           @default(0)
+  startedAt     DateTime      @default(now())
+  submittedAt   DateTime?
+  ackById       String?
+  ackByName     String?
+  ackAt         DateTime?
+  ackNote       String        @default("")
+  actions       VisitAction[]
+
+  @@index([storeId, submittedAt])
+  @@index([status])
+}
+
+enum VisitActionStatus {
+  OPEN
+  DONE // the shop says it's fixed
+  VERIFIED // the auditor or HQ agrees
+}
+
+/// A failed item from a visit that the shop must fix by a date.
+model VisitAction {
+  id         String            @id @default(cuid())
+  visitId    String
+  visit      StoreVisit        @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  storeId    String
+  itemIndex  Int
+  text       String
+  note       String            @default("")
+  critical   Boolean           @default(false)
+  dueAt      DateTime
+  status     VisitActionStatus @default(OPEN)
+  doneById   String?
+  doneByName String?
+  doneAt     DateTime?
+  doneNote   String            @default("")
+  donePhotos String[]
+  verifiedAt DateTime?
+  createdAt  DateTime          @default(now())
+
+  @@unique([visitId, itemIndex])
+  @@index([storeId, status, dueAt])
 }
