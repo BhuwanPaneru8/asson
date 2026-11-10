@@ -544,6 +544,8 @@ model Store {
   careCases        CareCase[]
   vmSubmissions    VmSubmission[]
   visits           StoreVisit[]
+  expenses         Expense[]
+  recurringCosts   RecurringCost[]
 
   @@index([active, priority])
 }
@@ -913,10 +915,33 @@ model Expense {
   amount      Int
   description String
   paidVia     String?
+  /// the location this cost belongs to; null = HQ / central
+  storeId     String?
+  store       Store?          @relation(fields: [storeId], references: [id])
+  /// what posted it automatically, e.g. "payroll:2026-11:<store>", "recurring:<id>:2026-11" (unique: never posted twice)
+  source      String?         @unique
   createdById String
   createdAt   DateTime        @default(now())
 
   @@index([date])
+  @@index([storeId, date])
+}
+
+/// A cost that repeats every month (rent, internet, security, cleaning): posted to Expenses automatically.
+model RecurringCost {
+  id          String          @id @default(cuid())
+  storeId     String?
+  store       Store?          @relation(fields: [storeId], references: [id])
+  category    ExpenseCategory
+  amount      Int
+  description String
+  /// YYYY-MM: first and (optionally) last month it applies to
+  startMonth  String
+  endMonth    String?
+  active      Boolean         @default(true)
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }
 
 model OrderEvent {

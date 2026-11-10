@@ -138,8 +138,27 @@ export async function markPaid(tx: Tx, owner: Actor, month: string, paidVia: str
   if (!upd.count) throw new PayrollError("Approve the payroll before marking it paid.");
   const gross = r.slips.reduce((s, x) => s + x.gross, 0), employer = r.slips.reduce((s, x) => s + x.ssfEmployer, 0);
   const net = r.slips.reduce((s, x) => s + x.net, 0), tds = r.slips.reduce((s, x) => s + x.incomeTax, 0), ssf = r.slips.reduce((s, x) => s + x.ssfEmployee + x.ssfEmployer, 0);
-  await tx.expense.create({ data: { date: today, category: "SALARIES", amount: gross, description: `Payroll ${month}: gross salaries (${r.slips.length} people; net paid ${formatPrice(net)}, TDS ${formatPrice(tds)} to deposit)`, paidVia, createdById: owner.id } });
-  if (employer) await tx.expense.create({ data: { date: today, category: "SALARIES", amount: employer, description: `Payroll ${month}: employer SSF 20% (deposit ${formatPrice(ssf)} to SSF incl. employee share)`, paidVia, createdById: owner.id } });
+  // cost goes to the location each person works at (split evenly if several; HQ if all/none), so the shop P&L
+  // carries its own staff; `source` makes posting twice impossible
+  const people = await tx.user.findMany({ where: { id: { in: r.slips.map((x) => x.userId) } }, select: { id: true, allLocations: true, locations: { select: { storeId: true } } } });
+  const where = new Map(people.map((p) => [p.id, p.allLocations || !p.locations.length ? [null] : p.locations.map((l) => l.storeId).sort()]));
+  const byLoc = new Map<string | null, { gross: number; employer: number; people: number }>();
+  for (const x of r.slips) {
+    const locs = where.get(x.userId) ?? [null];
+    locs.forEach((loc, i) => {
+      // even split, the remainder to the first location so nothing is lost to rounding
+      const part = (v: number) => Math.floor(v / locs.length) + (i === 0 ? v % locs.length : 0);
+      const b = byLoc.get(loc) ?? { gross: 0, employer: 0, people: 0 };
+      b.gross += part(x.gross); b.employer += part(x.ssfEmployer); b.people += 1;
+      byLoc.set(loc, b);
+    });
+  }
+  const names = new Map((await tx.store.findMany({ where: { id: { in: [...byLoc.keys()].filter((k): k is string => !!k) } }, select: { id: true, name: true } })).map((x) => [x.id, x.name]));
+  for (const [loc, b] of [...byLoc.entries()].sort(([a], [z]) => String(a).localeCompare(String(z)))) {
+    const at = loc ? names.get(loc) ?? "location" : "HQ";
+    await tx.expense.create({ data: { date: today, category: "SALARIES", amount: b.gross, storeId: loc, source: `payroll:${month}:${loc ?? "hq"}:gross`, description: `Payroll ${month}: gross salaries, ${at} (${b.people} people; whole run net ${formatPrice(net)}, TDS ${formatPrice(tds)} to deposit)`, paidVia, createdById: owner.id } });
+    if (b.employer) await tx.expense.create({ data: { date: today, category: "SALARIES", amount: b.employer, storeId: loc, source: `payroll:${month}:${loc ?? "hq"}:ssf`, description: `Payroll ${month}: employer SSF 20%, ${at} (deposit ${formatPrice(ssf)} to SSF for the whole run)`, paidVia, createdById: owner.id } });
+  }
   await audit(tx, owner, { action: "payroll.paid", entity: ["PayrollRun", r.id], summary: `Payroll ${month} paid via ${paidVia}: net ${formatPrice(net)}, TDS ${formatPrice(tds)}, SSF ${formatPrice(ssf)}; cost ${formatPrice(gross + employer)} posted to expenses` });
   return { gross, employer, net, tds, ssf };
 }
