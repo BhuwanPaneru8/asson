@@ -205,6 +205,8 @@ model User {
   locations          StaffLocation[]
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
+  employment         Employment?
+  payslips           Payslip[]
 
   @@index([role])
   @@index([createdAt])
@@ -1476,4 +1478,89 @@ model LeaveRequest {
 
   @@index([userId, fromDate])
   @@index([status, createdAt])
+}
+
+// ---------- People: payroll (Phase 12b) ----------
+
+/// Salary terms for a staff member (monthly, paisa). Owner-only.
+model Employment {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  basic       Int
+  /// dearness and other fixed allowances per month
+  allowance   Int      @default(0)
+  inSsf       Boolean  @default(true)
+  /// tax bands: married couples have their own
+  married     Boolean  @default(false)
+  pan         String?
+  bankAccount String?
+  joinedOn    String?
+  active      Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+/// Income-tax bands for one Nepal fiscal year (e.g. "2083/84"). Payroll refuses to run until confirmed.
+model PayrollTaxYear {
+  id               String    @id @default(cuid())
+  fiscalYear       String    @unique
+  /// [{ upTo: rupees | null, rate: percent }]
+  single           Json
+  married          Json
+  ssfFirstBandZero Boolean   @default(true)
+  confirmedById    String?
+  confirmedAt      DateTime?
+  source           String?
+  updatedAt        DateTime  @updatedAt
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+model PayrollRun {
+  id           String        @id @default(cuid())
+  /// Gregorian month YYYY-MM (the timesheet month)
+  month        String        @unique
+  fiscalYear   String
+  status       PayrollStatus @default(DRAFT)
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  paidAt       DateTime?
+  createdAt    DateTime      @default(now())
+  slips        Payslip[]
+}
+
+/// One person's pay for one month. Recomputed while the run is a draft; frozen once approved.
+model Payslip {
+  id              String     @id @default(cuid())
+  runId           String
+  run             PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User       @relation(fields: [userId], references: [id])
+  basic           Int
+  allowance       Int
+  bonus           Int        @default(0)
+  workingDays     Int
+  daysWorked      Int
+  leaveDays       Int
+  unpaidDays      Int
+  /// extra unpaid days the owner added (absences not on the timesheet)
+  extraUnpaidDays Int        @default(0)
+  inSsf           Boolean
+  married         Boolean
+  earnedBasic     Int
+  unpaidDeduction Int
+  gross           Int
+  ssfEmployee     Int
+  ssfEmployer     Int
+  incomeTax       Int
+  net             Int
+  note            String?
+
+  @@unique([runId, userId])
 }
