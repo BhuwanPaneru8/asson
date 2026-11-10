@@ -103,7 +103,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="flex justify-between border-t border-line pt-2 text-[15px] font-semibold"><dt>{t("sum.total")}</dt><dd>{formatPrice(order.total)}</dd></div>
             </dl>
           </div>
-          <p className="text-[13px] text-muted">{t("ord.help", { phone: store.supportPhone, email: store.supportEmail })}</p>
+          <p className="text-[13px] text-muted"><Link href={`/help?order=${formatOrderNumber(order.number)}#write`} className="font-medium text-ink underline underline-offset-4">{t("care.problemWithOrder")}</Link> {t("ord.help", { phone: store.supportPhone, email: store.supportEmail })}</p>
         </div>
       </div>
       {placed && <div className="mt-12 text-center"><Link href="/shop" className={buttonClass("secondary")}>{t("bag.continue")}</Link></div>}

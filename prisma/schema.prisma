@@ -209,6 +209,8 @@ model User {
   payslips           Payslip[]
   issuesReported     Issue[]         @relation("IssueReporter")
   issuesAssigned     Issue[]         @relation("IssueAssignee")
+  careCases          CareCase[]      @relation("CareCustomer")
+  careAssigned       CareCase[]      @relation("CareAssignee")
 
   @@index([role])
   @@index([createdAt])
@@ -486,6 +488,7 @@ model Order {
   returns       Return[]
   notifications Notification[]
   allocations   OrderAllocation[]
+  careCases     CareCase[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -538,6 +541,7 @@ model Store {
   commissionRules  CommissionRule[]
   checklistRuns    ChecklistRun[]
   issues           Issue[]
+  careCases        CareCase[]
 
   @@index([active, priority])
 }
@@ -1712,4 +1716,90 @@ model IssueEvent {
   createdAt DateTime     @default(now())
 
   @@index([issueId, createdAt])
+}
+
+enum CareChannel {
+  WEB // the contact form on Help or an order page
+  PHONE
+  WHATSAPP
+  SHOP // told a shop in person
+  EMAIL
+  SOCIAL // Facebook, Instagram, TikTok
+}
+
+enum CareCategory {
+  ORDER // where is it, wrong or missing item
+  DELIVERY // late, courier problem
+  PAYMENT // charged twice, refund not received
+  QUALITY // faulty, damaged, colour ran
+  EXCHANGE // size or exchange
+  SERVICE // complaint about a shop or staff
+  OTHER
+}
+
+enum CareStatus {
+  NEW // nobody has replied yet
+  OPEN // we're working on it
+  WAITING // waiting for the customer
+  RESOLVED
+}
+
+/// One customer problem, from any channel, in one queue. Customers follow it at /help/case/<token>.
+model CareCase {
+  id             String        @id @default(cuid())
+  number         Int           @unique @default(autoincrement())
+  /// secret for the customer's page (no sign-in needed)
+  token          String        @unique
+  channel        CareChannel
+  category       CareCategory
+  priority       IssuePriority @default(NORMAL)
+  status         CareStatus    @default(NEW)
+  subject        String
+  name           String
+  phone          String?
+  email          String?
+  locale         String        @default("en")
+  userId         String?
+  user           User?         @relation("CareCustomer", fields: [userId], references: [id], onDelete: SetNull)
+  orderId        String?
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  /// the shop it's about (its manager sees it); null = online / HQ
+  storeId        String?
+  store          Store?        @relation(fields: [storeId], references: [id])
+  assigneeId     String?
+  assignee       User?         @relation("CareAssignee", fields: [assigneeId], references: [id])
+  createdById    String? // staff who logged a phone/shop case
+  /// when we owe the customer a reply by (set when they write, cleared when we reply)
+  respondBy      DateTime?
+  firstReplyAt   DateTime?
+  lastCustomerAt DateTime      @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  messages       CareMessage[]
+
+  @@index([status, respondBy])
+  @@index([phone])
+  @@index([userId])
+  @@index([orderId])
+  @@index([storeId, createdAt])
+}
+
+enum CareMessageKind {
+  CUSTOMER // from the customer
+  REPLY // from us, shown to the customer
+  NOTE // staff only
+}
+
+model CareMessage {
+  id        String          @id @default(cuid())
+  caseId    String
+  case      CareCase        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kind      CareMessageKind
+  body      String
+  byId      String?
+  byName    String
+  createdAt DateTime        @default(now())
+
+  @@index([caseId, createdAt])
 }

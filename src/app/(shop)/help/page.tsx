@@ -5,6 +5,8 @@ import { formatPrice } from "@/lib/utils";
 import { getT } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
 import { localise, type T } from "@/lib/i18n";
+import { getCurrentUser } from "@/lib/auth";
+import { CareForm } from "@/components/account/care-form";
 
 export const metadata: Metadata = { title: "Help & FAQs" };
 
@@ -31,8 +33,14 @@ function faq(t: T, l: (s: string) => string) {
   ];
 }
 
-export default async function HelpPage() {
+const CATS = ["ORDER", "DELIVERY", "PAYMENT", "QUALITY", "EXCHANGE", "SERVICE", "OTHER"] as const;
+
+export default async function HelpPage({ searchParams }: { searchParams: Promise<{ order?: string; topic?: string }> }) {
   const { t, locale } = await getT();
+  const sp = await searchParams;
+  const user = await getCurrentUser();
+  const me = user?.role === "CUSTOMER" ? user : null;
+  const topic = CATS.find((c) => c === sp.topic?.toUpperCase()) ?? "ORDER";
   const FAQ = faq(t, (s) => localise(locale, s));
   return (
     <div className="container-page max-w-3xl py-12">
@@ -59,6 +67,11 @@ export default async function HelpPage() {
           whatsapp: <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">{store.supportWhatsApp}</a>,
           email: <a href={`mailto:${store.supportEmail}`} className="underline hover:text-accent">{store.supportEmail}</a>,
         })}</p>
+        <div id="write" className="mt-8 scroll-mt-24 border-t border-line pt-6">
+          <h3 className="text-[17px] font-semibold">{t("care.title")}</h3>
+          <p className="mt-1 text-[14px] text-ink-soft">{t("care.intro", { hours: store.care.replyHours.NORMAL })}</p>
+          <CareForm defaults={{ name: me?.name ?? "", phone: me?.phone ?? "", email: me?.email ?? "", order: String(sp.order ?? "").slice(0, 20), category: topic }} />
+        </div>
       </section>
       <section id="privacy" className="mt-12 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.privacy")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">{t("help.privacyBody")} Replace this with your full privacy policy.</p></section>
       <section id="terms" className="mt-8 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.terms")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">Replace this with your terms of sale.</p></section>
