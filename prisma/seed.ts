@@ -171,6 +171,7 @@ async function main() {
     db.payslip.deleteMany(), db.payrollRun.deleteMany(), db.employment.deleteMany(), db.payrollTaxYear.deleteMany(),
     db.commissionRule.deleteMany(),
     db.checklistRun.deleteMany(), db.checklistTemplate.deleteMany(), db.announcement.deleteMany(),
+    db.issueEvent.deleteMany(), db.issue.deleteMany(),
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),

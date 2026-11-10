@@ -78,12 +78,12 @@ function encode(c: HTMLCanvasElement, ext: "webp" | "jpg" | null, q: number): Pr
 }
 
 /** Upload a resized set; returns the URL to store on the product. */
-export async function uploadPhoto(file: File): Promise<{ url: string; width: number; height: number; reused: boolean }> {
+export async function uploadPhoto(file: File, purpose?: "issue"): Promise<{ url: string; width: number; height: number; reused: boolean }> {
   const r = await resizeForUpload(file);
   const form = new FormData();
   for (const [w, b] of r.blobs) form.append(`w${w}`, b, `${w}.${r.ext}`);
   form.append("name", file.name);
-  const res = await fetch("/api/admin/media", { method: "POST", body: form });
+  const res = await fetch(purpose ? `/api/admin/media?purpose=${purpose}` : "/api/admin/media", { method: "POST", body: form });
   const data = await res.json().catch(() => ({ ok: false, error: `Upload failed (${res.status})` }));
   if (!data.ok) throw new Error(data.error ?? "Upload failed");
   return data;

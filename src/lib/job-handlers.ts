@@ -7,6 +7,7 @@ import { birthdayRun } from "./referrals";
 import { autoDraftReplenishment } from "./replenishment";
 import { watchdog } from "./health";
 import { autoCloseForgotten } from "./people";
+import { escalateOverdue } from "./issues";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -32,6 +33,7 @@ export async function stockAudit() {
 export const HANDLERS = {
   "notifications.dispatch": { label: "Send queued SMS", run: () => dispatchNotifications(200), maxAttempts: 3 },
   "system.watchdog": { label: "Health checks and owner alerts", run: () => watchdog(), maxAttempts: 1 },
+  "issues.escalate": { label: "Flag shop issues past their due time to HQ", run: () => escalateOverdue(), maxAttempts: 2 },
   "people.autoclose": { label: "Close forgotten clock-outs (for a manager to fix)", run: () => autoCloseForgotten(), maxAttempts: 2 },
   "payments.expire": { label: "Release unpaid online orders", run: () => expireUnpaidOrders(), maxAttempts: 3 },
   // a mismatch is a bug, not a flaky network: fail once, loudly
@@ -53,6 +55,7 @@ export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "notifications.dispatch", everyMs: 1 * MIN },
   { type: "system.watchdog", everyMs: 5 * MIN },
   { type: "people.autoclose", everyMs: 60 * MIN },
+  { type: "issues.escalate", everyMs: 15 * MIN },
   { type: "payments.expire", everyMs: 10 * MIN },
   { type: "stock.audit", everyMs: DAY },
   { type: "jobs.prune", everyMs: DAY },
