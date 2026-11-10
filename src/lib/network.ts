@@ -16,7 +16,7 @@ export type Grouping = "location" | "district" | "province";
 
 type SalesRow = { storeId: string; units: number; orders: number; revenue: number; cost: number; uncosted: number };
 
-async function salesByLocation(p: Period): Promise<Map<string, SalesRow>> {
+export async function salesByLocation(p: Period): Promise<Map<string, SalesRow>> {
   const rows = await db.$queryRaw<{ storeId: string; units: bigint; orders: bigint; revenue: Prisma.Decimal | null; cost: bigint | null; uncosted: bigint }[]>`
     SELECT a."storeId",
       SUM(a."quantity") AS "units",
