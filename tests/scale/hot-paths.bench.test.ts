@@ -12,6 +12,7 @@ import { cashPosition } from "@/lib/cash";
 import { importStatement, reconciliation } from "@/lib/bank-statements";
 import { closeChecklist } from "@/lib/month-close";
 import { computeVat } from "@/lib/vat";
+import { yearPack } from "@/lib/fiscal-year";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -92,6 +93,13 @@ it("hot paths stay within budget at national scale", async () => {
     await time("bank: import and match a 3,000-line statement", REPORT, () => db.$transaction((tx) => importStatement(tx, finance, acct, lines), { timeout: 60_000 }));
     await time("bank: reconciliation view", REPORT, () => reconciliation());
     await time("finance: VAT return for a month (sales, returns, purchases)", REPORT, () => { const to = new Date(Date.now() - 86_400_000); const from = new Date(to.getTime() - 29 * 86_400_000); return computeVat(from.toISOString().slice(0, 10), to.toISOString().slice(0, 10)); });
+    {
+      // the year to date as a fiscal year (scratch DB): P&L by month for 12+ months, VAT, TDS, balances
+      const ad = new Date().getUTCFullYear() - 1;
+      const label = `${ad + 57}/${String((ad + 58) % 100).padStart(2, "0")}`;
+      await db.fiscalYearClose.upsert({ where: { label }, create: { label, from: `${ad}-07-17`, to: `${ad + 1}-07-16`, createdById: "scale-bench" }, update: {} });
+      await time("finance: fiscal-year pack (13 months of P&L)", REPORT, () => yearPack(label));
+    }
     await time("finance: month-end close checklist (last full month)", REPORT, () => closeChecklist(new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 7)));
   }
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));

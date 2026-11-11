@@ -167,6 +167,7 @@ async function main() {
   // closed months and filed VAT returns lock expenses, bills and payments (triggers): clear them before wiping
   await db.monthClose.deleteMany();
   await db.vatReturn.deleteMany();
+  await db.fiscalYearClose.deleteMany();
   await db.$transaction([
     // own production first: it points at products, suppliers and locations
     db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),

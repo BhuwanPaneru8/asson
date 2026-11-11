@@ -2188,3 +2188,21 @@ model StatutoryDeposit {
   @@unique([runId, kind])
   @@index([paidOn])
 }
+
+/// A fiscal year (Shrawan–Ashadh) signed off by the owner, with the year's figures as they stood.
+model FiscalYearClose {
+  id           String    @id @default(cuid())
+  /// e.g. "2083/84"
+  label        String    @unique
+  from         String // YYYY-MM-DD (AD date of Shrawan 1)
+  to           String // YYYY-MM-DD (AD date of the last day of Ashadh)
+  closedAt     DateTime?
+  closedById   String?
+  closedByName String?
+  snapshot     Json?
+  reopenedAt   DateTime?
+  reopenReason String    @default("")
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
