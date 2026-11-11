@@ -89,6 +89,8 @@ export const store = {
     ] as { key: string; label: string; paid: boolean; perYear?: number; perRequest?: number; accruePerDaysWorked?: number; maxBalance?: number }[],
   },
   /** Own production (Admin → Production). Owner to confirm. */
+  /** Salary TDS and SSF are deposited within this many days after the payroll month ends (confirm with the accountant). */
+  statutoryDueDays: 25,
   /** Cash per location (Finance → Cash). */
   cash: {
     holdLimit: 200_000_00, // more than this in a safe: deposit it

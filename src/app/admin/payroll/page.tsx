@@ -27,6 +27,7 @@ export default async function PayrollPage() {
       <div className="mb-4 flex flex-wrap gap-2 text-[13.5px]">
         <Link href="/admin/payroll/staff" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Pay terms ({onPayroll} of {staff} staff on payroll)</Link>
         <Link href="/admin/payroll/commissions" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Sales commission</Link>
+        <Link href="/admin/payroll/statutory" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">TDS and SSF deposits</Link>
         <Link href="/admin/payroll/tax" className="rounded-md border border-line bg-white px-3 py-2 hover:border-ink">Tax bands · FY {fiscalYearOf(thisMonth)} {fy?.confirmedAt ? "✓" : <span className="text-warn">needs confirming</span>}</Link>
       </div>
       <Card title="Payrolls">
