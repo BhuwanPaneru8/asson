@@ -52,7 +52,8 @@ test("HQ sends a display brief; the shop sends photos; HQ asks for a redo, then 
   await expect(cashier.getByText("Price tags are hidden behind the dupatta. Turn them out.").first()).toBeVisible();
   await sendShots(cashier);
   await cashier.getByRole("button", { name: "Send again" }).click();
-  await expect(cashier.getByText(/Waiting for review/).first()).toBeVisible();
+  // "Waiting for review" is already in round 1's history: wait for round 2 itself before HQ looks
+  await expect(cashier.getByText("round 2")).toBeVisible();
 
   await owner.reload();
   await expect(owner.getByText("round 2")).toBeVisible();
