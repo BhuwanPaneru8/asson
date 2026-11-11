@@ -40,11 +40,12 @@ export default async function PickingPage({ searchParams }: { searchParams: Prom
         <div className="grid gap-4 lg:grid-cols-2">
           <Card title={`1 · Collect ${list.units} unit${list.units === 1 ? "" : "s"}`}>
             <table className="w-full text-[14px]">
-              <thead className="border-b border-line bg-cloud/40"><tr className="text-left text-[12px] uppercase tracking-wider text-muted"><th className="px-4 py-2">SKU</th><th className="px-3">Item</th><th className="px-3 text-right">Qty</th><th className="w-8 print:table-cell" aria-label="Tick" /></tr></thead>
+              <thead className="border-b border-line bg-cloud/40"><tr className="text-left text-[12px] uppercase tracking-wider text-muted"><th className="px-4 py-2">Bin</th><th className="px-3">SKU</th><th className="px-3">Item</th><th className="px-3 text-right">Qty</th><th className="w-8 print:table-cell" aria-label="Tick" /></tr></thead>
               <tbody className="divide-y divide-line">
                 {list.skus.map((s) => (
                   <tr key={s.sku}>
-                    <td className="whitespace-nowrap px-4 py-2 font-mono text-[12.5px]">{s.sku}</td>
+                    <td className="whitespace-nowrap px-4 py-2 font-mono text-[13px] font-semibold">{s.bin?.code ?? <span className="font-sans text-[12px] font-normal text-warn">no bin</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-[12.5px]">{s.sku}</td>
                     <td className="px-3">{s.name} · {s.color} <b>{s.size}</b><span className="block text-[12px] text-muted">for {s.orders.map((n) => formatOrderNumber(n)).join(", ")}</span></td>
                     <td className="px-3 text-right text-[16px] font-semibold tabular-nums">{s.quantity}</td>
                     <td className="px-2"><span className="inline-block h-4 w-4 rounded border border-line" /></td>
@@ -61,7 +62,7 @@ export default async function PickingPage({ searchParams }: { searchParams: Prom
                     <Link href={`/admin/orders/${o.id}`} className="font-medium underline">{formatOrderNumber(o.number)}</Link>
                     <span className="ml-2 text-[12px] text-muted">{formatDateTime(o.createdAt)}{o.district ? ` · ${o.district}` : ""}{o.shippingMethod === "express" ? " · EXPRESS" : ""}</span>
                     {o.pickup && <p className={cn("mt-0.5 text-[12.5px] font-medium", o.pickup.id === here.id ? "text-success" : "text-warn")}>{o.pickup.id === here.id ? "Click-and-collect here: keep at the counter" : `Click-and-collect: send to ${o.pickup.name}`}</p>}
-                    <ul className="mt-1 text-[13px]">{o.lines.map((l, i) => <li key={i}>{l.quantity} × {l.name} · {l.color} {l.size} <span className="font-mono text-[11.5px] text-muted">{l.sku}</span></li>)}</ul>
+                    <ul className="mt-1 text-[13px]">{o.lines.map((l, i) => <li key={i}>{l.quantity} × {l.name} · {l.color} {l.size} <span className="font-mono text-[11.5px] text-muted">{l.sku}{l.bin ? ` · ${l.bin}` : ""}</span></li>)}</ul>
                   </div>
                   <PickButton orderId={o.id} storeId={here.id} />
                 </li>

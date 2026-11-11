@@ -52,7 +52,7 @@ export default async function PurchaseOrderPage({ params }: { params: Promise<{ 
             {po.receipts.map((r) => (
               <li key={r.id} className="flex justify-between px-5 py-2.5">
                 <span>GRN-{r.number} · {who(r.receivedById)} · {formatDateTime(r.createdAt)}{r.note ? ` · “${r.note}”` : ""}</span>
-                <span className="tabular-nums">{r.items.reduce((s, i) => s + i.quantity, 0)} good{r.items.some((i) => i.damaged) ? ` · ${r.items.reduce((s, i) => s + i.damaged, 0)} damaged` : ""}</span>
+                <span className="flex items-center gap-3"><span className="tabular-nums">{r.items.reduce((s, i) => s + i.quantity, 0)} good{r.items.some((i) => i.damaged) ? ` · ${r.items.reduce((s, i) => s + i.damaged, 0)} damaged` : ""}</span>{r.storeId && <Link href={`/admin/bins/putaway/${r.id}`} className="underline underline-offset-4">Putaway</Link>}</span>
               </li>
             ))}
           </ul>

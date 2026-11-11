@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { binMap, byBin } from "@/lib/bins";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requirePermission } from "@/lib/auth";
@@ -25,6 +26,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
   if (!c) notFound();
   if (!canActAt(await scopeFor(me), c.storeId)) notFound(); // counts belong to the people who work there
   const people = await db.user.findMany({ where: { id: { in: [c.createdById, c.submittedById, c.approvedById].filter((x): x is string => !!x) } }, select: { id: true, name: true } });
+  const bins = await binMap(c.storeId, c.lines.map((l) => l.variantId)); // the count sheet walks the shelves in bin order
   const who = (id: string | null) => people.find((p) => p.id === id)?.name ?? "—";
   const title = `${countNo(c.number)} · ${c.store.name} · ${c.scopeLabel}`;
   const back = <Link href="/admin/counts" className="mb-4 inline-flex items-center gap-1.5 text-[13.5px] text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" /> Stock counts</Link>;
@@ -34,7 +36,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
       <>
         {back}
         <PageHeader title={title} description={`Started by ${who(c.createdById)} · ${formatDateTime(c.createdAt)}. Count each item in one go; the shop can keep selling.`} />
-        <CountSheet countId={c.id} lines={c.lines.map((l) => ({ variantId: l.variantId, sku: l.variant.sku, name: l.variant.product.name, color: l.variant.color, size: l.variant.size, counted: l.counted }))} />
+        <CountSheet countId={c.id} lines={byBin(c.lines.map((l) => ({ variantId: l.variantId, sku: l.variant.sku, name: l.variant.product.name, color: l.variant.color, size: l.variant.size, counted: l.counted, bin: bins.get(l.variantId) ?? null }))).map(({ bin, ...l }) => ({ ...l, name: bin ? `${bin.code} · ${l.name}` : l.name }))} />
       </>
     );
   }

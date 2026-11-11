@@ -369,6 +369,7 @@ model Variant {
   transferItems   StockTransferItem[]
   countLines      StockCountLine[]
   productionLines ProductionLine[]
+  binAssignments  BinAssignment[]
 
   @@unique([productId, color, size])
   @@index([color])
@@ -549,6 +550,7 @@ model Store {
   budgets          ShopBudget[]
   cashEntries      CashEntry[]
   deposits         BankDeposit[]
+  bins             Bin[]
 
   @@index([active, priority])
 }
@@ -2205,4 +2207,35 @@ model FiscalYearClose {
   createdById  String
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+/// A shelf position at a location, e.g. A-03-2 (zone A, aisle 3, shelf 2). Pick lists walk bins in `sortKey` order.
+model Bin {
+  id          String          @id @default(cuid())
+  storeId     String
+  store       Store           @relation(fields: [storeId], references: [id])
+  code        String
+  /// the code with numbers zero-padded, so A-2 sorts before A-10
+  sortKey     String
+  zone        String          @default("")
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  assignments BinAssignment[]
+
+  @@unique([storeId, code])
+  @@index([storeId, sortKey])
+}
+
+/// The home bin of one size at one location: where it's put away and picked from.
+model BinAssignment {
+  storeId      String
+  variantId    String
+  variant      Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  binId        String
+  bin          Bin      @relation(fields: [binId], references: [id])
+  assignedById String
+  updatedAt    DateTime @updatedAt
+
+  @@id([storeId, variantId])
+  @@index([binId])
 }

@@ -13,6 +13,7 @@ import { importStatement, reconciliation } from "@/lib/bank-statements";
 import { closeChecklist } from "@/lib/month-close";
 import { computeVat } from "@/lib/vat";
 import { yearPack } from "@/lib/fiscal-year";
+import { binOverview } from "@/lib/bins";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -58,6 +59,15 @@ it("hot paths stay within budget at national scale", async () => {
   });
 
   // staff
+  {
+    // the busiest warehouse gets a bin for every size it stocks (scratch DB): ~36k bins and assignments
+    const [w] = await db.$queryRaw<{ id: string }[]>`SELECT s."id" FROM "Store" s JOIN "StoreStock" ss ON ss."storeId" = s."id" WHERE s."kind" = 'WAREHOUSE' GROUP BY s."id" ORDER BY COUNT(*) DESC LIMIT 1`;
+    if (!(await db.binAssignment.count({ where: { storeId: w.id } }))) {
+      await db.$executeRawUnsafe(`INSERT INTO "Bin" ("id", "storeId", "code", "sortKey", "zone") SELECT 'bn_' || ss."variantId", ss."storeId", 'Z-' || row_number() OVER (), 'Z-' || lpad((row_number() OVER ())::text, 6, '0'), 'Z' FROM "StoreStock" ss WHERE ss."storeId" = '${w.id}' ON CONFLICT DO NOTHING`);
+      await db.$executeRawUnsafe(`INSERT INTO "BinAssignment" ("storeId", "variantId", "binId", "assignedById", "updatedAt") SELECT ss."storeId", ss."variantId", 'bn_' || ss."variantId", 'scale-bench', NOW() FROM "StoreStock" ss WHERE ss."storeId" = '${w.id}' AND ss."variantId" NOT IN (SELECT "variantId" FROM "StoreStock" WHERE "storeId" = '${w.id}' ORDER BY "variantId" LIMIT 500) ON CONFLICT DO NOTHING`);
+    }
+    await time("bins: overview of the busiest warehouse", REPORT, () => binOverview(w.id));
+  }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());
 
