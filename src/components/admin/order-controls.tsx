@@ -10,13 +10,13 @@ const LABEL: Partial<Record<OrderStatus, string>> = {
   CONFIRMED: "Confirm order", PACKED: "Mark as packed", SHIPPED: "Mark as shipped", OUT_FOR_DELIVERY: "Out for delivery",
   DELIVERED: "Mark delivered", CANCELLED: "Cancel order", RETURNED: "Return received & refund", RETURN_REQUESTED: "Open return",
 };
-const CARRIERS = ["Own rider", "Pathao Parcel", "Nepal Can Move (NCM)", "Upaya City Cargo", "Aramex Nepal", "Nepal Post"];
+import { CARRIERS } from "@/lib/carriers";
 
 export function OrderControls({ orderId, status, next: allowed, paymentPending, carrier, tracking, pickupAt }: { orderId: string; status: OrderStatus; next: OrderStatus[]; paymentPending: boolean; carrier: string | null; tracking: string | null; pickupAt?: string | null }) {
   // pickup orders are handed over (and paid) at the shop's till, not from here
   const next = pickupAt ? allowed.filter((s) => s !== "DELIVERED") : allowed;
   const [pending, start] = useTransition();
-  const [c, setC] = useState(carrier ?? CARRIERS[0]);
+  const [c, setC] = useState<string>(carrier ?? CARRIERS[0]);
   const [awb, setAwb] = useState(tracking ?? "");
   const [note, setNote] = useState("");
 
