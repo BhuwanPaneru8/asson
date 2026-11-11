@@ -37,7 +37,7 @@ export function StatementImport({ accounts }: { accounts: string[] }) {
       )}
       <button className={btn} disabled={pending || !preview || account.trim().length < 2} onClick={() => start(async () => {
         const r = await importStatementAction(account, text);
-        if (r.ok) { toast.success(`${r.added} new line(s) · ${r.deposits} deposit(s), ${r.remittances} COD remittance(s), ${r.payments} supplier payment(s), ${r.expenses} expense(s), ${r.vat} VAT payment(s) matched${r.leftForOthers ? ` · ${r.leftForOthers} of your own deposits left for someone else` : ""}`); setPreview(null); setText(""); setName(""); } else toast.error(r.error);
+        if (r.ok) { toast.success(`${r.added} new line(s) · ${r.deposits} deposit(s), ${r.remittances} COD remittance(s), ${r.payments} supplier payment(s), ${r.expenses} expense(s), ${r.vat} VAT and ${r.statutory} TDS/SSF payment(s) matched${r.leftForOthers ? ` · ${r.leftForOthers} of your own deposits left for someone else` : ""}`); setPreview(null); setText(""); setName(""); } else toast.error(r.error);
       })}>{pending ? "Working…" : "Import and match"}</button>
       <p className="text-[12px] text-muted">Importing the same file twice adds nothing. Deposits are matched by bank, amount and date (slip numbers settle ties); courier COD remittances by amount and date. Nothing ambiguous is guessed.</p>
     </div>
@@ -47,7 +47,7 @@ export function StatementImport({ accounts }: { accounts: string[] }) {
 type Opt = { id: string; label: string };
 const BOOK = [["FEES", "Bank charge / fee"], ["UTILITIES", "Utility"], ["RENT", "Rent"], ["MARKETING", "Marketing"], ["DELIVERY", "Courier"], ["EQUIPMENT", "Equipment"], ["OTHER", "Other"]] as const;
 
-export function ResolveLine({ lineId, debit, deposits, remittances, payments, expenses, vat = [] }: { lineId: string; debit: boolean; deposits: Opt[]; remittances: Opt[]; payments: Opt[]; expenses: Opt[]; vat?: Opt[] }) {
+export function ResolveLine({ lineId, debit, deposits, remittances, payments, expenses, vat = [], statutory = [] }: { lineId: string; debit: boolean; deposits: Opt[]; remittances: Opt[]; payments: Opt[]; expenses: Opt[]; vat?: Opt[]; statutory?: Opt[] }) {
   const [choice, setChoice] = useState("");
   const [why, setWhy] = useState("");
   const [cat, setCat] = useState<(typeof BOOK)[number][0]>("FEES");
@@ -56,7 +56,7 @@ export function ResolveLine({ lineId, debit, deposits, remittances, payments, ex
     const [kind, id] = choice.split(":");
     const r = await resolveLineAction({
       lineId,
-      ...(kind === "d" ? { depositId: id } : kind === "r" ? { remittanceId: id } : kind === "p" ? { paymentId: id } : kind === "e" ? { expenseId: id } : kind === "v" ? { vatReturnId: id } : kind === "book" ? { book: { category: cat, description: why } } : { ignore: why }),
+      ...(kind === "d" ? { depositId: id } : kind === "r" ? { remittanceId: id } : kind === "p" ? { paymentId: id } : kind === "e" ? { expenseId: id } : kind === "v" ? { vatReturnId: id } : kind === "s" ? { statutoryId: id } : kind === "book" ? { book: { category: cat, description: why } } : { ignore: why }),
     });
     if (r.ok) toast.success("Done"); else toast.error(r.error);
   });
@@ -69,6 +69,7 @@ export function ResolveLine({ lineId, debit, deposits, remittances, payments, ex
         {remittances.length > 0 && <optgroup label="Courier COD">{remittances.map((r) => <option key={r.id} value={`r:${r.id}`}>{r.label}</option>)}</optgroup>}
         {payments.length > 0 && <optgroup label="Supplier payment">{payments.map((p) => <option key={p.id} value={`p:${p.id}`}>{p.label}</option>)}</optgroup>}
         {expenses.length > 0 && <optgroup label="Recorded expense">{expenses.map((e) => <option key={e.id} value={`e:${e.id}`}>{e.label}</option>)}</optgroup>}
+        {statutory.length > 0 && <optgroup label="Payroll TDS / SSF">{statutory.map((d) => <option key={d.id} value={`s:${d.id}`}>{d.label}</option>)}</optgroup>}
         {vat.length > 0 && <optgroup label="VAT payment">{vat.map((v) => <option key={v.id} value={`v:${v.id}`}>{v.label}</option>)}</optgroup>}
         {debit && <option value="book">Book it as an expense</option>}
         <option value="ignore">Something else (say what)</option>

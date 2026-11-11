@@ -29,7 +29,7 @@ export default async function BankPage() {
           <ul className="divide-y divide-line">{r.unmatched.map((l) => (
             <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-[14px]">
               <span className="min-w-0"><b className={l.amount < 0 ? "tabular-nums text-danger" : "tabular-nums text-success"}>{l.amount < 0 ? `−${formatPrice(-l.amount)}` : `+${formatPrice(l.amount)}`}</b> · {l.account} · {formatDate(`${l.date}T12:00:00+05:45`)}<span className="block truncate text-[12.5px] text-muted">{l.description}{l.reference ? ` · ${l.reference}` : ""}</span></span>
-              <ResolveLine lineId={l.id} debit={l.amount < 0} deposits={l.depositOptions} remittances={l.remittanceOptions} payments={l.paymentOptions} expenses={l.expenseOptions} vat={l.vatOptions} />
+              <ResolveLine lineId={l.id} debit={l.amount < 0} deposits={l.depositOptions} remittances={l.remittanceOptions} payments={l.paymentOptions} expenses={l.expenseOptions} vat={l.vatOptions} statutory={l.statutoryOptions} />
             </li>
           ))}</ul>
         </Card>

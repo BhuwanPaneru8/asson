@@ -1,4 +1,5 @@
 import "server-only";
+import { createForRun } from "./statutory";
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
@@ -159,6 +160,8 @@ export async function markPaid(tx: Tx, owner: Actor, month: string, paidVia: str
     await tx.expense.create({ data: { date: today, category: "SALARIES", amount: b.gross, storeId: loc, source: `payroll:${month}:${loc ?? "hq"}:gross`, description: `Payroll ${month}: gross salaries, ${at} (${b.people} people; whole run net ${formatPrice(net)}, TDS ${formatPrice(tds)} to deposit)`, paidVia, createdById: owner.id } });
     if (b.employer) await tx.expense.create({ data: { date: today, category: "SALARIES", amount: b.employer, storeId: loc, source: `payroll:${month}:${loc ?? "hq"}:ssf`, description: `Payroll ${month}: employer SSF 20%, ${at} (deposit ${formatPrice(ssf)} to SSF for the whole run)`, paidVia, createdById: owner.id } });
   }
+  // what the run now owes the IRD (TDS) and the SSF, with due dates
+  await createForRun(tx, r.id, month);
   await audit(tx, owner, { action: "payroll.paid", entity: ["PayrollRun", r.id], summary: `Payroll ${month} paid via ${paidVia}: net ${formatPrice(net)}, TDS ${formatPrice(tds)}, SSF ${formatPrice(ssf)}; cost ${formatPrice(gross + employer)} posted to expenses` });
   return { gross, employer, net, tds, ssf };
 }

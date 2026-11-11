@@ -1564,17 +1564,18 @@ enum PayrollStatus {
 }
 
 model PayrollRun {
-  id           String        @id @default(cuid())
+  id           String             @id @default(cuid())
   /// Gregorian month YYYY-MM (the timesheet month)
-  month        String        @unique
+  month        String             @unique
   fiscalYear   String
-  status       PayrollStatus @default(DRAFT)
+  status       PayrollStatus      @default(DRAFT)
   createdById  String
   approvedById String?
   approvedAt   DateTime?
   paidAt       DateTime?
-  createdAt    DateTime      @default(now())
+  createdAt    DateTime           @default(now())
   slips        Payslip[]
+  deposits     StatutoryDeposit[]
 }
 
 /// One person's pay for one month. Recomputed while the run is a draft; frozen once approved.
@@ -2097,6 +2098,8 @@ model StatementLine {
   expense      Expense?            @relation(fields: [expenseId], references: [id])
   vatReturnId  String?             @unique
   vatReturn    VatReturn?          @relation(fields: [vatReturnId], references: [id])
+  statutoryId  String?             @unique
+  statutory    StatutoryDeposit?   @relation(fields: [statutoryId], references: [id])
   note         String              @default("")
   matchedById  String?
   matchedAt    DateTime?
@@ -2158,4 +2161,30 @@ model VatReturn {
   statementLine  StatementLine?
 
   @@index([from, to])
+}
+
+enum StatutoryKind {
+  TDS // income tax withheld from salaries, deposited with the IRD
+  SSF // employee 11% + employer 20%, deposited with the Social Security Fund
+}
+
+/// What a paid payroll owes the IRD or the SSF, and when it was deposited.
+model StatutoryDeposit {
+  id            String         @id @default(cuid())
+  runId         String
+  run           PayrollRun     @relation(fields: [runId], references: [id])
+  kind          StatutoryKind
+  /// paisa, from the payslips
+  amount        Int
+  /// YYYY-MM-DD: 25 days after the payroll month ends
+  dueOn         String
+  paidOn        String?
+  paidAmount    Int?
+  reference     String?
+  paidById      String?
+  createdAt     DateTime       @default(now())
+  statementLine StatementLine?
+
+  @@unique([runId, kind])
+  @@index([paidOn])
 }
