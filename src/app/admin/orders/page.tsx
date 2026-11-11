@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Orders" };
 const TAKE = 25;
-const TABS: (OrderStatus | "ALL")[] = ["ALL", "PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "RETURN_REQUESTED", "CANCELLED", "RETURNED"];
+const TABS: (OrderStatus | "ALL")[] = ["ALL", "PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "RETURNING", "DELIVERED", "RETURN_REQUESTED", "CANCELLED", "RETURNED"];
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; page?: string; pay?: string; call?: string }> }) {
   await requirePermission("orders");

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
-test("a wave is picked in one walk, each order is packed by scanning its items (a wrong item is refused), then handed to a courier on a manifest", async ({ page }) => {
+test("a wave is picked in one walk, each order is packed by scanning its items (a wrong item is refused), then handed to a courier on a manifest; it fails delivery, comes back and is received", async ({ page }) => {
   page.on("dialog", (d) => d.accept());
   await signIn(page, "owner", "/admin/fulfilment");
   await expect(page.getByRole("heading", { name: /^Fulfilment · / })).toBeVisible();
@@ -63,4 +63,21 @@ test("a wave is picked in one walk, each order is packed by scanning its items (
   await expect(page.getByText("handed over", { exact: true })).toBeVisible();
   await expect(page.getByText(/handed to E2E Rider/)).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: tracking })).toContainText("shipped");
+
+  // the courier can't deliver: record the attempt, bring it back, scan it in at the warehouse
+  await page.goto("/admin/fulfilment/deliveries");
+  const row = page.getByRole("row").filter({ hasText: shipNo });
+  await row.getByRole("button", { name: "Update" }).click();
+  await page.getByLabel("What happened").selectOption({ label: "Customer refused" });
+  await page.getByRole("button", { name: "Failed attempt" }).click();
+  await expect(page.getByText("Attempt recorded; customer asked to call")).toBeVisible();
+  await expect(row).toContainText("Customer refused");
+  await page.getByRole("button", { name: "Return to us" }).click();
+  await expect(page.getByText("Coming back to us")).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: shipNo })).toContainText("Customer refused");
+  await page.getByLabel("Returned order number").fill(shipNo);
+  await page.getByLabel("Return fee").fill("100");
+  await page.getByRole("button", { name: "Receive parcel" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "received" })).toContainText(`${shipNo} received, back on sale`);
+  await expect(page.getByRole("listitem").filter({ hasText: shipNo })).toHaveCount(0);
 });

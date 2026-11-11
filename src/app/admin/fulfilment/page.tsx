@@ -22,7 +22,7 @@ export default async function FulfilmentPage({ searchParams }: { searchParams: P
   const [o, mf] = await Promise.all([fulfilmentOverview(here.id), manifestOverview(here.id)]);
   return (
     <>
-      <PageHeader title={`Fulfilment · ${here.name}`} description="Pick orders in waves (one walk, a slot per order), pack each one by scanning its items, then hand the parcels to couriers on a signed manifest." actions={<Link href={`/admin/picking?store=${here.id}`} className="text-[13.5px] underline underline-offset-4">Single pick list</Link>} />
+      <PageHeader title={`Fulfilment · ${here.name}`} description="Pick orders in waves (one walk, a slot per order), pack each one by scanning its items, then hand the parcels to couriers on a signed manifest." actions={<span className="flex gap-4"><Link href="/admin/fulfilment/deliveries" className="text-[13.5px] underline underline-offset-4">Deliveries</Link><Link href={`/admin/picking?store=${here.id}`} className="text-[13.5px] underline underline-offset-4">Single pick list</Link></span>} />
       {locations.length > 1 && <div className="mb-4 flex flex-wrap gap-1.5">{locations.map((l) => <Link key={l.id} href={`/admin/fulfilment?store=${l.id}`} className={cn("rounded-full border px-3 py-1 text-[13px]", l.id === here.id ? "border-ink bg-ink text-white" : "border-line bg-white")}>{l.name}</Link>)}</div>}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[["Orders waiting for a wave", String(o.waiting)], ["Open waves", String(o.waves.filter((w) => w.status === "OPEN").length)], ["Packed today", String(o.packedToday)], ["Packed with an override", String(o.overrides)]].map(([l, v]) => (

@@ -7,6 +7,7 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
   PACKED: "Packed",
   SHIPPED: "Shipped",
   OUT_FOR_DELIVERY: "Out for delivery",
+  RETURNING: "Returning to us",
   DELIVERED: "Delivered",
   CANCELLED: "Cancelled",
   RETURN_REQUESTED: "Return requested",
@@ -18,8 +19,10 @@ export const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["PACKED", "CANCELLED"],
   PACKED: ["SHIPPED", "CANCELLED"],
-  SHIPPED: ["OUT_FOR_DELIVERY", "DELIVERED"],
-  OUT_FOR_DELIVERY: ["DELIVERED"],
+  SHIPPED: ["OUT_FOR_DELIVERY", "DELIVERED", "RETURNING"],
+  OUT_FOR_DELIVERY: ["DELIVERED", "RETURNING"],
+  // undelivered: the courier brings it back; it's closed (Cancelled) when received here or reported lost
+  RETURNING: ["CANCELLED"],
   DELIVERED: ["RETURN_REQUESTED"],
   RETURN_REQUESTED: ["RETURNED", "DELIVERED"],
   CANCELLED: [],
@@ -32,6 +35,7 @@ export const PICKUP_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PACKED: ["DELIVERED", "CANCELLED"],
   SHIPPED: [],
   OUT_FOR_DELIVERY: [],
+  RETURNING: [],
 };
 
 export const PICKUP_LABEL: Partial<Record<OrderStatus, string>> = { PACKED: "Ready for pickup", DELIVERED: "Collected" };

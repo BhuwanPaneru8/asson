@@ -128,6 +128,8 @@ enum OrderStatus {
   PACKED // picked & packed in warehouse
   SHIPPED // handed to courier
   OUT_FOR_DELIVERY
+  /// the courier couldn't deliver and is bringing the parcel back (return to origin); ends Cancelled once received
+  RETURNING
   DELIVERED
   CANCELLED
   RETURN_REQUESTED
@@ -482,17 +484,19 @@ model Order {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  items         OrderItem[]
-  events        OrderEvent[]
-  payments      Payment[]
-  tenders       Tender[]
-  returns       Return[]
-  notifications Notification[]
-  allocations   OrderAllocation[]
-  careCases     CareCase[]
-  waveOrder     WaveOrder?
-  packCheck     PackCheck?
-  manifestOrder ManifestOrder?
+  items            OrderItem[]
+  events           OrderEvent[]
+  payments         Payment[]
+  tenders          Tender[]
+  returns          Return[]
+  notifications    Notification[]
+  allocations      OrderAllocation[]
+  careCases        CareCase[]
+  waveOrder        WaveOrder?
+  packCheck        PackCheck?
+  manifestOrder    ManifestOrder?
+  deliveryAttempts DeliveryAttempt[]
+  rto              ReturnToOrigin?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -556,6 +560,7 @@ model Store {
   bins             Bin[]
   pickWaves        PickWave[]
   manifests        Manifest[]
+  rtoReceipts      ReturnToOrigin[]
 
   @@index([active, priority])
 }
@@ -2334,4 +2339,58 @@ model ManifestOrder {
   addedAt        DateTime @default(now())
 
   @@id([manifestId, orderId])
+}
+
+enum DeliveryFailReason {
+  CUSTOMER_REFUSED
+  NOT_REACHABLE // phone off or not answering
+  NOT_HOME
+  WRONG_ADDRESS
+  COD_NOT_READY // customer didn't have the cash
+  RESCHEDULED // customer asked for another day
+  OTHER
+}
+
+/// A failed delivery attempt, as reported by the courier.
+model DeliveryAttempt {
+  id           String             @id @default(cuid())
+  orderId      String
+  order        Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reason       DeliveryFailReason
+  note         String             @default("")
+  recordedById String
+  createdAt    DateTime           @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+enum RtoState {
+  IN_TRANSIT // the courier is bringing it back
+  RECEIVED // back at one of our locations
+  LOST // the courier lost it: we claim the goods' value
+}
+
+/// A parcel coming back undelivered (return to origin), and how it came back.
+model ReturnToOrigin {
+  orderId       String             @id
+  order         Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reason        DeliveryFailReason
+  carrier       String
+  startedAt     DateTime           @default(now())
+  startedById   String
+  state         RtoState           @default(IN_TRANSIT)
+  /// receipt
+  storeId       String?
+  store         Store?             @relation(fields: [storeId], references: [id])
+  closedAt      DateTime?
+  closedById    String?
+  damaged       Boolean            @default(false)
+  /// the courier's return fee, and what we claim from them for a lost parcel (paisa)
+  courierCharge Int                @default(0)
+  claimAmount   Int                @default(0)
+  note          String             @default("")
+
+  @@index([state, startedAt])
+  @@index([startedAt])
 }

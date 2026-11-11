@@ -91,6 +91,8 @@ export const store = {
   /** Own production (Admin → Production). Owner to confirm. */
   /** Salary TDS and SSF are deposited within this many days after the payroll month ends (confirm with the accountant). */
   statutoryDueDays: 25,
+  /** deliveries desk: a shipped parcel not delivered after this many days is "stuck"; a parcel coming back after this many is chased with the courier */
+  delivery: { stuckDays: 5, chaseReturnDays: 10 },
   /** Cash per location (Finance → Cash). */
   cash: {
     holdLimit: 200_000_00, // more than this in a safe: deposit it

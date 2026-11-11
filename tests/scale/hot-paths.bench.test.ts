@@ -16,6 +16,7 @@ import { yearPack } from "@/lib/fiscal-year";
 import { binOverview } from "@/lib/bins";
 import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manifests";
+import { deliveriesDesk } from "@/lib/deliveries";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -80,6 +81,8 @@ it("hot paths stay within budget at national scale", async () => {
       await db.$transaction((tx) => cancelWave(tx, staff, wv.id));
       void waveId;
       await time("manifests: courier hand-over desk", STAFF, () => manifestOverview(busy.storeId));
+      await time("deliveries: desk with return rates (whole network)", STAFF, () => deliveriesDesk({ all: true }));
+      await time("deliveries: desk for one warehouse", STAFF, () => deliveriesDesk({ all: false, storeIds: [busy.storeId] }));
       // 100 parcels packed, scanned onto a manifest and handed over (each shipping through transitionOrder), rolled back
       await time("manifests: scan 100 parcels and hand them over", REPORT, () => db.$transaction(async (tx) => {
         const ids = (await tx.$queryRaw<{ id: string; number: number }[]>`SELECT DISTINCT o."id", o."number" FROM "Order" o JOIN "OrderAllocation" a ON a."orderId" = o."id" WHERE o."status" = 'CONFIRMED' AND o."pickupStoreId" IS NULL AND a."storeId" = ${busy.storeId} LIMIT 100`);
