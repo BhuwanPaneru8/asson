@@ -10,6 +10,7 @@ import { shopPl } from "@/lib/shop-pl";
 import { budgetReport, targetProgress } from "@/lib/budgets";
 import { cashPosition } from "@/lib/cash";
 import { importStatement, reconciliation } from "@/lib/bank-statements";
+import { closeChecklist } from "@/lib/month-close";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -89,6 +90,7 @@ it("hot paths stay within budget at national scale", async () => {
     const finance = { id: "bench-finance", name: "Bench", role: "ADMIN" };
     await time("bank: import and match a 3,000-line statement", REPORT, () => db.$transaction((tx) => importStatement(tx, finance, acct, lines), { timeout: 60_000 }));
     await time("bank: reconciliation view", REPORT, () => reconciliation());
+    await time("finance: month-end close checklist (last full month)", REPORT, () => closeChecklist(new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 7)));
   }
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));
   await time("network: by province, 90 days", REPORT, () => networkReport({ days: 90, scope: { all: true }, group: "province" }));

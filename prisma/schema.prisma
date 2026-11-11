@@ -913,19 +913,20 @@ model StockAlert {
 }
 
 model Expense {
-  id          String          @id @default(cuid())
-  date        String // YYYY-MM-DD (Asia/Kathmandu)
-  category    ExpenseCategory
-  amount      Int
-  description String
-  paidVia     String?
+  id            String          @id @default(cuid())
+  date          String // YYYY-MM-DD (Asia/Kathmandu)
+  category      ExpenseCategory
+  amount        Int
+  description   String
+  paidVia       String?
   /// the location this cost belongs to; null = HQ / central
-  storeId     String?
-  store       Store?          @relation(fields: [storeId], references: [id])
+  storeId       String?
+  store         Store?          @relation(fields: [storeId], references: [id])
   /// what posted it automatically, e.g. "payroll:2026-11:<store>", "recurring:<id>:2026-11" (unique: never posted twice)
-  source      String?         @unique
-  createdById String
-  createdAt   DateTime        @default(now())
+  source        String?         @unique
+  createdById   String
+  createdAt     DateTime        @default(now())
+  statementLine StatementLine?
 
   @@index([date])
   @@index([storeId, date])
@@ -1199,22 +1200,23 @@ model SupplierBill {
 
 /// Money paid to a supplier. Whatever isn't allocated to bills is credit for later bills.
 model SupplierPayment {
-  id          String              @id @default(cuid())
-  number      Int                 @unique @default(autoincrement())
-  supplierId  String
-  supplier    Supplier            @relation(fields: [supplierId], references: [id])
-  amount      Int
+  id            String              @id @default(cuid())
+  number        Int                 @unique @default(autoincrement())
+  supplierId    String
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  amount        Int
   /// not yet allocated to a bill = supplier credit (CHECK 0 <= unallocated <= amount)
-  unallocated Int
-  method      SupplierPayMethod
-  reference   String?
-  paidAt      DateTime
-  note        String?
-  voidedAt    DateTime?
-  voidReason  String?
-  createdById String
-  createdAt   DateTime            @default(now())
-  allocations PaymentAllocation[]
+  unallocated   Int
+  method        SupplierPayMethod
+  reference     String?
+  paidAt        DateTime
+  note          String?
+  voidedAt      DateTime?
+  voidReason    String?
+  createdById   String
+  createdAt     DateTime            @default(now())
+  allocations   PaymentAllocation[]
+  statementLine StatementLine?
 
   @@index([supplierId, paidAt])
 }
@@ -2066,10 +2068,10 @@ model BankDeposit {
 }
 
 enum StatementLineStatus {
-  UNMATCHED // a credit we haven't explained yet
-  MATCHED // tied to a shop deposit or a courier COD remittance
-  IGNORED // not ours to match (interest, wallet settlement, owner top-up): with a note
-  DEBIT // money out: kept for the record, not matched here
+  UNMATCHED // a line we haven't explained yet (credit or debit)
+  MATCHED // tied to a shop deposit, courier COD remittance, supplier payment or expense
+  IGNORED // explained in words (interest, wallet settlement, salary batch, owner top-up)
+  DEBIT // retired: debits are matched like credits now (kept so old values stay valid)
 }
 
 /// One line of an imported bank statement. Importing the same file twice adds nothing (the key is unique).
@@ -2089,6 +2091,10 @@ model StatementLine {
   deposit      BankDeposit?        @relation(fields: [depositId], references: [id])
   remittanceId String?             @unique
   remittance   CodRemittance?      @relation(fields: [remittanceId], references: [id])
+  paymentId    String?             @unique
+  payment      SupplierPayment?    @relation(fields: [paymentId], references: [id])
+  expenseId    String?             @unique
+  expense      Expense?            @relation(fields: [expenseId], references: [id])
   note         String              @default("")
   matchedById  String?
   matchedAt    DateTime?
@@ -2097,4 +2103,21 @@ model StatementLine {
 
   @@index([account, date])
   @@index([status])
+}
+
+/// A month whose books are closed: nothing dated in it can be added or changed until the owner reopens it.
+model MonthClose {
+  id           String    @id @default(cuid())
+  /// YYYY-MM
+  month        String    @unique
+  closedAt     DateTime?
+  closedById   String?
+  closedByName String?
+  /// the checklist and P&L as they stood when it was closed
+  snapshot     Json
+  reopenedAt   DateTime?
+  reopenReason String    @default("")
+  /// times it has been closed (a reopen + close counts again)
+  closes       Int       @default(1)
+  updatedAt    DateTime  @updatedAt
 }

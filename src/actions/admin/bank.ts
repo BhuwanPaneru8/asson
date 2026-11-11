@@ -39,7 +39,11 @@ export async function importStatementAction(account: string, text: string) {
   }
 }
 
-const resolveSchema = z.object({ lineId: z.string(), depositId: z.string().optional(), remittanceId: z.string().optional(), ignore: z.string().max(300).optional() });
+const resolveSchema = z.object({
+  lineId: z.string(), depositId: z.string().optional(), remittanceId: z.string().optional(), paymentId: z.string().optional(), expenseId: z.string().optional(),
+  book: z.object({ category: z.enum(["RENT", "UTILITIES", "MARKETING", "PACKAGING", "DELIVERY", "EQUIPMENT", "FEES", "OTHER"]), description: z.string().max(150), storeId: z.string().optional() }).optional(),
+  ignore: z.string().max(300).optional(),
+});
 
 export async function resolveLineAction(input: z.input<typeof resolveSchema>) {
   const me = await requirePermission("finance");

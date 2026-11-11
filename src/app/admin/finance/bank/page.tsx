@@ -13,23 +13,23 @@ export default async function BankPage() {
   await requirePermission("finance");
   const [r, recent] = await Promise.all([
     reconciliation(),
-    db.statementLine.findMany({ where: { status: { in: ["MATCHED", "IGNORED"] } }, orderBy: { matchedAt: "desc" }, take: 20, include: { deposit: { select: { number: true, store: { select: { name: true } } } }, remittance: { select: { carrier: true, reference: true } } } }),
+    db.statementLine.findMany({ where: { status: { in: ["MATCHED", "IGNORED"] } }, orderBy: { matchedAt: "desc" }, take: 20, include: { deposit: { select: { number: true, store: { select: { name: true } } } }, remittance: { select: { carrier: true, reference: true } }, payment: { select: { supplier: { select: { name: true } } } }, expense: { select: { description: true } } } }),
   ]);
   return (
     <>
-      <PageHeader title="Bank statements" description="Import each account's statement (CSV from internet banking). Credits are matched to shop deposits and courier COD remittances; you explain the rest. Deposits the bank never shows are listed for chasing." actions={<Link href="/admin/cash" className="text-[13.5px] underline underline-offset-4">Cash</Link>} />
+      <PageHeader title="Bank statements" description="Import each account's statement (CSV from internet banking). Money in is matched to shop deposits and courier COD remittances; money out to supplier payments and expenses paid by bank. You explain the rest (or book a bank charge as an expense). Deposits the bank never shows are listed for chasing." actions={<Link href="/admin/cash" className="text-[13.5px] underline underline-offset-4">Cash</Link>} />
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[["Credits to explain", `${r.unmatched.length} · ${formatPrice(r.unmatched.reduce((a, l) => a + l.amount, 0))}`], ["Deposits not on the statement", String(r.notOnStatement.length)], ["COD remittances not seen", String(r.unseenRemittances.length)], ["Accounts", r.accounts.map((a) => `${a.account} to ${a.lastDate}`).join(" · ") || "none yet"]].map(([l, v]) => (
+        {[["Lines to explain", `${r.unmatched.length} (${r.unmatched.filter((l) => l.amount > 0).length} in, ${r.unmatched.filter((l) => l.amount < 0).length} out)`], ["Deposits not on the statement", String(r.notOnStatement.length)], ["COD remittances not seen", String(r.unseenRemittances.length)], ["Accounts", r.accounts.map((a) => `${a.account} to ${a.lastDate}`).join(" · ") || "none yet"]].map(([l, v]) => (
           <Card key={l}><div className="p-4"><p className="text-[12px] text-muted">{l}</p><p className="mt-1 text-[17px] font-semibold tabular-nums">{v}</p></div></Card>
         ))}
       </div>
       <Card title="Import a statement" className="mb-4"><StatementImport accounts={r.accounts.map((a) => a.account)} /></Card>
       {r.unmatched.length > 0 && (
-        <Card title={`Credits to explain · ${r.unmatched.length}`} className="mb-4">
+        <Card title={`Lines to explain · ${r.unmatched.length}`} className="mb-4">
           <ul className="divide-y divide-line">{r.unmatched.map((l) => (
             <li key={l.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-[14px]">
-              <span className="min-w-0"><b className="tabular-nums">{formatPrice(l.amount)}</b> · {l.account} · {formatDate(`${l.date}T12:00:00+05:45`)}<span className="block truncate text-[12.5px] text-muted">{l.description}{l.reference ? ` · ${l.reference}` : ""}</span></span>
-              <ResolveLine lineId={l.id} deposits={l.depositOptions} remittances={l.remittanceOptions} />
+              <span className="min-w-0"><b className={l.amount < 0 ? "tabular-nums text-danger" : "tabular-nums text-success"}>{l.amount < 0 ? `−${formatPrice(-l.amount)}` : `+${formatPrice(l.amount)}`}</b> · {l.account} · {formatDate(`${l.date}T12:00:00+05:45`)}<span className="block truncate text-[12.5px] text-muted">{l.description}{l.reference ? ` · ${l.reference}` : ""}</span></span>
+              <ResolveLine lineId={l.id} debit={l.amount < 0} deposits={l.depositOptions} remittances={l.remittanceOptions} payments={l.paymentOptions} expenses={l.expenseOptions} />
             </li>
           ))}</ul>
         </Card>
@@ -46,7 +46,7 @@ export default async function BankPage() {
       {recent.length > 0 && (
         <Card title="Recently matched">
           <ul className="divide-y divide-line text-[13.5px]">{recent.map((l) => (
-            <li key={l.id} className="flex justify-between gap-3 px-5 py-2"><span>{l.date} · {formatPrice(l.amount)} · {l.description}</span><span className="text-muted">{l.deposit ? `${depositRef(l.deposit.number)} ${l.deposit.store.name}` : l.remittance ? `${l.remittance.carrier} COD ${l.remittance.reference}` : l.note}</span></li>
+            <li key={l.id} className="flex justify-between gap-3 px-5 py-2"><span>{l.date} · {formatPrice(l.amount)} · {l.description}</span><span className="text-muted">{l.deposit ? `${depositRef(l.deposit.number)} ${l.deposit.store.name}` : l.remittance ? `${l.remittance.carrier} COD ${l.remittance.reference}` : l.payment ? `Payment to ${l.payment.supplier.name}` : l.expense ? `Expense: ${l.expense.description}` : l.note}</span></li>
           ))}</ul>
         </Card>
       )}

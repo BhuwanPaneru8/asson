@@ -164,6 +164,8 @@ async function main() {
   console.log("Resetting data…");
   // the cash book is append-only (a trigger blocks DELETE); TRUNCATE empties it for a fresh seed
   await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit"`);
+  // closed months lock expenses, bills and payments (triggers): reopen everything before wiping
+  await db.monthClose.deleteMany();
   await db.$transaction([
     // own production first: it points at products, suppliers and locations
     db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),

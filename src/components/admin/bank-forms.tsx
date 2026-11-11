@@ -37,32 +37,44 @@ export function StatementImport({ accounts }: { accounts: string[] }) {
       )}
       <button className={btn} disabled={pending || !preview || account.trim().length < 2} onClick={() => start(async () => {
         const r = await importStatementAction(account, text);
-        if (r.ok) { toast.success(`${r.added} new line(s) · ${r.deposits} deposit(s) and ${r.remittances} COD remittance(s) matched${r.leftForOthers ? ` · ${r.leftForOthers} of your own deposits left for someone else` : ""}`); setPreview(null); setText(""); setName(""); } else toast.error(r.error);
+        if (r.ok) { toast.success(`${r.added} new line(s) · ${r.deposits} deposit(s), ${r.remittances} COD remittance(s), ${r.payments} supplier payment(s), ${r.expenses} expense(s) matched${r.leftForOthers ? ` · ${r.leftForOthers} of your own deposits left for someone else` : ""}`); setPreview(null); setText(""); setName(""); } else toast.error(r.error);
       })}>{pending ? "Working…" : "Import and match"}</button>
       <p className="text-[12px] text-muted">Importing the same file twice adds nothing. Deposits are matched by bank, amount and date (slip numbers settle ties); courier COD remittances by amount and date. Nothing ambiguous is guessed.</p>
     </div>
   );
 }
 
-export function ResolveLine({ lineId, deposits, remittances }: { lineId: string; deposits: { id: string; label: string }[]; remittances: { id: string; label: string }[] }) {
+type Opt = { id: string; label: string };
+const BOOK = [["FEES", "Bank charge / fee"], ["UTILITIES", "Utility"], ["RENT", "Rent"], ["MARKETING", "Marketing"], ["DELIVERY", "Courier"], ["EQUIPMENT", "Equipment"], ["OTHER", "Other"]] as const;
+
+export function ResolveLine({ lineId, debit, deposits, remittances, payments, expenses }: { lineId: string; debit: boolean; deposits: Opt[]; remittances: Opt[]; payments: Opt[]; expenses: Opt[] }) {
   const [choice, setChoice] = useState("");
   const [why, setWhy] = useState("");
+  const [cat, setCat] = useState<(typeof BOOK)[number][0]>("FEES");
   const [pending, start] = useTransition();
   const go = () => start(async () => {
     const [kind, id] = choice.split(":");
-    const r = await resolveLineAction({ lineId, ...(kind === "d" ? { depositId: id } : kind === "r" ? { remittanceId: id } : { ignore: why }) });
+    const r = await resolveLineAction({
+      lineId,
+      ...(kind === "d" ? { depositId: id } : kind === "r" ? { remittanceId: id } : kind === "p" ? { paymentId: id } : kind === "e" ? { expenseId: id } : kind === "book" ? { book: { category: cat, description: why } } : { ignore: why }),
+    });
     if (r.ok) toast.success("Done"); else toast.error(r.error);
   });
+  const needsText = choice === "ignore" || choice === "book";
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      <select className={cn(input, "h-8 max-w-72 text-[13px]")} value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Explain this credit">
+      <select className={cn(input, "h-8 max-w-72 text-[13px]")} value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="Explain this line">
         <option value="">What is it?</option>
         {deposits.length > 0 && <optgroup label="Shop deposit">{deposits.map((d) => <option key={d.id} value={`d:${d.id}`}>{d.label}</option>)}</optgroup>}
         {remittances.length > 0 && <optgroup label="Courier COD">{remittances.map((r) => <option key={r.id} value={`r:${r.id}`}>{r.label}</option>)}</optgroup>}
+        {payments.length > 0 && <optgroup label="Supplier payment">{payments.map((p) => <option key={p.id} value={`p:${p.id}`}>{p.label}</option>)}</optgroup>}
+        {expenses.length > 0 && <optgroup label="Recorded expense">{expenses.map((e) => <option key={e.id} value={`e:${e.id}`}>{e.label}</option>)}</optgroup>}
+        {debit && <option value="book">Book it as an expense</option>}
         <option value="ignore">Something else (say what)</option>
       </select>
-      {choice === "ignore" && <input className={cn(input, "h-8 w-48 text-[13px]")} placeholder="e.g. interest, wallet settlement" value={why} onChange={(e) => setWhy(e.target.value)} aria-label="What this money is" />}
-      <button className="h-8 rounded-md bg-ink px-3 text-[13px] text-white disabled:opacity-40" disabled={pending || !choice || (choice === "ignore" && !why.trim())} onClick={go}>Save</button>
+      {choice === "book" && <select className={cn(input, "h-8 text-[13px]")} value={cat} onChange={(e) => setCat(e.target.value as typeof cat)} aria-label="Expense category">{BOOK.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}
+      {needsText && <input className={cn(input, "h-8 w-48 text-[13px]")} placeholder={choice === "book" ? "e.g. bank service charge" : debit ? "e.g. salary batch, owner drawing" : "e.g. interest, wallet settlement"} value={why} onChange={(e) => setWhy(e.target.value)} aria-label={choice === "book" ? "What the expense was" : "What this money is"} />}
+      <button className="h-8 rounded-md bg-ink px-3 text-[13px] text-white disabled:opacity-40" disabled={pending || !choice || (needsText && why.trim().length < (choice === "book" ? 3 : 1))} onClick={go}>Save</button>
     </span>
   );
 }

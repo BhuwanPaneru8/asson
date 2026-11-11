@@ -6,6 +6,10 @@ import { audit, type AuditActor } from "./audit";
 import { checkDeposit, CashError, depositRef } from "./cash";
 import { parseCsv } from "./csv";
 import { formatPrice } from "./utils";
+import { assertMonthOpen, CloseError } from "./month-close";
+import { ktmDate } from "./pos";
+import { paymentNo } from "./payables";
+import type { ExpenseCategory } from "@prisma/client";
 
 // Bank statements: finance uploads the bank's CSV export; each credit is matched to what explains it, a shop's
 // bank deposit (which then counts as checked against the statement) or a courier's COD remittance. Matching
@@ -86,6 +90,9 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 /** The account finance named ("NIC Asia current") and the bank a shop typed ("NIC Asia"): one contains the other.
  *  No looser rule: "Nepal Bank" and "Nepal Investment" must never match. */
 const sameBank = (account: string, bank: string) => { const a = norm(account), b = norm(bank); return !!a && !!b && (a.includes(b) || b.includes(a)); };
+/** A cheque/transfer reference appears in the narration: its digits (4+) or the whole of it, ignoring spaces and words
+ *  like "CHQ" ("CHQ 000124" matches "CHQ PAID 000124"). */
+const refIn = (ref: string | null, text: string) => { if (!ref) return false; const digits = ref.replace(/\D/g, ""); return digits.length >= 4 ? text.includes(digits) : text.includes(norm(ref)); };
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000);
 
 /** Store the lines (new ones only), then match what can be matched. */
@@ -99,11 +106,11 @@ export async function importStatement(tx: Tx, finance: Actor, account: string, l
     const base = [acct.toLowerCase(), l.date, l.amount, l.description, l.reference].join("|");
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    return { account: acct, date: l.date, amount: l.amount, description: l.description, reference: l.reference, key: createHash("sha256").update(`${base}|${n}`).digest("hex"), status: (l.amount < 0 ? "DEBIT" : "UNMATCHED") as "DEBIT" | "UNMATCHED", importedById: finance.id };
+    return { account: acct, date: l.date, amount: l.amount, description: l.description, reference: l.reference, key: createHash("sha256").update(`${base}|${n}`).digest("hex"), status: "UNMATCHED" as const, importedById: finance.id };
   });
   const r = await tx.statementLine.createMany({ data, skipDuplicates: true });
   const matched = await autoMatch(tx, finance, acct);
-  await audit(tx, finance, { action: "bank.import", entity: ["StatementLine", acct], summary: `Statement ${acct}: ${r.count} new line(s) of ${lines.length}, ${matched.deposits + matched.remittances} matched` });
+  await audit(tx, finance, { action: "bank.import", entity: ["StatementLine", acct], summary: `Statement ${acct}: ${r.count} new line(s) of ${lines.length}, ${matched.deposits + matched.remittances + matched.payments + matched.expenses} matched` });
   return { added: r.count, duplicates: lines.length - r.count, ...matched };
 }
 
@@ -134,6 +141,47 @@ async function matchRemittance(tx: Tx, finance: Actor, lineId: string, remittanc
   await audit(tx, finance, { action: "bank.match.cod", entity: ["CodRemittance", remittanceId], summary: `${rem.carrier} COD remittance ${formatPrice(rem.received)} (${rem.reference}) seen on ${line.account} ${line.date}` });
 }
 
+/** Tie a debit to a supplier payment made by bank, cheque or wallet (same amount; not void; not already matched). */
+async function matchPayment(tx: Tx, finance: Actor, lineId: string, paymentId: string) {
+  const line = await lockLine(tx, lineId);
+  if (line.status !== "UNMATCHED") throw new StatementError("That line is already dealt with.");
+  if (line.amount > 0) throw new StatementError("Money in can't be a supplier payment.");
+  const p = await tx.supplierPayment.findUnique({ where: { id: paymentId }, include: { statementLine: { select: { id: true } }, supplier: { select: { name: true } } } });
+  if (!p || p.voidedAt) throw new StatementError("Payment not found (or void).");
+  if (p.statementLine) throw new StatementError("That payment is already matched to another line.");
+  if (p.method === "CASH") throw new StatementError("That payment was in cash: it can't be on the bank statement.");
+  if (p.amount !== -line.amount) throw new StatementError(`${paymentNo(p.number)} was recorded as ${formatPrice(p.amount)}; the bank shows ${formatPrice(-line.amount)}. Void and re-record the payment first.`);
+  await tx.statementLine.update({ where: { id: lineId }, data: { status: "MATCHED", paymentId, matchedById: finance.id, matchedAt: new Date() } });
+  await audit(tx, finance, { action: "bank.match.payment", entity: ["SupplierPayment", paymentId], summary: `${paymentNo(p.number)} to ${p.supplier.name} ${formatPrice(p.amount)} seen on ${line.account} ${line.date}` });
+}
+
+/** Tie a debit to an expense already recorded as paid by bank (rent by transfer, a bill paid online). */
+async function matchExpense(tx: Tx, finance: Actor, lineId: string, expenseId: string) {
+  const line = await lockLine(tx, lineId);
+  if (line.status !== "UNMATCHED") throw new StatementError("That line is already dealt with.");
+  if (line.amount > 0) throw new StatementError("Money in can't be an expense.");
+  const e = await tx.expense.findUnique({ where: { id: expenseId }, include: { statementLine: { select: { id: true } } } });
+  if (!e) throw new StatementError("Expense not found.");
+  if (e.statementLine) throw new StatementError("That expense is already matched to another line.");
+  if (e.amount !== -line.amount) throw new StatementError(`The expense is ${formatPrice(e.amount)}; the bank shows ${formatPrice(-line.amount)}.`);
+  await tx.statementLine.update({ where: { id: lineId }, data: { status: "MATCHED", expenseId, matchedById: finance.id, matchedAt: new Date() } });
+}
+
+/** A debit nobody recorded (bank charges, a utility paid by standing order): book it as an expense from the line. */
+async function bookExpense(tx: Tx, finance: Actor, lineId: string, d: { category: ExpenseCategory; description: string; storeId?: string | null }) {
+  const line = await lockLine(tx, lineId);
+  if (line.status !== "UNMATCHED") throw new StatementError("That line is already dealt with.");
+  if (line.amount > 0) throw new StatementError("Money in can't be booked as an expense.");
+  if (d.category === "SALARIES") throw new StatementError("Salaries are booked by payroll: explain the salary batch in words instead.");
+  if (d.description.trim().length < 3) throw new StatementError("Say what it was.");
+  await assertMonthOpen(tx, line.date, "an expense");
+  const e = await tx.expense.create({ data: { date: line.date, category: d.category, amount: -line.amount, storeId: d.storeId || null, description: `${d.description.trim().slice(0, 150)} (from ${line.account} statement)`, paidVia: "Bank", source: `statement:${line.id}`, createdById: finance.id } });
+  await tx.statementLine.update({ where: { id: lineId }, data: { status: "MATCHED", expenseId: e.id, matchedById: finance.id, matchedAt: new Date() } });
+  await audit(tx, finance, { action: "bank.expense", entity: ["Expense", e.id], summary: `Booked ${formatPrice(e.amount)} ${d.category.toLowerCase()} from ${line.account} ${line.date}: ${d.description.trim().slice(0, 100)}` });
+}
+
+const cashPaid = (via: string | null) => !!via && /^(cash|petty)/i.test(via.trim());
+
 /**
  * Match every unmatched credit that has exactly one explanation: a recorded deposit at a bank like this account,
  * same amount, deposited 0–4 days before the statement date (a slip number in the narration settles a tie);
@@ -142,15 +190,30 @@ async function matchRemittance(tx: Tx, finance: Actor, lineId: string, remittanc
  */
 export async function autoMatch(tx: Tx, finance: Actor, account?: string) {
   const lines = await tx.statementLine.findMany({ where: { status: "UNMATCHED", ...(account ? { account } : {}) }, orderBy: [{ date: "asc" }, { id: "asc" }], take: 5000 });
-  if (!lines.length) return { deposits: 0, remittances: 0, leftForOthers: 0 };
-  const [deposits, remittances] = await Promise.all([
+  if (!lines.length) return { deposits: 0, remittances: 0, payments: 0, expenses: 0, leftForOthers: 0 };
+  const dates = lines.map((l) => l.date).sort();
+  const since = new Date(Date.parse(`${dates[0]}T00:00:00Z`) - 10 * 86_400_000);
+  const [deposits, remittances, payments, expenseRows] = await Promise.all([
     tx.bankDeposit.findMany({ where: { status: "RECORDED" } }),
     tx.codRemittance.findMany({ where: { statementLine: null } }),
+    tx.supplierPayment.findMany({ where: { statementLine: null, voidedAt: null, method: { not: "CASH" }, paidAt: { gte: since } } }),
+    tx.expense.findMany({ where: { statementLine: null, date: { gte: since.toISOString().slice(0, 10) }, amount: { gt: 0 }, OR: [{ source: null }, { AND: [{ NOT: { source: { startsWith: "payroll:" } } }, { NOT: { source: { startsWith: "petty:" } } }] }] } }),
   ]);
-  const usedD = new Set<string>(), usedR = new Set<string>();
-  let nD = 0, nR = 0, left = 0;
+  const expenses = expenseRows.filter((e) => !cashPaid(e.paidVia));
+  const usedD = new Set<string>(), usedR = new Set<string>(), usedP = new Set<string>(), usedE = new Set<string>();
+  let nD = 0, nR = 0, nP = 0, nE = 0, left = 0;
   for (const l of lines) {
     const text = norm(`${l.description} ${l.reference}`);
+    if (l.amount < 0) {
+      // a supplier payment by bank/cheque/wallet of that amount, paid 0–5 days before the bank shows it (cheques clear late);
+      // else an expense paid by bank of that amount within 5 days. The reference settles a tie.
+      let pc = payments.filter((p) => !usedP.has(p.id) && p.amount === -l.amount && dayDiff(l.date, ktmDate(p.paidAt)) >= 0 && dayDiff(l.date, ktmDate(p.paidAt)) <= 5);
+      if (pc.length > 1) { const byRef = pc.filter((p) => refIn(p.reference, text)); if (byRef.length) pc = byRef; }
+      if (pc.length === 1) { usedP.add(pc[0].id); await matchPayment(tx, finance, l.id, pc[0].id); nP++; continue; }
+      const ec = expenses.filter((e) => !usedE.has(e.id) && e.amount === -l.amount && Math.abs(dayDiff(l.date, e.date)) <= 5);
+      if (ec.length === 1) { usedE.add(ec[0].id); await matchExpense(tx, finance, l.id, ec[0].id); nE++; }
+      continue;
+    }
     let cands = deposits.filter((d) => !usedD.has(d.id) && d.amount === l.amount && sameBank(l.account, d.bank) && dayDiff(l.date, d.depositedOn) >= 0 && dayDiff(l.date, d.depositedOn) <= 4);
     if (cands.length > 1) { const bySlip = cands.filter((d) => text.includes(norm(d.slipNo))); if (bySlip.length) cands = bySlip; }
     if (cands.length === 1) {
@@ -165,16 +228,19 @@ export async function autoMatch(tx: Tx, finance: Actor, account?: string) {
     if (rc.length > 1) { const byRef = rc.filter((r) => (r.reference && text.includes(norm(r.reference))) || text.includes(norm(r.carrier))); if (byRef.length) rc = byRef; }
     if (rc.length === 1) { usedR.add(rc[0].id); await matchRemittance(tx, finance, l.id, rc[0].id); nR++; }
   }
-  return { deposits: nD, remittances: nR, leftForOthers: left };
+  return { deposits: nD, remittances: nR, payments: nP, expenses: nE, leftForOthers: left };
 }
 
 /** Finance ties a line by hand (deposit or remittance), or sets it aside with a reason. */
-export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { depositId?: string; remittanceId?: string; ignore?: string }) {
+export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { depositId?: string; remittanceId?: string; paymentId?: string; expenseId?: string; book?: { category: ExpenseCategory; description: string; storeId?: string | null }; ignore?: string }) {
   try {
     if (d.depositId) return await matchDeposit(tx, finance, lineId, d.depositId);
     if (d.remittanceId) return await matchRemittance(tx, finance, lineId, d.remittanceId);
+    if (d.paymentId) return await matchPayment(tx, finance, lineId, d.paymentId);
+    if (d.expenseId) return await matchExpense(tx, finance, lineId, d.expenseId);
+    if (d.book) return await bookExpense(tx, finance, lineId, d.book);
   } catch (e) {
-    if (e instanceof CashError) throw new StatementError(e.message);
+    if (e instanceof CashError || e instanceof CloseError) throw new StatementError(e.message);
     throw e;
   }
   const why = d.ignore?.trim() ?? "";
@@ -189,11 +255,13 @@ export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { d
 
 /** What finance needs: per account the last statement date and unexplained credits; deposits and remittances the bank hasn't shown. */
 export async function reconciliation(now = new Date()) {
-  const [accounts, unmatched, pendingDeposits, unseenRemittances] = await Promise.all([
+  const [accounts, unmatched, pendingDeposits, unseenRemittances, openPayments, openExpenses] = await Promise.all([
     db.statementLine.groupBy({ by: ["account"], _max: { date: true }, _count: { _all: true } }),
     db.statementLine.findMany({ where: { status: "UNMATCHED" }, orderBy: [{ date: "desc" }], take: 300 }),
     db.bankDeposit.findMany({ where: { status: "RECORDED" }, orderBy: { depositedOn: "asc" }, include: { store: { select: { name: true } } } }),
     db.codRemittance.findMany({ where: { statementLine: null }, orderBy: { createdAt: "asc" }, take: 300 }),
+    db.supplierPayment.findMany({ where: { statementLine: null, voidedAt: null, method: { not: "CASH" } }, orderBy: { paidAt: "desc" }, take: 500, include: { supplier: { select: { name: true } } } }),
+    db.expense.findMany({ where: { statementLine: null, amount: { gt: 0 }, OR: [{ source: null }, { AND: [{ NOT: { source: { startsWith: "payroll:" } } }, { NOT: { source: { startsWith: "petty:" } } }] }] }, orderBy: { date: "desc" }, take: 500 }),
   ]);
   const lastDate = (bank: string) => accounts.filter((a) => sameBank(a.account, bank)).map((a) => a._max.date ?? "").sort().pop() ?? null;
   const latest = accounts.map((a) => a._max.date ?? "").sort().pop() ?? null;
@@ -202,8 +270,10 @@ export async function reconciliation(now = new Date()) {
     unmatched: unmatched.map((l) => ({
       ...l,
       // likely explanations to pick from: same amount first, then any recorded deposit at that bank within 10 days
-      depositOptions: pendingDeposits.filter((d) => sameBank(l.account, d.bank) && Math.abs(dayDiff(l.date, d.depositedOn)) <= 10).sort((a, b) => Number(b.amount === l.amount) - Number(a.amount === l.amount)).slice(0, 8).map((d) => ({ id: d.id, label: `${depositRef(d.number)} ${d.store.name} ${formatPrice(d.amount)} on ${d.depositedOn}` })),
-      remittanceOptions: unseenRemittances.filter((r) => r.received === l.amount).slice(0, 5).map((r) => ({ id: r.id, label: `${r.carrier} ${formatPrice(r.received)} (${r.reference})` })),
+      depositOptions: l.amount < 0 ? [] : pendingDeposits.filter((d) => sameBank(l.account, d.bank) && Math.abs(dayDiff(l.date, d.depositedOn)) <= 10).sort((a, b) => Number(b.amount === l.amount) - Number(a.amount === l.amount)).slice(0, 8).map((d) => ({ id: d.id, label: `${depositRef(d.number)} ${d.store.name} ${formatPrice(d.amount)} on ${d.depositedOn}` })),
+      remittanceOptions: l.amount > 0 ? unseenRemittances.filter((r) => r.received === l.amount).slice(0, 5).map((r) => ({ id: r.id, label: `${r.carrier} ${formatPrice(r.received)} (${r.reference})` })) : [],
+      paymentOptions: l.amount < 0 ? openPayments.filter((p) => Math.abs(dayDiff(l.date, ktmDate(p.paidAt))) <= 15).sort((a, b) => Number(b.amount === -l.amount) - Number(a.amount === -l.amount)).slice(0, 8).map((p) => ({ id: p.id, label: `${paymentNo(p.number)} ${p.supplier.name} ${formatPrice(p.amount)}${p.reference ? ` (${p.reference})` : ""}` })) : [],
+      expenseOptions: l.amount < 0 ? openExpenses.filter((e) => e.amount === -l.amount && !cashPaid(e.paidVia) && Math.abs(dayDiff(l.date, e.date)) <= 15).slice(0, 5).map((e) => ({ id: e.id, label: `${e.date} ${e.description} ${formatPrice(e.amount)}` })) : [],
     })),
     // a deposit made 3+ days before the last statement of its bank, still not seen: chase it
     notOnStatement: pendingDeposits.filter((d) => { const ld = lastDate(d.bank); return ld && dayDiff(ld, d.depositedOn) >= 3; }).map((d) => ({ id: d.id, number: d.number, store: d.store.name, amount: d.amount, bank: d.bank, slipNo: d.slipNo, depositedOn: d.depositedOn, lastStatement: lastDate(d.bank) })),
