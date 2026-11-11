@@ -79,6 +79,10 @@ export const store = {
     weeklyOff: 6, // Saturday (0 = Sunday … 6 = Saturday): not counted as a leave day
     autoCloseHours: 16, // an entry still open this long was a forgotten clock-out
     presentMinutes: 240, // a day counts as worked (for home leave) at 4+ hours
+    // rosters: Labour Act 2074 — 8 hours a day, 48 a week, one day off a week; overtime beyond that needs consent and pay
+    dayHours: 8,
+    maxWeekHours: 48,
+    lateGraceMinutes: 10, // clocking in this long after the shift starts counts as late
     leave: [
       { key: "HOME", label: "Home leave", accruePerDaysWorked: 20, maxBalance: 90, paid: true },
       { key: "SICK", label: "Sick leave", perYear: 12, paid: true },

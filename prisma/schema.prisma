@@ -207,6 +207,7 @@ model User {
   locations          StaffLocation[]
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
+  rosterShifts       RosterShift[]
   employment         Employment?
   payslips           Payslip[]
   issuesReported     Issue[]         @relation("IssueReporter")
@@ -562,6 +563,10 @@ model Store {
   pickWaves        PickWave[]
   manifests        Manifest[]
   rtoReceipts      ReturnToOrigin[]
+  rosterShifts     RosterShift[]
+  rosterWeeks      RosterWeek[]
+  /// fewest people the roster should have on each open day
+  minStaff         Int               @default(2)
 
   @@index([active, priority])
 }
@@ -2394,4 +2399,45 @@ model ReturnToOrigin {
 
   @@index([state, startedAt])
   @@index([startedAt])
+}
+
+// ---------- People: rosters (Phase 16a) ----------
+
+/// One planned shift: a person at a location on a Nepal date, start to end (same day). One per person per day.
+model RosterShift {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  /// Nepal calendar date YYYY-MM-DD, and times "HH:MM" Nepal time
+  date        String
+  start       String
+  end         String
+  createdById String
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([storeId, date])
+}
+
+/// A location's week (from its first day): staff see the shifts once it's published.
+model RosterWeek {
+  storeId       String
+  store         Store     @relation(fields: [storeId], references: [id])
+  weekStart     String
+  publishedAt   DateTime
+  publishedById String
+  /// last edit to the week's shifts (added, changed or removed): after publishedAt means staff see an old plan
+  changedAt     DateTime?
+
+  @@id([storeId, weekStart])
+}
+
+/// Public holidays (set by the owner each year; the government announces them).
+model Holiday {
+  date      String   @id
+  name      String
+  createdAt DateTime @default(now())
 }

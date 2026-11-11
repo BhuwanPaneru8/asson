@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen, CalendarDays } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/scorecard", label: "Shop scorecard", icon: Gauge, perm: "ops.manage" },
   { href: "/admin/ops", label: "Shop operations", icon: Megaphone, perm: "ops.manage" },
   { href: "/admin/people", label: "People", icon: UsersRound, perm: "people" },
+  { href: "/admin/rosters", label: "Rosters", icon: CalendarDays, perm: "people" },
   { href: "/admin/payroll", label: "Payroll", icon: HandCoins, perm: "payroll" },
   { href: "/admin/today", label: "Today", icon: ListChecks, perm: "self.time" },
   { href: "/admin/visits", label: "Store visits", icon: ClipboardCheck, perm: "self.time" },

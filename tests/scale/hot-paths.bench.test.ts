@@ -18,6 +18,8 @@ import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manifests";
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
+import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
+import { ktmDate } from "@/lib/pos";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -96,6 +98,17 @@ it("hot paths stay within budget at national scale", async () => {
         await handOver(tx, staff, manifest.id, { riderName: "Bench rider", parcels: ids.length });
         throw new Rollback();
       }, { timeout: 120_000 }).catch((e) => { if (!(e instanceof Rollback)) throw e; }));
+    }
+  }
+  {
+    // rosters (8 staff per location, 8 weeks of shifts and 4 of clock-ins)
+    const wk = weekStartOf(ktmDate());
+    const [shop] = await db.$queryRaw<{ storeId: string }[]>`SELECT "storeId" FROM "RosterShift" GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1`;
+    if (shop) {
+      await time("rosters: one location's week planner", STAFF, () => rosterWeek(shop.storeId, wk));
+      await time("rosters: every location's week (HQ)", STAFF, () => rosterOverview({ all: true }, wk));
+      await time("rosters: roster vs clock-ins, 14 days, one location", STAFF, () => rosterVsActual([shop.storeId], addDays(ktmDate(), -13), ktmDate()));
+      await time("rosters: roster vs clock-ins, 14 days, whole network", REPORT, () => rosterVsActual(null, addDays(ktmDate(), -13), ktmDate()));
     }
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
