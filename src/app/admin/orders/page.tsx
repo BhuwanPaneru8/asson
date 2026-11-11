@@ -1,3 +1,4 @@
+import { codRiskFor } from "@/lib/cod-risk";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth";
 import type { OrderStatus, Prisma } from "@prisma/client";
@@ -40,6 +41,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     db.order.groupBy({ by: ["status"], _count: { _all: true } }),
     db.order.count({ where: toCall }),
   ]);
+  // COD risk for orders still waiting for their confirmation call
+  const risk = await codRiskFor(orders.filter((o) => o.status === "PENDING" && o.paymentMethod === "COD" && o.channel === "ONLINE"));
   const countOf = (s: string) => (s === "ALL" ? counts.reduce((a, c) => a + c._count._all, 0) : counts.find((c) => c.status === s)?._count._all ?? 0);
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams(Object.entries({ status: sp.status, q: sp.q, pay: sp.pay, ...patch }).filter(([, v]) => v) as [string, string][]);
@@ -71,7 +74,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       </form>
       <Card>
         <OrdersTable
-          orders={orders.map((o) => ({ id: o.id, number: o.number, name: (o.shippingAddress as { fullName?: string })?.fullName ?? "", email: o.email, city: (o.shippingAddress as { city?: string })?.city ?? "", status: o.status, paymentMethod: o.paymentMethod, paymentStatus: o.paymentStatus, total: o.total, items: o._count.items, createdAt: o.createdAt.toISOString() }))}
+          orders={orders.map((o) => ({ id: o.id, number: o.number, name: (o.shippingAddress as { fullName?: string })?.fullName ?? "", email: o.email, city: (o.shippingAddress as { city?: string })?.city ?? "", status: o.status, paymentMethod: o.paymentMethod, paymentStatus: o.paymentStatus, total: o.total, items: o._count.items, createdAt: o.createdAt.toISOString(), risk: risk.get(o.id) ?? null }))}
           page={page}
           pages={Math.max(1, Math.ceil(total / TAKE))}
           total={total}

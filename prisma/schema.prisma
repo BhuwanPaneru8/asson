@@ -502,6 +502,7 @@ model Order {
   @@index([status, createdAt])
   @@index([createdAt])
   @@index([email])
+  @@index([phone])
   @@index([paymentStatus, paymentDueAt])
   @@index([channel, createdAt])
   @@index([shiftId])
