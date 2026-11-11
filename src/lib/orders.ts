@@ -25,9 +25,10 @@ export async function transitionOrder(opts: {
   within?: (tx: Prisma.TransactionClient) => Promise<void>;
   /** set only by the till's pickup hand-over, which records the payment */
   handover?: boolean;
-}) {
+}, outer?: Prisma.TransactionClient) {
   const { orderId, to, actor, actorId } = opts;
-  return db.$transaction(async (tx) => {
+  // inside a caller's transaction (e.g. a courier hand-over moving many orders at once) or in its own
+  const body = async (tx: Prisma.TransactionClient) => {
     const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: { include: { returnItems: { select: { quantity: true } } } } } });
     if (!order) throw new TransitionError("Order not found.");
     const pickup = !!order.pickupStoreId;
@@ -79,5 +80,6 @@ export async function transitionOrder(opts: {
     const notice = pickup ? PICKUP_NOTICE_FOR_STATUS[to] ?? NOTICE_FOR_STATUS[to] : NOTICE_FOR_STATUS[to];
     if (notice) await queueOrderNotice(tx, orderId, notice);
     return { from: order.status, to };
-  });
+  };
+  return outer ? body(outer) : db.$transaction(body);
 }

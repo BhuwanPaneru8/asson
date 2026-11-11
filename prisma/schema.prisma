@@ -492,6 +492,7 @@ model Order {
   careCases     CareCase[]
   waveOrder     WaveOrder?
   packCheck     PackCheck?
+  manifestOrder ManifestOrder?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -554,6 +555,7 @@ model Store {
   deposits         BankDeposit[]
   bins             Bin[]
   pickWaves        PickWave[]
+  manifests        Manifest[]
 
   @@index([active, priority])
 }
@@ -2290,4 +2292,46 @@ model PackCheck {
   box         String?
   packedById  String
   createdAt   DateTime @default(now())
+}
+
+enum ManifestStatus {
+  OPEN // parcels being scanned on
+  HANDED_OVER // the rider signed for them; the orders are shipped
+  CANCELLED
+}
+
+/// The parcels one courier collects from one location in one pickup. Handing over ships every order on it at once.
+model Manifest {
+  id          String          @id @default(cuid())
+  number      Int             @unique @default(autoincrement())
+  storeId     String
+  store       Store           @relation(fields: [storeId], references: [id])
+  carrier     String
+  status      ManifestStatus  @default(OPEN)
+  createdById String
+  createdAt   DateTime        @default(now())
+  /// filled at hand-over
+  riderName   String?
+  riderPhone  String?
+  handedAt    DateTime?
+  handedById  String?
+  parcels     Int?
+  codTotal    Int?
+  orders      ManifestOrder[]
+
+  @@index([storeId, status])
+}
+
+model ManifestOrder {
+  manifestId     String
+  manifest       Manifest @relation(fields: [manifestId], references: [id], onDelete: Cascade)
+  orderId        String   @unique // one manifest per parcel (rows are removed if the manifest is cancelled)
+  order          Order    @relation(fields: [orderId], references: [id])
+  trackingNumber String
+  /// cash the rider collects at the door (COD total, 0 if prepaid)
+  cod            Int
+  addedById      String
+  addedAt        DateTime @default(now())
+
+  @@id([manifestId, orderId])
 }

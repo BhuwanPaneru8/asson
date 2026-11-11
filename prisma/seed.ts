@@ -177,7 +177,7 @@ async function main() {
     db.statutoryDeposit.deleteMany(), db.payslip.deleteMany(), db.payrollRun.deleteMany(), db.employment.deleteMany(), db.payrollTaxYear.deleteMany(),
     db.commissionRule.deleteMany(),
     db.checklistRun.deleteMany(), db.checklistTemplate.deleteMany(), db.announcement.deleteMany(),
-    db.issueEvent.deleteMany(), db.issue.deleteMany(), db.careMessage.deleteMany(), db.careCase.deleteMany(), db.vmEvent.deleteMany(), db.vmSubmission.deleteMany(), db.vmBrief.deleteMany(), db.visitAction.deleteMany(), db.storeVisit.deleteMany(), db.visitTemplate.deleteMany(), db.shopBudget.deleteMany(), db.recurringCost.deleteMany(), db.binAssignment.deleteMany(), db.bin.deleteMany(), db.packCheck.deleteMany(), db.waveOrder.deleteMany(), db.pickWave.deleteMany(),
+    db.issueEvent.deleteMany(), db.issue.deleteMany(), db.careMessage.deleteMany(), db.careCase.deleteMany(), db.vmEvent.deleteMany(), db.vmSubmission.deleteMany(), db.vmBrief.deleteMany(), db.visitAction.deleteMany(), db.storeVisit.deleteMany(), db.visitTemplate.deleteMany(), db.shopBudget.deleteMany(), db.recurringCost.deleteMany(), db.binAssignment.deleteMany(), db.bin.deleteMany(), db.manifestOrder.deleteMany(), db.manifest.deleteMany(), db.packCheck.deleteMany(), db.waveOrder.deleteMany(), db.pickWave.deleteMany(),
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
