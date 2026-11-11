@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault } from "lucide-react";
+import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3 } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time" },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers" },
   { href: "/admin/replenishment", label: "Replenishment", icon: RefreshCw, perm: "transfers" },
+  { href: "/admin/bins", label: "Bins", icon: Grid3x3, perm: "stock.count" },
   { href: "/admin/counts", label: "Stock counts", icon: ClipboardCheck, perm: "stock.count" },
   { href: "/admin/locations", label: "Locations", icon: MapPin, perm: "locations" },
   { href: "/admin/purchasing", label: "Purchasing", icon: ClipboardList, perm: "purchasing" },
