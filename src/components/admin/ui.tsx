@@ -27,6 +27,7 @@ const STATUS_TONE: Record<OrderStatus, string> = {
   PACKED: "bg-[#efe8fb] text-[#5b3aa6]",
   SHIPPED: "bg-[#e3f2f4] text-[#1e6f73]",
   OUT_FOR_DELIVERY: "bg-[#e3f2f4] text-[#1e6f73]",
+  RETURNING: "bg-[#fbeee0] text-[#9a5b13]",
   DELIVERED: "bg-[#e6f1ea] text-success",
   CANCELLED: "bg-cloud text-muted",
   RETURN_REQUESTED: "bg-[#fbe9e7] text-danger",

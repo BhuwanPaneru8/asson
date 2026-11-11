@@ -2,6 +2,7 @@ import type { OrderStatus } from "@prisma/client";
 import { Check } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { makeT, type MessageKey, type T } from "@/lib/i18n";
+import { store } from "@/lib/config";
 
 const DELIVERY_STEPS: { status: OrderStatus; label: MessageKey }[] = [
   { status: "PENDING", label: "status.placed" },
@@ -21,6 +22,7 @@ const PICKUP_STEPS: { status: OrderStatus; label: MessageKey }[] = [
 
 export function OrderProgress({ status, events, pickup = false, t = makeT("en") }: { status: OrderStatus; events: { status: OrderStatus | null; createdAt: Date | string }[]; pickup?: boolean; t?: T }) {
   const STEPS = pickup ? PICKUP_STEPS : DELIVERY_STEPS;
+  if (status === "RETURNING") return <p className="bg-[#fbeee0] p-4 text-[14.5px] text-[#9a5b13]">{t("ord.returningNote", { phone: store.supportPhone })}</p>;
   if (status === "CANCELLED") return <p className="bg-[#fbe9e7] p-4 text-[14.5px] text-danger">{t("ord.cancelledNote")}</p>;
   const idx = ["RETURN_REQUESTED", "RETURNED"].includes(status) ? STEPS.length - 1 : STEPS.findIndex((s) => s.status === status);
   return (

@@ -63,7 +63,7 @@ The [PRD](PRD.md) defines ten business systems. They map onto the codebase like 
 |---|---|---|---|
 | Commerce | Catalogue, search, cart, checkout | `lib/catalog.ts`, `lib/cart.ts`, `actions/cart.ts`, `actions/checkout.ts`, `app/(shop)` | ✅ |
 | Payments | eSewa, Khalti, COD, reconciliation | `lib/payments/*`, `app/api/payments/*`, `app/api/cron/payments` | 🟡 |
-| Orders and fulfilment | State machine, events, packing slip; waves, scan packing, courier manifests (hand-over ships every parcel in one transaction) | `lib/orders.ts`, `lib/order-status.ts`, `lib/fulfilment.ts`, `lib/manifests.ts`, `actions/admin/orders.ts` | ✅ |
+| Orders and fulfilment | State machine, events, packing slip; waves, scan packing, courier manifests (hand-over ships every parcel in one transaction), failed deliveries and returns to origin | `lib/orders.ts`, `lib/order-status.ts`, `lib/fulfilment.ts`, `lib/manifests.ts`, `lib/deliveries.ts`, `actions/admin/orders.ts` | ✅ |
 | Inventory | Variant stock, ledger, adjustments | `Variant`, `InventoryLog`, `actions/admin/catalog.ts` | ✅ (no costing yet) |
 | Customers | Accounts, addresses, wishlist, reviews | `lib/auth.ts`, `actions/account.ts`, `actions/auth.ts` | ✅ |
 | Workforce | Roles, permissions, approval PINs | `lib/permissions.ts` (single map), `requirePermission()` | ✅ |

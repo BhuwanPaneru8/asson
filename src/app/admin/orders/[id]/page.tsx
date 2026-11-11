@@ -1,3 +1,4 @@
+import { codRiskFor } from "@/lib/cod-risk";
 import { EntityHistory } from "@/components/admin/entity-history";
 import Image from "next/image";
 import { requirePermission } from "@/lib/auth";
@@ -84,8 +85,8 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-4">
-          {order.status === "PENDING" && order.paymentMethod === "COD" && order.channel === "ONLINE" && <CallPanel orderId={order.id} phone={order.phone} attempts={order.callAttempts} outcome={order.callOutcome} />}
-          <OrderControls orderId={order.id} status={order.status} next={transitionsFor(order.status, !!order.pickupStoreId)} pickupAt={order.pickupStore?.name} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
+          {order.status === "PENDING" && order.paymentMethod === "COD" && order.channel === "ONLINE" && <CallPanel orderId={order.id} phone={order.phone} attempts={order.callAttempts} outcome={order.callOutcome} risk={(await codRiskFor([order])).get(order.id) ?? null} />}
+          <OrderControls orderId={order.id} status={order.status} next={transitionsFor(order.status, !!order.pickupStoreId).filter((s) => s !== "RETURNING" && order.status !== "RETURNING")} pickupAt={order.pickupStore?.name} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
           <Card title="Customer">
             <div className="space-y-1 px-5 py-4 text-[14px]">
               {order.user ? <Link href={`/admin/customers?q=${encodeURIComponent(order.email)}`} className="font-medium hover:underline">{order.user.name}</Link> : <p className="font-medium">Guest checkout</p>}

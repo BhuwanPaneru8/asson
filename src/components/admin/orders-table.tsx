@@ -9,7 +9,7 @@ import { bulkUpdateStatus } from "@/actions/admin/orders";
 import { formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { StatusPill, Pill, Th, Td, AdminPager } from "./ui";
 
-type Row = { id: string; number: number; name: string; email: string; city: string; status: OrderStatus; paymentMethod: string; paymentStatus: string; total: number; items: number; createdAt: string };
+type Row = { id: string; number: number; name: string; email: string; city: string; status: OrderStatus; paymentMethod: string; paymentStatus: string; total: number; items: number; createdAt: string; risk?: { level: "high" | "medium" | "low"; reasons: string[] } | null };
 
 const BULK: { to: OrderStatus; label: string }[] = [
   { to: "CONFIRMED", label: "Mark confirmed" },
@@ -54,7 +54,7 @@ export function OrdersTable({ orders, page, pages, total }: { orders: Row[]; pag
             {orders.map((o) => (
               <tr key={o.id} className={sel.has(o.id) ? "bg-accent-soft/40" : "hover:bg-cloud/40"}>
                 <Td><input type="checkbox" aria-label={`Select ${formatOrderNumber(o.number)}`} checked={sel.has(o.id)} onChange={() => toggle(o.id)} className="h-4 w-4 accent-ink" /></Td>
-                <Td><Link href={`/admin/orders/${o.id}`} className="font-semibold hover:underline">{formatOrderNumber(o.number)}</Link><p className="text-[12.5px] text-muted">{o.items} item{o.items > 1 && "s"}</p></Td>
+                <Td><Link href={`/admin/orders/${o.id}`} className="font-semibold hover:underline">{formatOrderNumber(o.number)}</Link><p className="text-[12.5px] text-muted">{o.items} item{o.items > 1 && "s"}</p>{o.risk && o.risk.level !== "low" && <span title={o.risk.reasons.join("; ")} className="mt-1 inline-block"><Pill tone={o.risk.level === "high" ? "danger" : "warn"}>{o.risk.level} COD risk</Pill></span>}</Td>
                 <Td><p>{o.name || "—"}</p><p className="text-[12.5px] text-muted">{o.city || o.email}</p></Td>
                 <Td className="whitespace-nowrap text-muted">{formatDateTime(o.createdAt)}</Td>
                 <Td><StatusPill status={o.status} /></Td>

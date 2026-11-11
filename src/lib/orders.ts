@@ -25,6 +25,9 @@ export async function transitionOrder(opts: {
   within?: (tx: Prisma.TransactionClient) => Promise<void>;
   /** set only by the till's pickup hand-over, which records the payment */
   handover?: boolean;
+  /** set only by the deliveries desk: a parcel coming back undelivered, and (on receipt) where its units go back
+   *  on sale — null when it came back damaged or was lost */
+  rto?: { restockTo: string | null };
 }, outer?: Prisma.TransactionClient) {
   const { orderId, to, actor, actorId } = opts;
   // inside a caller's transaction (e.g. a courier hand-over moving many orders at once) or in its own
@@ -34,6 +37,7 @@ export async function transitionOrder(opts: {
     const pickup = !!order.pickupStoreId;
     const label = (s: OrderStatus) => statusLabel(s, pickup);
     if (!transitionsFor(order.status, pickup).includes(to)) throw new TransitionError(`Can't move an order from ${label(order.status)} to ${label(to)}.`);
+    if ((to === "RETURNING" || order.status === "RETURNING") && !opts.rto) throw new TransitionError("Undelivered parcels are handled in Fulfilment → Deliveries, so they're counted back in where they arrive.");
     if (pickup && to === "DELIVERED" && !opts.handover) throw new TransitionError("Hand pickup orders over at the shop's till (Point of sale → Pickups) so the payment is recorded.");
 
     const data: Prisma.OrderUpdateManyMutationInput = { status: to };
@@ -57,9 +61,13 @@ export async function transitionOrder(opts: {
       const back = order.items.map((it) => ({ id: it.id, variantId: it.variantId, productId: it.productId, quantity: it.quantity - it.returnItems.reduce((s, r) => s + r.quantity, 0) }));
       // a pickup order that was ready (or collected) is physically at the pickup shop now
       const atShop = pickup && ["PACKED", "DELIVERED", "RETURN_REQUESTED"].includes(order.status) ? order.pickupStoreId! : undefined;
-      await restockOrder(tx, { orderId, items: back, reason: to === "CANCELLED" ? "CANCEL_RESTOCK" : "RETURN_RESTOCK", actorId, to: atShop });
+      // a parcel back from the courier goes on sale where it arrived; damaged or lost ones don't (the desk records them)
+      const restockTo = order.status === "RETURNING" ? opts.rto!.restockTo : atShop;
+      if (order.status !== "RETURNING" || restockTo) {
+        await restockOrder(tx, { orderId, items: back, reason: to === "CANCELLED" ? "CANCEL_RESTOCK" : "RETURN_RESTOCK", actorId, to: restockTo ?? undefined });
+        await queueBackInStock(tx, order.items.flatMap((i) => (i.variantId ? [i.variantId] : [])));
+      }
       for (const it of back) if (it.variantId && it.quantity > 0) await tx.product.update({ where: { id: it.productId }, data: { soldCount: { decrement: it.quantity } } });
-      await queueBackInStock(tx, order.items.flatMap((i) => (i.variantId ? [i.variantId] : [])));
     }
 
     const shipNote = to === "SHIPPED" && (data.carrier || data.trackingNumber) ? ` via ${data.carrier ?? "courier"}${data.trackingNumber ? ` (${data.trackingNumber})` : ""}` : "";

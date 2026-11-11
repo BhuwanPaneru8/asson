@@ -15,7 +15,7 @@ import { dispatchNotifications } from "@/lib/notifications";
 const sendSoon = () => after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
 
 type R = { ok: boolean; error?: string; message?: string };
-const statusEnum = z.enum(["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "RETURN_REQUESTED", "RETURNED"]);
+const statusEnum = z.enum(["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "RETURNING", "DELIVERED", "CANCELLED", "RETURN_REQUESTED", "RETURNED"]);
 
 export async function updateOrderStatus(input: { orderId: string; to: OrderStatus; note?: string; carrier?: string; trackingNumber?: string }): Promise<R> {
   const staff = await requirePermission("orders");
