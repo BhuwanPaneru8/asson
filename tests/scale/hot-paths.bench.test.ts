@@ -11,6 +11,7 @@ import { budgetReport, targetProgress } from "@/lib/budgets";
 import { cashPosition } from "@/lib/cash";
 import { importStatement, reconciliation } from "@/lib/bank-statements";
 import { closeChecklist } from "@/lib/month-close";
+import { computeVat } from "@/lib/vat";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -90,6 +91,7 @@ it("hot paths stay within budget at national scale", async () => {
     const finance = { id: "bench-finance", name: "Bench", role: "ADMIN" };
     await time("bank: import and match a 3,000-line statement", REPORT, () => db.$transaction((tx) => importStatement(tx, finance, acct, lines), { timeout: 60_000 }));
     await time("bank: reconciliation view", REPORT, () => reconciliation());
+    await time("finance: VAT return for a month (sales, returns, purchases)", REPORT, () => { const to = new Date(Date.now() - 86_400_000); const from = new Date(to.getTime() - 29 * 86_400_000); return computeVat(from.toISOString().slice(0, 10), to.toISOString().slice(0, 10)); });
     await time("finance: month-end close checklist (last full month)", REPORT, () => closeChecklist(new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 7)));
   }
   await time("shop scorecard: every shop, 30 days", REPORT, () => scorecard({ scope: { all: true }, days: 30 }));

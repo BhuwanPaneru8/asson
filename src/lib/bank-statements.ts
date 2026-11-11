@@ -110,7 +110,7 @@ export async function importStatement(tx: Tx, finance: Actor, account: string, l
   });
   const r = await tx.statementLine.createMany({ data, skipDuplicates: true });
   const matched = await autoMatch(tx, finance, acct);
-  await audit(tx, finance, { action: "bank.import", entity: ["StatementLine", acct], summary: `Statement ${acct}: ${r.count} new line(s) of ${lines.length}, ${matched.deposits + matched.remittances + matched.payments + matched.expenses} matched` });
+  await audit(tx, finance, { action: "bank.import", entity: ["StatementLine", acct], summary: `Statement ${acct}: ${r.count} new line(s) of ${lines.length}, ${matched.deposits + matched.remittances + matched.payments + matched.expenses + matched.vat} matched` });
   return { added: r.count, duplicates: lines.length - r.count, ...matched };
 }
 
@@ -180,6 +180,23 @@ async function bookExpense(tx: Tx, finance: Actor, lineId: string, d: { category
   await audit(tx, finance, { action: "bank.expense", entity: ["Expense", e.id], summary: `Booked ${formatPrice(e.amount)} ${d.category.toLowerCase()} from ${line.account} ${line.date}: ${d.description.trim().slice(0, 100)}` });
 }
 
+/** Tie a debit to a filed VAT return's payment (records the payment from the line if it wasn't yet). */
+async function matchVat(tx: Tx, finance: Actor, lineId: string, vatReturnId: string) {
+  const line = await lockLine(tx, lineId);
+  if (line.status !== "UNMATCHED") throw new StatementError("That line is already dealt with.");
+  if (line.amount > 0) throw new StatementError("Money in can't be a VAT payment.");
+  const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "VatReturn" WHERE "id" = ${vatReturnId} FOR UPDATE`;
+  if (!row) throw new StatementError("VAT return not found.");
+  const v = await tx.vatReturn.findUniqueOrThrow({ where: { id: vatReturnId }, include: { statementLine: { select: { id: true } } } });
+  if (v.status !== "FILED") throw new StatementError("That return isn't filed.");
+  if (v.statementLine) throw new StatementError("That VAT payment is already matched to another line.");
+  const due = v.paidAmount ?? v.payable;
+  if (due !== -line.amount) throw new StatementError(`${v.label} ${v.paidAmount ? "was paid as" : "has payable"} ${formatPrice(due)}; the bank shows ${formatPrice(-line.amount)}.`);
+  if (!v.paidOn) await tx.vatReturn.update({ where: { id: v.id }, data: { paidOn: line.date, paidAmount: -line.amount, paidRef: (line.reference || line.description).slice(0, 80) } });
+  await tx.statementLine.update({ where: { id: lineId }, data: { status: "MATCHED", vatReturnId: v.id, matchedById: finance.id, matchedAt: new Date() } });
+  await audit(tx, finance, { action: "bank.match.vat", entity: ["VatReturn", v.id], summary: `VAT ${v.label} payment ${formatPrice(-line.amount)} seen on ${line.account} ${line.date}` });
+}
+
 const cashPaid = (via: string | null) => !!via && /^(cash|petty)/i.test(via.trim());
 
 /**
@@ -190,21 +207,25 @@ const cashPaid = (via: string | null) => !!via && /^(cash|petty)/i.test(via.trim
  */
 export async function autoMatch(tx: Tx, finance: Actor, account?: string) {
   const lines = await tx.statementLine.findMany({ where: { status: "UNMATCHED", ...(account ? { account } : {}) }, orderBy: [{ date: "asc" }, { id: "asc" }], take: 5000 });
-  if (!lines.length) return { deposits: 0, remittances: 0, payments: 0, expenses: 0, leftForOthers: 0 };
+  if (!lines.length) return { deposits: 0, remittances: 0, payments: 0, expenses: 0, vat: 0, leftForOthers: 0 };
   const dates = lines.map((l) => l.date).sort();
   const since = new Date(Date.parse(`${dates[0]}T00:00:00Z`) - 10 * 86_400_000);
-  const [deposits, remittances, payments, expenseRows] = await Promise.all([
+  const [deposits, remittances, payments, expenseRows, vats] = await Promise.all([
     tx.bankDeposit.findMany({ where: { status: "RECORDED" } }),
     tx.codRemittance.findMany({ where: { statementLine: null } }),
     tx.supplierPayment.findMany({ where: { statementLine: null, voidedAt: null, method: { not: "CASH" }, paidAt: { gte: since } } }),
     tx.expense.findMany({ where: { statementLine: null, date: { gte: since.toISOString().slice(0, 10) }, amount: { gt: 0 }, OR: [{ source: null }, { AND: [{ NOT: { source: { startsWith: "payroll:" } } }, { NOT: { source: { startsWith: "petty:" } } }] }] } }),
+    tx.vatReturn.findMany({ where: { status: "FILED", statementLine: null, payable: { gt: 0 } } }),
   ]);
   const expenses = expenseRows.filter((e) => !cashPaid(e.paidVia));
-  const usedD = new Set<string>(), usedR = new Set<string>(), usedP = new Set<string>(), usedE = new Set<string>();
-  let nD = 0, nR = 0, nP = 0, nE = 0, left = 0;
+  const usedD = new Set<string>(), usedR = new Set<string>(), usedP = new Set<string>(), usedE = new Set<string>(), usedV = new Set<string>();
+  let nD = 0, nR = 0, nP = 0, nE = 0, nV = 0, left = 0;
   for (const l of lines) {
     const text = norm(`${l.description} ${l.reference}`);
     if (l.amount < 0) {
+      // a filed VAT return's payment: its amount, within 45 days after the period ends
+      const vc = vats.filter((v) => !usedV.has(v.id) && (v.paidAmount ?? v.payable) === -l.amount && dayDiff(l.date, v.to) > 0 && dayDiff(l.date, v.to) <= 45);
+      if (vc.length === 1) { usedV.add(vc[0].id); await matchVat(tx, finance, l.id, vc[0].id); nV++; continue; }
       // a supplier payment by bank/cheque/wallet of that amount, paid 0–5 days before the bank shows it (cheques clear late);
       // else an expense paid by bank of that amount within 5 days. The reference settles a tie.
       let pc = payments.filter((p) => !usedP.has(p.id) && p.amount === -l.amount && dayDiff(l.date, ktmDate(p.paidAt)) >= 0 && dayDiff(l.date, ktmDate(p.paidAt)) <= 5);
@@ -228,16 +249,17 @@ export async function autoMatch(tx: Tx, finance: Actor, account?: string) {
     if (rc.length > 1) { const byRef = rc.filter((r) => (r.reference && text.includes(norm(r.reference))) || text.includes(norm(r.carrier))); if (byRef.length) rc = byRef; }
     if (rc.length === 1) { usedR.add(rc[0].id); await matchRemittance(tx, finance, l.id, rc[0].id); nR++; }
   }
-  return { deposits: nD, remittances: nR, payments: nP, expenses: nE, leftForOthers: left };
+  return { deposits: nD, remittances: nR, payments: nP, expenses: nE, vat: nV, leftForOthers: left };
 }
 
 /** Finance ties a line by hand (deposit or remittance), or sets it aside with a reason. */
-export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { depositId?: string; remittanceId?: string; paymentId?: string; expenseId?: string; book?: { category: ExpenseCategory; description: string; storeId?: string | null }; ignore?: string }) {
+export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { depositId?: string; remittanceId?: string; paymentId?: string; expenseId?: string; vatReturnId?: string; book?: { category: ExpenseCategory; description: string; storeId?: string | null }; ignore?: string }) {
   try {
     if (d.depositId) return await matchDeposit(tx, finance, lineId, d.depositId);
     if (d.remittanceId) return await matchRemittance(tx, finance, lineId, d.remittanceId);
     if (d.paymentId) return await matchPayment(tx, finance, lineId, d.paymentId);
     if (d.expenseId) return await matchExpense(tx, finance, lineId, d.expenseId);
+    if (d.vatReturnId) return await matchVat(tx, finance, lineId, d.vatReturnId);
     if (d.book) return await bookExpense(tx, finance, lineId, d.book);
   } catch (e) {
     if (e instanceof CashError || e instanceof CloseError) throw new StatementError(e.message);
@@ -255,13 +277,14 @@ export async function resolveLine(tx: Tx, finance: Actor, lineId: string, d: { d
 
 /** What finance needs: per account the last statement date and unexplained credits; deposits and remittances the bank hasn't shown. */
 export async function reconciliation(now = new Date()) {
-  const [accounts, unmatched, pendingDeposits, unseenRemittances, openPayments, openExpenses] = await Promise.all([
+  const [accounts, unmatched, pendingDeposits, unseenRemittances, openPayments, openExpenses, openVat] = await Promise.all([
     db.statementLine.groupBy({ by: ["account"], _max: { date: true }, _count: { _all: true } }),
     db.statementLine.findMany({ where: { status: "UNMATCHED" }, orderBy: [{ date: "desc" }], take: 300 }),
     db.bankDeposit.findMany({ where: { status: "RECORDED" }, orderBy: { depositedOn: "asc" }, include: { store: { select: { name: true } } } }),
     db.codRemittance.findMany({ where: { statementLine: null }, orderBy: { createdAt: "asc" }, take: 300 }),
     db.supplierPayment.findMany({ where: { statementLine: null, voidedAt: null, method: { not: "CASH" } }, orderBy: { paidAt: "desc" }, take: 500, include: { supplier: { select: { name: true } } } }),
     db.expense.findMany({ where: { statementLine: null, amount: { gt: 0 }, OR: [{ source: null }, { AND: [{ NOT: { source: { startsWith: "payroll:" } } }, { NOT: { source: { startsWith: "petty:" } } }] }] }, orderBy: { date: "desc" }, take: 500 }),
+    db.vatReturn.findMany({ where: { status: "FILED", statementLine: null, payable: { gt: 0 } }, orderBy: { to: "desc" }, take: 12 }),
   ]);
   const lastDate = (bank: string) => accounts.filter((a) => sameBank(a.account, bank)).map((a) => a._max.date ?? "").sort().pop() ?? null;
   const latest = accounts.map((a) => a._max.date ?? "").sort().pop() ?? null;
@@ -273,6 +296,7 @@ export async function reconciliation(now = new Date()) {
       depositOptions: l.amount < 0 ? [] : pendingDeposits.filter((d) => sameBank(l.account, d.bank) && Math.abs(dayDiff(l.date, d.depositedOn)) <= 10).sort((a, b) => Number(b.amount === l.amount) - Number(a.amount === l.amount)).slice(0, 8).map((d) => ({ id: d.id, label: `${depositRef(d.number)} ${d.store.name} ${formatPrice(d.amount)} on ${d.depositedOn}` })),
       remittanceOptions: l.amount > 0 ? unseenRemittances.filter((r) => r.received === l.amount).slice(0, 5).map((r) => ({ id: r.id, label: `${r.carrier} ${formatPrice(r.received)} (${r.reference})` })) : [],
       paymentOptions: l.amount < 0 ? openPayments.filter((p) => Math.abs(dayDiff(l.date, ktmDate(p.paidAt))) <= 15).sort((a, b) => Number(b.amount === -l.amount) - Number(a.amount === -l.amount)).slice(0, 8).map((p) => ({ id: p.id, label: `${paymentNo(p.number)} ${p.supplier.name} ${formatPrice(p.amount)}${p.reference ? ` (${p.reference})` : ""}` })) : [],
+      vatOptions: l.amount < 0 ? openVat.map((v) => ({ id: v.id, label: `VAT ${v.label} ${formatPrice(v.paidAmount ?? v.payable)}` })) : [],
       expenseOptions: l.amount < 0 ? openExpenses.filter((e) => e.amount === -l.amount && !cashPaid(e.paidVia) && Math.abs(dayDiff(l.date, e.date)) <= 15).slice(0, 5).map((e) => ({ id: e.id, label: `${e.date} ${e.description} ${formatPrice(e.amount)}` })) : [],
     })),
     // a deposit made 3+ days before the last statement of its bank, still not seen: chase it
