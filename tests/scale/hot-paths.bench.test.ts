@@ -14,6 +14,7 @@ import { closeChecklist } from "@/lib/month-close";
 import { computeVat } from "@/lib/vat";
 import { yearPack } from "@/lib/fiscal-year";
 import { binOverview } from "@/lib/bins";
+import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
 import { profitAndLoss, stockValuation } from "@/lib/finance";
@@ -67,6 +68,17 @@ it("hot paths stay within budget at national scale", async () => {
       await db.$executeRawUnsafe(`INSERT INTO "BinAssignment" ("storeId", "variantId", "binId", "assignedById", "updatedAt") SELECT ss."storeId", ss."variantId", 'bn_' || ss."variantId", 'scale-bench', NOW() FROM "StoreStock" ss WHERE ss."storeId" = '${w.id}' AND ss."variantId" NOT IN (SELECT "variantId" FROM "StoreStock" WHERE "storeId" = '${w.id}' ORDER BY "variantId" LIMIT 500) ON CONFLICT DO NOTHING`);
     }
     await time("bins: overview of the busiest warehouse", REPORT, () => binOverview(w.id));
+    // a 60-order wave at the warehouse with the most orders waiting (then cancelled, so the orders stay free)
+    const staff = { id: "bench", name: "Bench", role: "ADMIN" };
+    const [busy] = await db.$queryRaw<{ storeId: string }[]>`SELECT a."storeId" FROM "OrderAllocation" a JOIN "Order" o ON o."id" = a."orderId" WHERE o."status" = 'CONFIRMED' AND a."pickedAt" IS NULL GROUP BY a."storeId" ORDER BY COUNT(*) DESC LIMIT 1`;
+    if (busy) {
+      let waveId = "";
+      await time("fulfilment: build a 60-order wave", STAFF, async () => { const wv = await db.$transaction((tx) => createWave(tx, staff, { storeId: busy.storeId, maxOrders: 60 })); waveId = wv.id; await db.$transaction((tx) => cancelWave(tx, staff, wv.id)); });
+      const wv = await db.$transaction((tx) => createWave(tx, staff, { storeId: busy.storeId, maxOrders: 60 }));
+      await time("fulfilment: 60-order wave pick list", STAFF, () => wavePickList(wv.id));
+      await db.$transaction((tx) => cancelWave(tx, staff, wv.id));
+      void waveId;
+    }
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

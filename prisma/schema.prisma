@@ -490,6 +490,8 @@ model Order {
   notifications Notification[]
   allocations   OrderAllocation[]
   careCases     CareCase[]
+  waveOrder     WaveOrder?
+  packCheck     PackCheck?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -551,6 +553,7 @@ model Store {
   cashEntries      CashEntry[]
   deposits         BankDeposit[]
   bins             Bin[]
+  pickWaves        PickWave[]
 
   @@index([active, priority])
 }
@@ -2238,4 +2241,53 @@ model BinAssignment {
 
   @@id([storeId, variantId])
   @@index([binId])
+}
+
+enum WaveStatus {
+  OPEN // being picked
+  PICKED // every unit collected into its slot
+  CANCELLED
+}
+
+/// A batch of orders picked in one walk at one location; each order gets a slot (tote or shelf number).
+model PickWave {
+  id          String      @id @default(cuid())
+  number      Int         @unique @default(autoincrement())
+  storeId     String
+  store       Store       @relation(fields: [storeId], references: [id])
+  status      WaveStatus  @default(OPEN)
+  createdById String
+  createdAt   DateTime    @default(now())
+  pickedById  String?
+  pickedAt    DateTime?
+  orders      WaveOrder[]
+
+  @@index([storeId, status])
+}
+
+model WaveOrder {
+  waveId  String
+  wave    PickWave @relation(fields: [waveId], references: [id], onDelete: Cascade)
+  orderId String   @unique // an order is in one wave at a time (rows are removed if the wave is cancelled)
+  order   Order    @relation(fields: [orderId], references: [id])
+  slot    Int
+
+  @@id([waveId, orderId])
+  @@unique([waveId, slot])
+}
+
+/// What the packer scanned before an order was packed (and any override, with its reason).
+model PackCheck {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  storeId     String?
+  /// [{ sku, quantity }]
+  scans       Json
+  matched     Boolean
+  override    String   @default("")
+  weightGrams Int?
+  box         String?
+  packedById  String
+  createdAt   DateTime @default(now())
 }
