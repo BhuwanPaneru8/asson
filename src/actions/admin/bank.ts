@@ -40,7 +40,7 @@ export async function importStatementAction(account: string, text: string) {
 }
 
 const resolveSchema = z.object({
-  lineId: z.string(), depositId: z.string().optional(), remittanceId: z.string().optional(), paymentId: z.string().optional(), expenseId: z.string().optional(),
+  lineId: z.string(), depositId: z.string().optional(), remittanceId: z.string().optional(), paymentId: z.string().optional(), expenseId: z.string().optional(), vatReturnId: z.string().optional(),
   book: z.object({ category: z.enum(["RENT", "UTILITIES", "MARKETING", "PACKAGING", "DELIVERY", "EQUIPMENT", "FEES", "OTHER"]), description: z.string().max(150), storeId: z.string().optional() }).optional(),
   ignore: z.string().max(300).optional(),
 });

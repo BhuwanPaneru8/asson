@@ -2095,6 +2095,8 @@ model StatementLine {
   payment      SupplierPayment?    @relation(fields: [paymentId], references: [id])
   expenseId    String?             @unique
   expense      Expense?            @relation(fields: [expenseId], references: [id])
+  vatReturnId  String?             @unique
+  vatReturn    VatReturn?          @relation(fields: [vatReturnId], references: [id])
   note         String              @default("")
   matchedById  String?
   matchedAt    DateTime?
@@ -2120,4 +2122,40 @@ model MonthClose {
   /// times it has been closed (a reopen + close counts again)
   closes       Int       @default(1)
   updatedAt    DateTime  @updatedAt
+}
+
+enum VatReturnStatus {
+  DRAFT
+  FILED // submitted to IRD: its period's purchase bills are locked
+}
+
+/// One VAT return. The period is the Nepali month the accountant files for, as AD dates (from–to, both included).
+model VatReturn {
+  id             String          @id @default(cuid())
+  /// e.g. "Kartik 2083"
+  label          String
+  from           String // YYYY-MM-DD
+  to             String
+  status         VatReturnStatus @default(DRAFT)
+  /// the figures as filed (paisa): output VAT on sales less returns, claimable input VAT, credit brought forward
+  outputVat      Int             @default(0)
+  inputVat       Int             @default(0)
+  unclaimableVat Int             @default(0)
+  broughtForward Int             @default(0)
+  payable        Int             @default(0)
+  carryForward   Int             @default(0)
+  snapshot       Json?
+  ackNo          String?
+  filedAt        DateTime?
+  filedById      String?
+  paidOn         String?
+  paidAmount     Int?
+  paidRef        String?
+  reopenReason   String          @default("")
+  createdById    String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  statementLine  StatementLine?
+
+  @@index([from, to])
 }
