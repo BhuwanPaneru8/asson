@@ -5,6 +5,7 @@ import { audit, type AuditActor } from "./audit";
 import { monthBounds, profitAndLoss } from "./finance";
 import { ktmDate } from "./pos";
 import { formatPrice } from "./utils";
+import { isMonthClosed } from "./month-close";
 
 // Profit and loss per location for a month, on exactly the rules of the company P&L (lib/finance.ts):
 // accrual by order date, VAT-inclusive sales after discounts, refunds and resellable returns in the period,
@@ -35,6 +36,7 @@ export async function saveRecurringCost(tx: Tx, owner: Actor, d: { id?: string; 
 
 /** Post every recurring cost that applies to `month` (once each: the source key is unique). Safe to run any number of times. */
 export async function postRecurring(month = ktmDate().slice(0, 7)) {
+  if (await isMonthClosed(month)) return { posted: 0 }; // a closed month's books don't change
   const costs = await db.recurringCost.findMany({ where: { active: true, startMonth: { lte: month }, OR: [{ endMonth: null }, { endMonth: { gte: month } }] } });
   if (!costs.length) return { posted: 0 };
   const owner = await db.user.findFirst({ where: { role: "ADMIN" }, orderBy: { createdAt: "asc" }, select: { id: true } });

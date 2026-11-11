@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { reportError } from "@/lib/errors";
 import { CostError, postRecurring, saveRecurringCost } from "@/lib/shop-pl";
+import { isMonthClosed } from "@/lib/month-close";
 
 const schema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -23,6 +24,7 @@ export async function addExpense(input: z.input<typeof schema>): Promise<{ ok: b
   const me = await requirePermission("finance");
   const p = schema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  if (await isMonthClosed(p.data.date.slice(0, 7))) return { ok: false, error: `${p.data.date.slice(0, 7)} is closed, so expenses can't be added there. Reopen the month first (Finance → Month-end close).` };
   await db.$transaction(async (tx) => {
     if (p.data.storeId && !(await tx.store.findUnique({ where: { id: p.data.storeId }, select: { id: true } }))) throw new Error("Location not found");
     const e = await tx.expense.create({ data: { ...p.data, amount: Math.round(p.data.amount), paidVia: p.data.paidVia || null, storeId: p.data.storeId || null, createdById: me.id } });

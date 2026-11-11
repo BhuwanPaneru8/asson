@@ -1,4 +1,5 @@
 import "server-only";
+import { assertMonthOpen, CloseError } from "./month-close";
 import type { Prisma, SupplierPayMethod } from "@prisma/client";
 import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
@@ -16,6 +17,11 @@ import { formatPrice } from "./utils";
 type Tx = Prisma.TransactionClient;
 type Actor = NonNullable<AuditActor>;
 export class PayablesError extends Error {}
+
+/** Bills and payments dated in a closed month are refused (the database refuses them too). */
+async function monthOpen(tx: Tx, when: string | Date, what: string) {
+  try { await assertMonthOpen(tx, when, what); } catch (e) { if (e instanceof CloseError) throw new PayablesError(e.message); throw e; }
+}
 
 export const billNo = (n: number) => `BILL-${String(n).padStart(5, "0")}`;
 export const paymentNo = (n: number) => `PAY-${String(n).padStart(5, "0")}`;
@@ -80,6 +86,7 @@ export async function recordBill(tx: Tx, actor: Actor, d: BillInput) {
     if (po?.supplierId !== supplier.id) throw new PayablesError("That purchase order is from another supplier.");
   }
   if (d.vatAmount > d.amount) throw new PayablesError("VAT can't be more than the bill total.");
+  await monthOpen(tx, d.billDate, "a bill");
   const billDate = nepalDay(d.billDate);
   const dueDate = d.dueDate ? nepalDay(d.dueDate) : addDays(billDate, supplier.paymentTermsDays);
   if (dueDate < billDate) throw new PayablesError("The due date is before the bill date.");
@@ -103,6 +110,7 @@ export async function recordPayment(tx: Tx, actor: Actor, d: PaymentInput) {
   const supplier = await tx.supplier.findUnique({ where: { id: d.supplierId }, select: { id: true, name: true } });
   if (!supplier) throw new PayablesError("Supplier not found.");
   if (d.method !== "CASH" && !d.reference) throw new PayablesError("Enter the cheque, bank or wallet reference.");
+  await monthOpen(tx, d.paidAt, "a payment");
   const payment = await tx.supplierPayment.create({
     data: { supplierId: supplier.id, amount: d.amount, unallocated: d.amount, method: d.method, reference: d.reference || null, paidAt: nepalDay(d.paidAt), note: d.note || null, createdById: actor.id },
     select: { id: true, number: true },
@@ -130,6 +138,7 @@ export async function recordPayment(tx: Tx, actor: Actor, d: PaymentInput) {
 export async function voidPayment(tx: Tx, actor: Actor, id: string, reason: string) {
   const p = await tx.supplierPayment.findUnique({ where: { id }, include: { supplier: { select: { name: true } }, allocations: { include: { bill: { select: { status: true } } } } } });
   if (!p) throw new PayablesError("Payment not found.");
+  await monthOpen(tx, p.paidAt, "a payment");
   const res = await tx.supplierPayment.updateMany({ where: { id, voidedAt: null }, data: { voidedAt: new Date(), voidReason: reason, unallocated: 0 } });
   if (!res.count) throw new PayablesError("This payment is already void.");
   for (const a of p.allocations) {
@@ -143,6 +152,7 @@ export async function voidPayment(tx: Tx, actor: Actor, id: string, reason: stri
 export async function voidBill(tx: Tx, actor: Actor, id: string, reason: string) {
   const b = await tx.supplierBill.findUnique({ where: { id }, include: { supplier: { select: { id: true, name: true } }, allocations: { include: { payment: { select: { voidedAt: true } } } } } });
   if (!b) throw new PayablesError("Bill not found.");
+  await monthOpen(tx, b.billDate, "a bill");
   const res = await tx.supplierBill.updateMany({ where: { id, status: { not: "VOID" } }, data: { status: "VOID", voidReason: reason, paid: 0 } });
   if (!res.count) throw new PayablesError("This bill is already void.");
   let released = 0;

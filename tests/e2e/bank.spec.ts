@@ -37,10 +37,10 @@ test("the owner imports a bank statement: the shop's deposit is ticked off autom
   await expect(owner.getByText(/2 new line\(s\) · 1 deposit\(s\)/)).toBeVisible();
 
   const interest = owner.getByRole("listitem").filter({ hasText: `INTEREST ${tag}` });
-  await interest.getByLabel("Explain this credit").selectOption("ignore");
+  await interest.getByLabel("Explain this line").selectOption("ignore");
   await interest.getByLabel("What this money is").fill("Interest");
   await interest.getByRole("button", { name: "Save" }).click();
-  await expect(owner.getByRole("listitem").filter({ hasText: `INTEREST ${tag}` }).getByLabel("Explain this credit")).toHaveCount(0);
+  await expect(owner.getByRole("listitem").filter({ hasText: `INTEREST ${tag}` }).getByLabel("Explain this line")).toHaveCount(0);
 
   await mgr.reload();
   await expect(mgr.getByText(/on statement/).first()).toBeVisible(); // the deposit shows as checked on the shop's page

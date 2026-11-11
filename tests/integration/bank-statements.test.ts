@@ -63,7 +63,9 @@ describe("bank statements", () => {
     expect(r).toMatchObject({ added: 5, duplicates: 0, deposits: 1, remittances: 1, leftForOthers: 1 });
     expect(await db.bankDeposit.findUniqueOrThrow({ where: { id: a1.id } })).toMatchObject({ status: "VERIFIED", bankAmount: rs(60_000), checkedById: acct.id });
     expect((await db.statementLine.findFirstOrThrow({ where: { remittanceId: rem.id } })).date).toBe("2026-11-07");
-    expect(await db.statementLine.count({ where: { status: "DEBIT" } })).toBe(1);
+    // the service charge (a debit) waits to be explained like any other line
+    const fee = await db.statementLine.findFirstOrThrow({ where: { amount: { lt: 0 } } });
+    expect(fee.status).toBe("UNMATCHED");
 
     // the same file again adds nothing
     expect(await db.$transaction((tx) => importStatement(tx, acct, "NIC Asia current", parseStatement(NIC).lines))).toMatchObject({ added: 0, duplicates: 5 });
@@ -81,6 +83,8 @@ describe("bank statements", () => {
     await expect(db.$transaction((tx) => resolveLine(tx, acct, interest.id, { depositId: mine.id }))).rejects.toThrow(/Someone else/);
     await expect(db.$transaction((tx) => resolveLine(tx, acct, interest.id, { ignore: " " }))).rejects.toThrow(/Say what this money is/);
     await db.$transaction((tx) => resolveLine(tx, acct, interest.id, { ignore: "Interest" }));
+    await db.$transaction((tx) => resolveLine(tx, acct, fee.id, { book: { category: "FEES", description: "Bank service charge" } }));
+    expect(await db.expense.findFirstOrThrow({ where: { source: `statement:${fee.id}` } })).toMatchObject({ amount: rs(150), date: "2026-11-08", category: "FEES", paidVia: "Bank", storeId: null });
 
     // a later statement shows Pokhara's 30,000 deposit as only 29,000: a dispute, the gap back on Pokhara's book
     const before = await balanceOf(db, pkr.id);

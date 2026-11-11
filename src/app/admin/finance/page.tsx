@@ -7,6 +7,7 @@ import { ktmDate } from "@/lib/pos";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { Card, PageHeader } from "@/components/admin/ui";
 import { ExpenseForm, RecurringForm } from "@/components/admin/expense-form";
+import { isMonthClosed } from "@/lib/month-close";
 
 export const metadata = { title: "Finance" };
 
@@ -23,6 +24,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
     db.store.findMany({ where: { active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, name: true } }),
     db.recurringCost.findMany({ orderBy: [{ active: "desc" }, { createdAt: "asc" }], include: { store: { select: { name: true } } } }),
   ]);
+  const closed = await isMonthClosed(month);
   const label = new Date(`${month}-15T12:00:00+05:45`).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const row = (l: string, v: number, opts: { bold?: boolean; neg?: boolean; muted?: boolean } = {}) => (
     <div className={`flex justify-between px-5 py-2 ${opts.bold ? "border-t border-line font-semibold" : ""} ${opts.muted ? "text-muted" : ""}`}>
@@ -35,8 +37,9 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Finance"
         description={`Profit & loss for ${label} — revenue by order date, cost of goods at the cost recorded when each item was sold.`}
-        actions={<form className="flex gap-2"><input type="month" name="month" defaultValue={month} max={thisMonth} aria-label="Month" className="h-10 rounded-md border border-line bg-white px-3 text-[14px]" /><button className="h-10 rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Go</button><Link href={`/admin/finance/shops?month=${month}`} className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Profit by shop</Link><Link href={`/admin/finance/budgets?month=${month}`} className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Budgets</Link><Link href="/admin/finance/bank" className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Bank statements</Link><Link href="/admin/finance/export" className="flex h-10 items-center rounded-md bg-ink px-3 text-[14px] text-white">Accounting export</Link></form>}
+        actions={<form className="flex gap-2"><input type="month" name="month" defaultValue={month} max={thisMonth} aria-label="Month" className="h-10 rounded-md border border-line bg-white px-3 text-[14px]" /><button className="h-10 rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Go</button><Link href={`/admin/finance/shops?month=${month}`} className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Profit by shop</Link><Link href={`/admin/finance/budgets?month=${month}`} className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Budgets</Link><Link href="/admin/finance/bank" className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Bank statements</Link><Link href={`/admin/finance/close?month=${month}`} className="flex h-10 items-center rounded-md border border-line bg-white px-3 text-[14px] hover:border-ink">Month-end close</Link><Link href="/admin/finance/export" className="flex h-10 items-center rounded-md bg-ink px-3 text-[14px] text-white">Accounting export</Link></form>}
       />
+      {closed && <p className="mb-4 rounded-md bg-cloud px-4 py-3 text-[14px]">{month} is closed: its expenses, bills and payments are locked. <Link href={`/admin/finance/close?month=${month}`} className="underline">Month-end close</Link></p>}
       {(pl.unitsWithoutCost > 0 || stock.skusWithoutCost > 0) && (
         <p className="mb-4 flex gap-2 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           {pl.unitsWithoutCost > 0 && `${pl.unitsWithoutCost} units sold this month had no purchase cost, so profit is overstated. `}
