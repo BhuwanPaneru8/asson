@@ -20,6 +20,7 @@ import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
 import { exchangeOptions, exchangesDesk } from "@/lib/exchanges";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
+import { swapsFor, swapsToApprove } from "@/lib/shift-swaps";
 import { ktmDate } from "@/lib/pos";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
 import { customerInsights } from "@/lib/customer-insights";
@@ -110,6 +111,9 @@ it("hot paths stay within budget at national scale", async () => {
       await time("rosters: every location's week (HQ)", STAFF, () => rosterOverview({ all: true }, wk));
       await time("rosters: roster vs clock-ins, 14 days, one location", STAFF, () => rosterVsActual([shop.storeId], addDays(ktmDate(), -13), ktmDate()));
       await time("rosters: roster vs clock-ins, 14 days, whole network", REPORT, () => rosterVsActual(null, addDays(ktmDate(), -13), ktmDate()));
+      const someone = await db.rosterShift.findFirst({ where: { storeId: shop.storeId }, select: { userId: true } });
+      if (someone) await time("rosters: a person's swaps and colleagues (Today)", STAFF, () => swapsFor(someone.userId));
+      await time("rosters: swaps to approve (HQ)", STAFF, () => swapsToApprove({ all: true }));
     }
   }
   {

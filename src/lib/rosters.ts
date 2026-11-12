@@ -147,7 +147,11 @@ export async function saveWeek(tx: Tx, user: Actor, storeId: string, weekStart: 
     if (!p.shift) { if (mine) { await tx.rosterShift.delete({ where: { id: mine.id } }); removed++; } continue; }
     if (mine && mine.start === p.shift.start && mine.end === p.shift.end) continue;
     try {
-      if (mine) await tx.rosterShift.update({ where: { id: mine.id }, data: { ...p.shift, createdById: user.id } });
+      if (mine) {
+        await tx.rosterShift.update({ where: { id: mine.id }, data: { ...p.shift, createdById: user.id } });
+        // a swap was asked for the old times: it no longer stands
+        await tx.shiftSwap.updateMany({ where: { OR: [{ shiftId: mine.id }, { backShiftId: mine.id }], status: { in: ["OFFERED", "ACCEPTED"] } }, data: { status: "CANCELLED" } });
+      }
       else await tx.rosterShift.create({ data: { storeId, userId: p.userId, date: p.date, ...p.shift, createdById: user.id } });
     } catch (e) {
       if ((e as { code?: string }).code === "P2002") throw new RosterError(`${name(p.userId)} has just been rostered elsewhere on ${weekdayOf(p.date)}. Reload and try again.`);
@@ -214,7 +218,7 @@ export async function myShifts(userId: string, today = ktmDate(), days = 7) {
   const weeks = await db.rosterWeek.findMany({ where: { OR: shifts.map((s) => ({ storeId: s.storeId, weekStart: weekStartOf(s.date) })) } });
   const holidays = await db.holiday.findMany({ where: { date: { in: shifts.map((s) => s.date) } } });
   return shifts.filter((s) => weeks.some((w) => w.storeId === s.storeId && w.weekStart === weekStartOf(s.date)))
-    .map((s) => ({ date: s.date, weekday: weekdayOf(s.date), store: s.store.name, label: shiftLabel(s), holiday: holidays.find((h) => h.date === s.date)?.name ?? null }));
+    .map((s) => ({ id: s.id, date: s.date, weekday: weekdayOf(s.date), store: s.store.name, label: shiftLabel(s), holiday: holidays.find((h) => h.date === s.date)?.name ?? null }));
 }
 
 export type ShiftResult = "on time" | "late" | "left early" | "late, left early" | "no-show" | "to come" | "not in yet";

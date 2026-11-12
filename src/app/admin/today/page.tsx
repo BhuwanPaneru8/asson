@@ -7,6 +7,8 @@ import { vmRef, vmToDo } from "@/lib/vm";
 import { visitRef, visitToDo } from "@/lib/visits";
 import { targetProgress } from "@/lib/budgets";
 import { myShifts } from "@/lib/rosters";
+import { swapsFor } from "@/lib/shift-swaps";
+import { MySwaps, OfferSwap } from "@/components/admin/swap-forms";
 import { ktmDate } from "@/lib/pos";
 import { formatPrice } from "@/lib/utils";
 import { scopeFor, storeFilter } from "@/lib/scope";
@@ -22,7 +24,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const locations = await db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } });
   const want = (await searchParams).store;
   const here = locations.find((l) => l.id === want) ?? locations[0];
-  const [shifts, news, lists, issues, displays, visits, target] = await Promise.all([myShifts(me.id), announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
+  const [shifts, swaps, news, lists, issues, displays, visits, target] = await Promise.all([myShifts(me.id), swapsFor(me.id), announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
   const unread = news.filter((a) => a.requiresAck && !a.readAt);
   return (
     <>
@@ -71,10 +73,11 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         <Card title="My shifts · next 7 days">
           {!shifts.length ? <p className="p-5 text-[14px] text-muted">No published shifts for you this week.</p> : (
             <ul className="divide-y divide-line text-[14px]">{shifts.map((s) => (
-              <li key={s.date} className={`flex items-center justify-between gap-3 px-5 py-2.5 ${s.date === ktmDate() ? "bg-accent-soft/40" : ""}`}><span><b>{s.date === ktmDate() ? "Today" : s.weekday}</b> <span className="text-muted">{s.date.slice(5)}</span>{s.holiday && <span className="ml-1 text-[12px] text-accent">{s.holiday}</span>}</span><span><span className="font-mono">{s.label}</span> · {s.store}</span></li>
+              <li key={s.date} className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-2.5 ${s.date === ktmDate() ? "bg-accent-soft/40" : ""}`}><span><b>{s.date === ktmDate() ? "Today" : s.weekday}</b> <span className="text-muted">{s.date.slice(5)}</span>{s.holiday && <span className="ml-1 text-[12px] text-accent">{s.holiday}</span>}</span><span className="ml-auto"><span className="font-mono">{s.label}</span> · {s.store}</span>{s.date !== ktmDate() && !swaps.mine.some((m) => m.shiftId === s.id) && <OfferSwap shiftId={s.id} colleagues={swaps.colleagues} />}</li>
             ))}</ul>
           )}
         </Card>
+        {(swaps.forMe.length > 0 || swaps.mine.length > 0 || swaps.recent.length > 0) && <Card title={swaps.forMe.length ? `Shift swaps · ${swaps.forMe.length} for you` : "Shift swaps"}><MySwaps forMe={swaps.forMe} mine={swaps.mine} recent={swaps.recent} /></Card>}
         <Card title={unread.length ? `From HQ · ${unread.length} to read` : "From HQ"}>
           {!news.length ? <p className="p-5 text-[14px] text-muted">No announcements.</p> : (
             <ul className="divide-y divide-line">{news.map((a) => (

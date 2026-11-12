@@ -9,6 +9,8 @@ import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from
 import { cn, formatDateTime } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { Holidays, MinStaff, RosterGrid } from "@/components/admin/roster-forms";
+import { swapsToApprove } from "@/lib/shift-swaps";
+import { ApproveSwaps } from "@/components/admin/swap-forms";
 
 export const metadata = { title: "Rosters" };
 
@@ -24,11 +26,12 @@ export default async function RostersPage({ searchParams }: { searchParams: Prom
   const week = sp.week && /^\d{4}-\d{2}-\d{2}$/.test(sp.week) ? weekStartOf(sp.week) : addDays(thisWeek, 7); // plan next week by default
   const here = locations.find((l) => l.id === sp.store) ?? locations[0];
   if (!here) return <PageHeader title="Rosters" description="You aren't assigned to a location." />;
-  const [w, overview, actual, holidays] = await Promise.all([
+  const [w, overview, actual, holidays, toApprove] = await Promise.all([
     rosterWeek(here.id, week),
     locations.length > 1 ? rosterOverview(scope, week) : Promise.resolve([]),
     rosterVsActual([here.id], addDays(today, -13), today),
     db.holiday.findMany({ where: { date: { gte: addDays(today, -7) } }, orderBy: { date: "asc" }, take: 30 }),
+    swapsToApprove(scope),
   ]);
   const qs = (p: { store?: string; week?: string }) => `/admin/rosters?store=${p.store ?? here.id}&week=${p.week ?? week}`;
   const misses = actual.rows.filter((r) => r.result !== "on time" && r.result !== "to come").reverse().slice(0, 20);
@@ -42,6 +45,7 @@ export default async function RostersPage({ searchParams }: { searchParams: Prom
         <Link href={qs({ week: addDays(week, 7) })} className="rounded-md border border-line bg-white px-3 py-1.5 hover:border-ink">Next →</Link>
         {w.published ? <Pill tone={w.changedSincePublish ? "warn" : "success"}>{w.changedSincePublish ? "changed since publishing: publish again" : `published ${formatDateTime(w.published.at)}`}</Pill> : <Pill tone="warn">draft: staff can&apos;t see it</Pill>}
       </div>
+      {toApprove.length > 0 && <Card title={`Shift swaps to approve · ${toApprove.length}`} className="mb-4"><ApproveSwaps rows={toApprove} /></Card>}
       {w.warnings.length > 0 && (
         <div className="mb-4 rounded-lg border border-warn/40 bg-[#fbeee0] px-4 py-3 text-[13.5px] text-[#7a4a10]">
           <p className="font-semibold">{w.warnings.length} thing{w.warnings.length === 1 ? "" : "s"} to check</p>

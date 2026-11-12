@@ -87,7 +87,7 @@ describe("rosters", () => {
     expect(await myShifts(ram.id, W)).toEqual([]); // not published yet
     await expect(tx((t) => publishWeek(t, mgr, pkr.id, W))).rejects.toThrow(/no shifts to publish/);
     await tx((t) => publishWeek(t, mgr, ktm.id, W));
-    expect(await myShifts(ram.id, W)).toEqual([{ date: day(1), weekday: "Mon", store: "Kathmandu shop", label: "10–18", holiday: null }]);
+    expect(await myShifts(ram.id, W)).toEqual([{ id: expect.any(String), date: day(1), weekday: "Mon", store: "Kathmandu shop", label: "10–18", holiday: null }]);
     expect((await rosterWeek(ktm.id, W)).changedSincePublish).toBe(false);
     await new Promise((r) => setTimeout(r, 10));
     await tx((t) => saveWeek(t, mgr, ktm.id, W, [{ userId: ram.id, date: day(1), value: "11-19" }]));

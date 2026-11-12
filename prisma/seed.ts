@@ -177,7 +177,7 @@ async function main() {
     db.statutoryDeposit.deleteMany(), db.payslip.deleteMany(), db.payrollRun.deleteMany(), db.employment.deleteMany(), db.payrollTaxYear.deleteMany(),
     db.commissionRule.deleteMany(),
     db.checklistRun.deleteMany(), db.checklistTemplate.deleteMany(), db.announcement.deleteMany(),
-    db.issueEvent.deleteMany(), db.issue.deleteMany(), db.careMessage.deleteMany(), db.careCase.deleteMany(), db.vmEvent.deleteMany(), db.vmSubmission.deleteMany(), db.vmBrief.deleteMany(), db.visitAction.deleteMany(), db.storeVisit.deleteMany(), db.visitTemplate.deleteMany(), db.shopBudget.deleteMany(), db.recurringCost.deleteMany(), db.binAssignment.deleteMany(), db.bin.deleteMany(), db.exchangeItem.deleteMany(), db.exchange.deleteMany(), db.deliveryAttempt.deleteMany(), db.returnToOrigin.deleteMany(), db.rosterShift.deleteMany(), db.rosterWeek.deleteMany(), db.manifestOrder.deleteMany(), db.manifest.deleteMany(), db.packCheck.deleteMany(), db.waveOrder.deleteMany(), db.pickWave.deleteMany(),
+    db.issueEvent.deleteMany(), db.issue.deleteMany(), db.careMessage.deleteMany(), db.careCase.deleteMany(), db.vmEvent.deleteMany(), db.vmSubmission.deleteMany(), db.vmBrief.deleteMany(), db.visitAction.deleteMany(), db.storeVisit.deleteMany(), db.visitTemplate.deleteMany(), db.shopBudget.deleteMany(), db.recurringCost.deleteMany(), db.binAssignment.deleteMany(), db.bin.deleteMany(), db.exchangeItem.deleteMany(), db.exchange.deleteMany(), db.deliveryAttempt.deleteMany(), db.returnToOrigin.deleteMany(), db.shiftSwap.deleteMany(), db.rosterShift.deleteMany(), db.rosterWeek.deleteMany(), db.manifestOrder.deleteMany(), db.manifest.deleteMany(), db.packCheck.deleteMany(), db.waveOrder.deleteMany(), db.pickWave.deleteMany(),
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
@@ -212,6 +212,8 @@ async function main() {
   // where demo staff work: ops staff and the manager across the business (HQ), the cashier at the Flagship
   await db.user.updateMany({ where: { email: { in: ["staff@asson.test", "manager@asson.test"] } }, data: { allLocations: true } });
   await db.staffLocation.create({ data: { user: { connect: { email: "cashier@asson.test" } }, store: { connect: { id: flagship.id } } } });
+  // the manager also works the Flagship floor (on its roster), besides seeing every location
+  await db.staffLocation.create({ data: { user: { connect: { email: "manager@asson.test" } }, store: { connect: { id: flagship.id } } } });
 
   const FIRST = ["Sita", "Bikash", "Anjali", "Prakash", "Sunita", "Rohan", "Pooja", "Nabin", "Srijana", "Suman", "Kritika", "Bibek", "Asmita", "Ramesh", "Manisha", "Sagar", "Pratiksha", "Aayush", "Sabina", "Dipesh"];
   const LAST = ["Shrestha", "Maharjan", "Thapa", "Gurung", "Adhikari", "Rai", "Karki", "Tamang", "Bhandari", "Poudel", "KC", "Joshi", "Sharma", "Lama", "Yadav", "Magar", "Limbu", "Basnet"];
