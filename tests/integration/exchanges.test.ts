@@ -68,7 +68,7 @@ describe("online size exchanges", () => {
     expect(await tx((t) => receiveExchange(t, staff, { ref: `AS${o.number}`, storeId: wh.id, conditions: { [item.id]: "RESELLABLE" } }))).toEqual({ number: exchange.number, damaged: 0 });
     expect(await stockAt("S")).toBe(sBefore + 2);
     const ret = await db.return.findFirstOrThrow({ where: { orderId: o.id }, include: { items: true } });
-    expect([ret.refundMethod, ret.refundAmount, ret.items[0].quantity, ret.items[0].amount]).toEqual(["EXCHANGE", 0, 2, 0]);
+    expect([ret.refundMethod, ret.refundAmount, ret.items[0].quantity, ret.items[0].amount, ret.storeId]).toEqual(["EXCHANGE", 0, 2, 0, wh.id]); // received here
     const orig = await db.order.findUniqueOrThrow({ where: { id: o.id } });
     expect([orig.status, orig.paymentStatus]).toEqual(["DELIVERED", "PAID"]);
     expect((await db.exchange.findUniqueOrThrow({ where: { id: exchange.id } })).status).toBe("DONE");

@@ -113,7 +113,7 @@ export async function receiveExchange(tx: Tx, user: Actor, d: { ref: string; sto
   if (!["SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"].includes(ex.replacement.status)) throw new ExchangeError(`The new size (${formatOrderNumber(ex.replacement.number)}) hasn't gone out yet: the old items come back when it's delivered.`);
   const here = await tx.store.findUniqueOrThrow({ where: { id: d.storeId }, select: { name: true } });
   const ret = await tx.return.create({ data: {
-    orderId: ex.order.id, processedById: user.id, reason: `${exchangeRef(ex.number)}: size exchange, received at ${here.name}`, refundMethod: "EXCHANGE", refundAmount: 0,
+    orderId: ex.order.id, storeId: d.storeId, processedById: user.id, reason: `${exchangeRef(ex.number)}: size exchange, received at ${here.name}`, refundMethod: "EXCHANGE", refundAmount: 0,
     items: { create: ex.items.map((i) => ({ orderItemId: i.orderItemId, quantity: i.quantity, condition: d.conditions[i.id] ?? "RESELLABLE", amount: 0 })) },
   }, select: { id: true, number: true } });
   let damaged = 0;

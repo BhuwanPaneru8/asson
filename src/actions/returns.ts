@@ -148,7 +148,7 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
     const ret = await db.$transaction(async (tx) => {
       const created = await tx.return.create({
         data: {
-          clientRef: d.clientRef, orderId: order.id, shiftId: d.refundMethod === "CASH" ? shift!.id : shift?.id ?? null,
+          clientRef: d.clientRef, orderId: order.id, shiftId: d.refundMethod === "CASH" ? shift!.id : shift?.id ?? null, storeId: shop.id,
           processedById: me.id, approvedById: approverId, reason: d.reason, refundMethod: d.refundMethod, refundAmount: refund,
           voucherCode, reference: d.reference || null, note: d.note || null,
           items: { create: rows.map((r) => ({ orderItemId: r.item.id, quantity: r.quantity, condition: r.condition, amount: r.amount })) },
