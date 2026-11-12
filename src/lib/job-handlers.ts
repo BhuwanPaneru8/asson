@@ -9,6 +9,7 @@ import { watchdog } from "./health";
 import { autoCloseForgotten } from "./people";
 import { escalateOverdue } from "./issues";
 import { postRecurring } from "./shop-pl";
+import { runPriceEvents } from "./markdowns";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -42,6 +43,7 @@ export const HANDLERS = {
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
   "replenishment.drafts": { label: "Draft shop restock transfers (if switched on)", run: () => autoDraftReplenishment(), maxAttempts: 2, timeoutMs: 5 * MIN },
   "loyalty.birthdays": { label: "Birthday points and greetings", run: () => birthdayRun(), maxAttempts: 3 },
+  "markdowns.run": { label: "Start and end scheduled sales (prices)", run: () => runPriceEvents(), maxAttempts: 3, timeoutMs: 5 * MIN },
   "jobs.prune": {
     label: "Tidy finished jobs",
     // finished bookkeeping rows only; dead jobs and errors stay until a human deals with them
@@ -60,6 +62,7 @@ export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "issues.escalate", everyMs: 15 * MIN },
   { type: "costs.recurring", everyMs: DAY },
   { type: "payments.expire", everyMs: 10 * MIN },
+  { type: "markdowns.run", everyMs: 5 * MIN },
   { type: "stock.audit", everyMs: DAY },
   { type: "jobs.prune", everyMs: DAY },
   { type: "loyalty.birthdays", everyMs: DAY },

@@ -306,6 +306,7 @@ model Product {
   pairsWith        Product[]         @relation("CompleteTheLook")
   pairedBy         Product[]         @relation("CompleteTheLook")
   reviews          Review[]
+  priceEventItems  PriceEventItem[]
   wishlistBy       WishlistItem[]
   stats            ProductStat[]
   lookItems        LookItem[]
@@ -2532,4 +2533,50 @@ model ShiftSwap {
   @@index([status, createdAt])
   @@index([toUserId, status])
   @@index([shiftId])
+}
+
+// ---------- Markdowns and price events (Phase 18a) ----------
+
+enum PriceEventStatus {
+  DRAFT
+  SCHEDULED // starts by itself at startsAt
+  LIVE // prices are marked down now
+  ENDED // prices put back
+  CANCELLED
+}
+
+/// A sale (Dashain, end of season, clearance): products marked down from startsAt, back at endsAt (or never).
+model PriceEvent {
+  id          String           @id @default(cuid())
+  number      Int              @unique @default(autoincrement())
+  name        String
+  startsAt    DateTime
+  /// null = a permanent markdown (clearance): prices stay down
+  endsAt      DateTime?
+  status      PriceEventStatus @default(DRAFT)
+  createdById String
+  createdAt   DateTime         @default(now())
+  startedAt   DateTime?
+  endedAt     DateTime?
+  items       PriceEventItem[]
+
+  @@index([status, startsAt])
+}
+
+model PriceEventItem {
+  id                String     @id @default(cuid())
+  eventId           String
+  event             PriceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product    @relation(fields: [productId], references: [id])
+  /// sale price (paisa)
+  newPrice          Int
+  /// what the product cost on the shelf before (taken when the event starts), to put back at the end
+  originalPrice     Int?
+  originalCompareAt Int?
+  /// set when the price couldn't be put back because someone changed it during the event
+  restoreSkipped    Boolean    @default(false)
+
+  @@unique([eventId, productId])
+  @@index([productId])
 }
