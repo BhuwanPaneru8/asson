@@ -11,6 +11,8 @@ import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
 import { localiseResult } from "@/lib/i18n/server";
 import { createExchange, ExchangeError } from "@/lib/exchanges";
+import { changeAddress, EditError, reduceItem, swapSize } from "@/lib/order-edits";
+import { ensureCartId } from "@/lib/cart";
 import { StockError } from "@/lib/stock";
 
 type R = { ok: boolean; error?: string; fieldErrors?: Record<string, string> };
@@ -132,6 +134,59 @@ async function requestExchangeImpl(orderId: string, input: unknown): Promise<R> 
   return { ok: true };
 }
 
+// ---------- Changing my order before it's packed ----------
+
+/** The customer as the one making the change (on the order timeline; their own id if signed in). */
+async function asCustomer(orderId: string) {
+  const o = await ownOrder(orderId);
+  if (!o) return null;
+  const user = await getCurrentUser();
+  return { id: user?.id ?? "", name: o.actor, role: "CUSTOMER" };
+}
+async function myEdit(orderId: string, f: (actor: { id: string; name: string; role: string }) => Promise<unknown>): Promise<R> {
+  const me = await asCustomer(orderId);
+  if (!me) return { ok: false, error: "Order not found." };
+  try {
+    await f(me);
+  } catch (e) {
+    if (e instanceof EditError || e instanceof StockError) return { ok: false, error: e.message };
+    throw e;
+  }
+  revalidateTag("products", { expire: 60 });
+  after(() => dispatchNotifications().catch(() => {}));
+  refresh();
+  return { ok: true };
+}
+async function changeMyAddressImpl(orderId: string, address: unknown): Promise<R> {
+  return myEdit(orderId, (me) => db.$transaction((tx) => changeAddress(tx, me, { orderId, address })));
+}
+async function reduceMyItemImpl(orderId: string, orderItemId: string, quantity: number): Promise<R> {
+  return myEdit(orderId, (me) => db.$transaction((tx) => reduceItem(tx, me, { orderId, orderItemId: String(orderItemId), quantity: Number(quantity) })));
+}
+async function swapMySizeImpl(orderId: string, orderItemId: string, newVariantId: string): Promise<R> {
+  return myEdit(orderId, (me) => db.$transaction((tx) => swapSize(tx, me, { orderId, orderItemId: String(orderItemId), newVariantId: String(newVariantId) })));
+}
+
+/** Put the same sizes back in the bag (what's still on sale and in stock). */
+async function buyAgainImpl(orderId: string): Promise<R & { added?: number; skipped?: number }> {
+  const o = await ownOrder(orderId);
+  if (!o) return { ok: false, error: "Order not found." };
+  const items = await db.orderItem.findMany({ where: { orderId }, select: { variantId: true, quantity: true, variant: { select: { stock: true, product: { select: { status: true } } } } } });
+  const cartId = await ensureCartId();
+  let added = 0, skipped = 0;
+  for (const i of items) {
+    if (!i.variantId || !i.variant || i.variant.product.status !== "ACTIVE" || i.variant.stock <= 0) { skipped++; continue; }
+    const existing = await db.cartItem.findUnique({ where: { cartId_variantId: { cartId, variantId: i.variantId } }, select: { quantity: true } });
+    const quantity = Math.min((existing?.quantity ?? 0) + i.quantity, i.variant.stock, store.maxQtyPerItem);
+    await db.cartItem.upsert({ where: { cartId_variantId: { cartId, variantId: i.variantId } }, update: { quantity }, create: { cartId, variantId: i.variantId, quantity } });
+    added++;
+  }
+  if (added) await db.cart.update({ where: { id: cartId }, data: { updatedAt: new Date() } });
+  refresh();
+  if (!added) return { ok: false, error: "None of these are available right now." };
+  return { ok: true, added, skipped };
+}
+
 const reviewSchema = z.object({
   productId: z.string(),
   rating: z.number().int().min(1).max(5),
@@ -169,4 +224,8 @@ export async function updateProfile(...args: Parameters<typeof updateProfileImpl
 export async function cancelOrder(...args: Parameters<typeof cancelOrderImpl>) { return localiseResult(await cancelOrderImpl(...args)); }
 export async function requestReturn(...args: Parameters<typeof requestReturnImpl>) { return localiseResult(await requestReturnImpl(...args)); }
 export async function requestExchange(...args: Parameters<typeof requestExchangeImpl>) { return localiseResult(await requestExchangeImpl(...args)); }
+export async function changeMyAddress(...args: Parameters<typeof changeMyAddressImpl>) { return localiseResult(await changeMyAddressImpl(...args)); }
+export async function reduceMyItem(...args: Parameters<typeof reduceMyItemImpl>) { return localiseResult(await reduceMyItemImpl(...args)); }
+export async function swapMySize(...args: Parameters<typeof swapMySizeImpl>) { return localiseResult(await swapMySizeImpl(...args)); }
+export async function buyAgain(...args: Parameters<typeof buyAgainImpl>) { return localiseResult(await buyAgainImpl(...args)); }
 export async function submitReview(...args: Parameters<typeof submitReviewImpl>) { return localiseResult(await submitReviewImpl(...args)); }

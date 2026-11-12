@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewOrder } from "@/lib/order-access";
 import { exchangeOptions } from "@/lib/exchanges";
+import { BuyAgain, OrderChange } from "@/components/account/order-change";
 import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
 import { store } from "@/lib/config";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
@@ -32,6 +33,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const deliveredAt = order.events.find((e) => e.status === "DELIVERED")?.createdAt;
   const ex = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
   const exchanged = !!ex && (ex.order.exchangeFor != null || (await db.exchange.count({ where: { orderId: order.id, status: { not: "CANCELLED" } } })) > 0);
+  // before packing the customer can change it themselves (not shop sales or exchange replacements)
+  const mine = !order.userId || order.userId === user?.id; // staff looking at someone's order use the admin page
+  const changeable = mine && order.channel === "ONLINE" && (order.status === "PENDING" || order.status === "CONFIRMED") && !(await db.exchange.count({ where: { replacementId: order.id } }));
+  const swapTo = changeable ? await db.variant.findMany({ where: { productId: { in: order.items.map((i) => i.productId) }, stock: { gt: 0 }, product: { status: "ACTIVE" } }, orderBy: { position: "asc" }, select: { id: true, productId: true, color: true, size: true } }) : [];
   const canReturn = order.status === "DELIVERED" && !exchanged && !!deliveredAt && now() - deliveredAt.getTime() < store.returnWindowDays * 86400000;
   const etaDays = a?.etaMaxDays ?? (order.shippingMethod === "express" ? 1 : a?.zone === "VALLEY" ? 2 : a?.zone === "REMOTE" ? 10 : 5);
   const eta = new Date(order.createdAt); eta.setDate(eta.getDate() + etaDays);
@@ -89,6 +94,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             ))}
           </ul>
           {ex && ex.open.length > 0 && <p className="mt-6 bg-accent-soft/50 p-3 text-[14px]">{t("ex.open", { ref: ex.open.join(", ") })}</p>}
+          {changeable && <div className="mt-6"><OrderChange orderId={order.id} paid={order.paymentStatus === "PAID"} addr={pickup ? null : { fullName: a.fullName, phone: a.phone, line1: a.line1, city: a.city, district: a.district ?? "" }}
+            items={order.items.map((i) => ({ id: i.id, name: i.name, color: i.color, size: i.size, quantity: i.quantity, sizes: swapTo.filter((v) => v.productId === i.productId && v.id !== i.variantId).map((v) => ({ variantId: v.id, label: `${v.color} ${v.size}` })) }))} /></div>}
+          {mine && ["DELIVERED", "CANCELLED", "RETURNED"].includes(order.status) && order.channel === "ONLINE" && <div className="mt-6"><BuyAgain orderId={order.id} /></div>}
           <div className="mt-6"><OrderActions orderId={order.id} canCancel={CUSTOMER_CANCELLABLE.includes(order.status)} canReturn={canReturn} exchange={ex && !ex.blocked ? ex.items : []} /></div>
         </div>
         <div className="space-y-6 md:col-span-5">
