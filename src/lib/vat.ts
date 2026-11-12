@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
 import { purchaseRegister, returnsRegister, salesRegister } from "./accounting";
+import { creditNotesIn } from "./payables";
 import { ktmDate } from "./pos";
 import { formatPrice } from "./utils";
 
@@ -23,16 +24,19 @@ const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_00
 /** The figures for a period (not saved). `broughtForward` is the credit left by the previous filed return. */
 export async function computeVat(from: string, to: string, broughtForward = 0) {
   if (!DATE.test(from) || !DATE.test(to) || from > to) throw new VatError("Give the period as two dates, start before end.");
-  const [sales, returns, purchases] = await Promise.all([salesRegister({ from, to }), returnsRegister({ from, to }), purchaseRegister({ from, to })]);
+  const [sales, returns, purchases, credits] = await Promise.all([salesRegister({ from, to }), returnsRegister({ from, to }), purchaseRegister({ from, to }), creditNotesIn(new Date(`${from}T00:00:00+05:45`), new Date(`${nextDay(to)}T00:00:00+05:45`))]);
   const sum = <T,>(rows: T[], f: (r: T) => number) => rows.reduce((a, r) => a + f(r), 0);
   const claimable = purchases.filter((p) => p.vat > 0 && p.pan), noPan = purchases.filter((p) => p.vat > 0 && !p.pan);
   const outputVat = sum(sales, (r) => r.vat) - sum(returns, (r) => r.vat);
-  const inputVat = sum(claimable, (r) => r.vat), unclaimableVat = sum(noPan, (r) => r.vat);
+  // supplier credit notes give back input VAT that was claimed (only on suppliers with a PAN, as for bills)
+  const creditVat = sum(credits.filter((c) => c.supplier.pan), (c) => c.vatAmount);
+  const inputVat = sum(claimable, (r) => r.vat) - creditVat, unclaimableVat = sum(noPan, (r) => r.vat);
   const net = outputVat - inputVat - broughtForward;
   return {
     sales: { count: sales.length, taxable: sum(sales, (r) => r.taxable), vat: sum(sales, (r) => r.vat) },
     returns: { count: returns.length, taxable: sum(returns, (r) => r.taxable), vat: sum(returns, (r) => r.vat) },
-    purchases: { count: purchases.length, taxable: sum(claimable, (r) => r.taxable), vat: inputVat },
+    purchases: { count: purchases.length, taxable: sum(claimable, (r) => r.taxable), vat: inputVat + creditVat },
+    supplierCredits: { count: credits.length, vat: creditVat },
     noPan: noPan.map((p) => ({ bill: p.bill, supplier: p.supplier, invoice: p.invoice, date: p.date, vat: p.vat })),
     outputVat, inputVat, unclaimableVat, broughtForward,
     payable: Math.max(0, net), carryForward: Math.max(0, -net),

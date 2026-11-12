@@ -64,6 +64,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Prom
             {row("Returns & refunds", pl.refunds, { neg: true, muted: true })}
             {row("Net sales", pl.netSales, { bold: true })}
             {row("Cost of goods sold", pl.cogs, { neg: true, muted: true })}
+            {pl.supplierCredits > 0 && <p className="-mt-1 pb-1 pl-1 text-[12px] text-muted">after {formatPrice(pl.supplierCredits)} of supplier credits for damaged goods sent back</p>}
             {row("Gross profit", pl.grossProfit, { bold: true })}
             {row("Delivery charged to customers", pl.deliveryIncome, { muted: true })}
             {pl.expenses.map((e) => <div key={e.category}>{row(e.label, e.amount, { neg: true, muted: true })}</div>)}

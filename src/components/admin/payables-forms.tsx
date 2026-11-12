@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { recordSupplierBill, recordSupplierPayment, voidSupplierBill, voidSupplierPayment } from "@/actions/admin/payables";
+import { recordSupplierBill, recordSupplierCredit, recordSupplierPayment, voidSupplierBill, voidSupplierCredit, voidSupplierPayment } from "@/actions/admin/payables";
 import { formatPrice } from "@/lib/utils";
 
 const input = "mt-1 h-10 w-full rounded-md border border-line bg-white px-2.5 text-[14px] outline-none focus:border-ink";
@@ -88,13 +88,52 @@ export function RecordPayment({ suppliers, bills, today }: { suppliers: Supplier
   );
 }
 
-export function VoidButton({ kind, id }: { kind: "bill" | "payment"; id: string }) {
+export function VoidButton({ kind, id }: { kind: "bill" | "payment" | "credit"; id: string }) {
   const [pending, start] = useTransition();
   return (
     <button disabled={pending} className="text-[12.5px] text-muted underline hover:text-danger" onClick={() => {
-      const why = prompt(kind === "bill" ? "Why is this bill void? Anything paid on it becomes credit." : "Why is this payment void? Its bills will be owed again.");
+      const why = prompt(kind === "bill" ? "Why is this bill void? Anything paid on it becomes credit." : kind === "credit" ? "Why is this credit note void? Its bills will be owed again." : "Why is this payment void? Its bills will be owed again.");
       if (!why) return;
-      start(async () => { const r = kind === "bill" ? await voidSupplierBill(id, why) : await voidSupplierPayment(id, why); if (r.ok) toast.success("Voided"); else toast.error(r.error); });
+      start(async () => { const r = kind === "bill" ? await voidSupplierBill(id, why) : kind === "credit" ? await voidSupplierCredit(id, why) : await voidSupplierPayment(id, why); if (r.ok) toast.success("Voided"); else toast.error(r.error); });
     }}>Void</button>
+  );
+}
+
+type Damaged = { id: string; supplierId: string; label: string; expected: number };
+
+/** A supplier's credit note: settles open bills (oldest first, or the ones ticked) and can cover damaged returns. */
+export function RecordCredit({ suppliers, bills, damaged, today }: { suppliers: Supplier[]; bills: OpenBill[]; damaged: Damaged[]; today: string }) {
+  const [f, setF] = useState({ supplierId: "", reference: "", date: today, amount: "", vatAmount: "", reason: "" });
+  const [pick, setPick] = useState<string[]>([]);
+  const [dmg, setDmg] = useState<string[]>([]);
+  const [pending, start] = useTransition();
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  const mine = bills.filter((b) => b.supplierId === f.supplierId);
+  const myDamaged = damaged.filter((d) => d.supplierId === f.supplierId);
+  return (
+    <form className="space-y-3 p-5" onSubmit={(e) => { e.preventDefault(); start(async () => {
+      const r = await recordSupplierCredit({ ...f, billIds: pick, damageEntryIds: dmg });
+      if (r.ok) { toast.success(`CN-${String(r.number).padStart(5, "0")} recorded${r.credit ? `: ${rs(r.credit)} kept as credit` : ""}`); setF({ ...f, reference: "", amount: "", vatAmount: "", reason: "" }); setPick([]); setDmg([]); } else toast.error(r.error);
+    }); }}>
+      <label className="block"><span className={label}>Supplier</span><select className={input} value={f.supplierId} onChange={(e) => { setF({ ...f, supplierId: e.target.value }); setPick([]); setDmg([]); }} aria-label="Credit note supplier"><option value="">Choose…</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block"><span className={label}>Their credit note no.</span><input className={input} value={f.reference} onChange={set("reference")} aria-label="Credit note number" /></label>
+        <label className="block"><span className={label}>Date</span><input type="date" className={input} value={f.date} onChange={set("date")} aria-label="Credit note date" /></label>
+        <label className="block"><span className={label}>Total, Rs (with VAT)</span><input className={input} inputMode="decimal" value={f.amount} onChange={set("amount")} aria-label="Credit total" /></label>
+        <label className="block"><span className={label}>VAT in it, Rs</span><input className={input} inputMode="decimal" value={f.vatAmount} onChange={set("vatAmount")} aria-label="Credit VAT" /></label>
+      </div>
+      <label className="block"><span className={label}>What it&apos;s for</span><input className={input} placeholder="e.g. damaged shirts returned, price correction on BILL-00012" value={f.reason} onChange={set("reason")} aria-label="Credit reason" /></label>
+      {myDamaged.length > 0 && (
+        <fieldset className="rounded-md border border-line p-3"><legend className="px-1 text-[12.5px] font-medium">Damaged goods it covers</legend>
+          {myDamaged.map((d) => <label key={d.id} className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={dmg.includes(d.id)} onChange={(e) => setDmg(e.target.checked ? [...dmg, d.id] : dmg.filter((x) => x !== d.id))} /> {d.label} · {rs(d.expected)} expected</label>)}
+        </fieldset>
+      )}
+      {mine.length > 0 && (
+        <fieldset className="rounded-md border border-line p-3"><legend className="px-1 text-[12.5px] font-medium">Set against (none ticked: oldest due first)</legend>
+          {mine.map((b) => <label key={b.id} className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={pick.includes(b.id)} onChange={(e) => setPick(e.target.checked ? [...pick, b.id] : pick.filter((x) => x !== b.id))} /> {b.label} · {rs(b.outstanding)} owed</label>)}
+        </fieldset>
+      )}
+      <button className="h-10 w-full rounded-md bg-ink text-[14px] font-medium text-white disabled:opacity-40" disabled={pending || !f.supplierId || !f.reference || !f.amount || f.reason.trim().length < 3}>{pending ? "Saving…" : "Record credit note"}</button>
+    </form>
   );
 }

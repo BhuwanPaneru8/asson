@@ -6,7 +6,7 @@ import { ktmDate } from "@/lib/pos";
 import { AGING_BUCKETS, billNo, payablesSummary, todayStart } from "@/lib/payables";
 import { cn, formatDate, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
-import { RecordBill, RecordPayment } from "@/components/admin/payables-forms";
+import { RecordBill, RecordCredit, RecordPayment } from "@/components/admin/payables-forms";
 
 export const metadata = { title: "Payables" };
 
@@ -19,6 +19,8 @@ export default async function PayablesPage() {
     db.supplier.findMany({ where: { active: true }, select: { id: true, name: true, paymentTermsDays: true }, orderBy: { name: "asc" } }),
     db.purchaseOrder.findMany({ where: { status: { in: ["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"] } }, orderBy: { createdAt: "desc" }, take: 200, select: { id: true, number: true, supplierId: true, items: { select: { quantityReceived: true, unitCost: true } } } }),
   ]);
+  // damaged goods sent back and still waiting for the supplier's credit
+  const waiting = canPay ? await db.damageEntry.findMany({ where: { kind: "TO_SUPPLIER", creditAt: null }, orderBy: { createdAt: "asc" }, take: 200, select: { id: true, supplierId: true, quantity: true, creditExpected: true, createdAt: true, variant: { select: { sku: true, product: { select: { name: true } } } } } }) : [];
   const start = todayStart();
   const tile = (l: string, v: string, sub: string, bad = false) => (
     <div className={cn("rounded-lg border bg-white p-4", bad ? "border-danger/40" : "border-line")}><p className="text-[12px] uppercase tracking-wider text-muted">{l}</p><p className={cn("mt-1 text-[22px] font-semibold", bad && "text-danger")}>{v}</p><p className="text-[12.5px] text-muted">{sub}</p></div>
@@ -30,7 +32,7 @@ export default async function PayablesPage() {
         {tile("You owe", formatPrice(s.owed), `${s.open.length} open bill${s.open.length === 1 ? "" : "s"}`)}
         {tile("Overdue", formatPrice(s.overdue), s.overdueCount ? `${s.overdueCount} bill${s.overdueCount === 1 ? "" : "s"} past due` : "nothing late", s.overdue > 0)}
         {tile("Due in 7 days", formatPrice(s.dueThisWeek), "plan the cash")}
-        {tile("Supplier credit", formatPrice(s.credit), "paid in advance")}
+        {tile("Supplier credit", formatPrice(s.credit), "paid in advance or credit notes")}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
@@ -77,6 +79,7 @@ export default async function PayablesPage() {
           {canPay
             ? <Card title="Record a payment"><RecordPayment today={today} suppliers={suppliers.map((x) => ({ id: x.id, name: x.name, terms: x.paymentTermsDays }))} bills={s.open.map((b) => ({ id: b.id, supplierId: b.supplier.id, label: `${billNo(b.number)} (${b.reference})`, outstanding: b.outstanding, due: b.dueDate.toISOString().slice(0, 10) }))} /></Card>
             : <p className="rounded-lg border border-line bg-white p-4 text-[13.5px] text-muted">Payments are recorded by the owner.</p>}
+          {canPay && <Card title="Record a credit note"><RecordCredit today={today} suppliers={suppliers.map((x) => ({ id: x.id, name: x.name, terms: x.paymentTermsDays }))} bills={s.open.map((b) => ({ id: b.id, supplierId: b.supplier.id, label: `${billNo(b.number)} (${b.reference})`, outstanding: b.outstanding, due: b.dueDate.toISOString().slice(0, 10) }))} damaged={waiting.map((d) => ({ id: d.id, supplierId: d.supplierId!, label: `${-d.quantity} × ${d.variant.product.name} (${d.variant.sku}), sent ${d.createdAt.toISOString().slice(0, 10)}`, expected: d.creditExpected ?? 0 }))} /></Card>}
         </div>
       </div>
     </>
