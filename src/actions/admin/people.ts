@@ -9,11 +9,12 @@ import { reportError, reportErrorSoon } from "@/lib/errors";
 import { dispatchNotifications } from "@/lib/notifications";
 import { cancelLeave, clockIn, clockOut, correctEntry, decideLeave, PeopleError, requestLeave } from "@/lib/people";
 import { ScopeError } from "@/lib/scope";
+import { AbsenceError, decideAbsence, reopenAbsence, type Decision } from "@/lib/absences";
 
 type R = { ok: true } | { ok: false; error: string };
 
 function failure(e: unknown, where: string): { ok: false; error: string } {
-  if (e instanceof PeopleError || e instanceof ScopeError) return { ok: false, error: e.message };
+  if (e instanceof PeopleError || e instanceof ScopeError || e instanceof AbsenceError) return { ok: false, error: e.message };
   void reportError(where, e);
   return { ok: false, error: "Couldn't save that. Nothing changed — please try again." };
 }
@@ -67,4 +68,20 @@ export async function fixAttendance(input: z.input<typeof fixSchema>): Promise<R
   const [ci, co] = [at(p.data.clockIn), at(p.data.clockOut)];
   if (Number.isNaN(ci.getTime()) || Number.isNaN(co.getTime())) return { ok: false, error: "Check the times." };
   return run("fixAttendance", () => db.$transaction((tx) => correctEntry(tx, me, p.data.id, { clockIn: ci, clockOut: co, reason: p.data.reason })));
+}
+
+const absenceSchema = z.object({ id: z.string().min(1), decision: z.enum(["UNPAID", "LEAVE", "WORKED"]), leaveType: z.string().optional(), note: z.string().trim().max(200).optional() });
+
+export async function decideMissedShift(input: { id: string; decision: Decision; leaveType?: string; note?: string }): Promise<R> {
+  const me = await requirePermission("people");
+  const p = absenceSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Choose what happened." };
+  const r = await run("decideAbsence", () => db.$transaction((tx) => decideAbsence(tx, me, p.data.id, p.data)));
+  if (r.ok && p.data.decision === "UNPAID") after(() => dispatchNotifications(20).catch(reportErrorSoon("decideAbsence: dispatch")));
+  return r;
+}
+
+export async function reopenMissedShift(id: string, reason: string): Promise<R> {
+  const me = await requirePermission("people");
+  return run("reopenAbsence", () => db.$transaction((tx) => reopenAbsence(tx, me, id, reason)));
 }

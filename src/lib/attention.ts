@@ -5,7 +5,7 @@ import { store as storeCfg } from "./config";
 import { can, type Role } from "./permissions";
 import { ktmDate } from "./pos";
 import type { Scope } from "./scope";
-import { addDays, rosterOverview, rosterVsActual, weekStartOf } from "./rosters";
+import { addDays, rosterOverview, weekStartOf } from "./rosters";
 import { swapsToApprove } from "./shift-swaps";
 import { trainingMatrix } from "./training";
 import { cashPosition } from "./cash";
@@ -72,18 +72,18 @@ export async function attention(user: { id: string; role: string }, scope: Scope
 
   if (can(role, "people")) jobs.push((async () => {
     const nextWeek = addDays(weekStartOf(today), 7);
-    const [issues, leave, swaps, rosters, yesterdayShifts, training] = await Promise.all([
+    const [issues, leave, swaps, rosters, absences, training] = await Promise.all([
       db.issue.count({ where: here({ status: { not: "RESOLVED" as const }, dueAt: { lt: now } }) }),
       db.leaveRequest.count({ where: { status: "PENDING", userId: { not: user.id }, ...(ids ? { user: { locations: { some: { storeId: { in: ids } } } } } : {}) } }),
       swapsToApprove(scope, now),
       rosterOverview(scope, nextWeek),
-      rosterVsActual(ids, yesterday, yesterday, now),
+      db.absence.count({ where: { status: "OPEN", userId: { not: user.id }, ...(ids ? { storeId: { in: ids } } : {}) } }),
       trainingMatrix(scope),
     ]);
     add("issues", "warn", issues, (n) => `${s(n, "shop issue")} past its due time`, "/admin/issues");
     add("leave", "warn", leave, (n) => `${s(n, "leave request")} to decide`, "/admin/people");
     add("swaps", "warn", swaps.length, (n) => `${s(n, "shift swap")} to approve`, "/admin/rosters");
-    add("noshow", "danger", yesterdayShifts.people.reduce((a, p) => a + p.noShow, 0), (n) => `${s(n, "no-show")} yesterday`, "/admin/rosters");
+    add("noshow", "danger", absences, (n) => `${s(n, "missed shift")} to decide: unpaid, leave or worked`, "/admin/people/absences");
     add("rosters", "warn", rosters.filter((r) => r.shifts > 0 ? !r.published : true).length, (n) => `${s(n, "location")} without a published roster for next week`, `/admin/rosters?week=${nextWeek}`);
     add("training", "warn", training.rows.filter((r) => r.of > 0 && r.done < r.of).length, (n) => `${s(n, "person", "people")} with training still to sign`, "/admin/training");
   })());

@@ -173,7 +173,7 @@ async function main() {
     db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),
     db.bomLine.deleteMany(), db.materialStock.deleteMany(), db.material.deleteMany(),
     db.creditAllocation.deleteMany(), db.supplierCredit.deleteMany(), db.paymentAllocation.deleteMany(), db.supplierPayment.deleteMany(), db.supplierBill.deleteMany(),
-    db.attendance.deleteMany(), db.leaveRequest.deleteMany(),
+    db.absence.deleteMany(), db.attendance.deleteMany(), db.leaveRequest.deleteMany(),
     db.statutoryDeposit.deleteMany(), db.payslip.deleteMany(), db.payrollRun.deleteMany(), db.employment.deleteMany(), db.payrollTaxYear.deleteMany(),
     db.commissionRule.deleteMany(),
     db.checklistRun.deleteMany(), db.checklistTemplate.deleteMany(), db.announcement.deleteMany(),
@@ -214,6 +214,15 @@ async function main() {
   await db.staffLocation.create({ data: { user: { connect: { email: "cashier@asson.test" } }, store: { connect: { id: flagship.id } } } });
   // the manager also works the Flagship floor (on its roster), besides seeing every location
   await db.staffLocation.create({ data: { user: { connect: { email: "manager@asson.test" } }, store: { connect: { id: flagship.id } } } });
+  // a missed shift for the manager to decide (People → Missed shifts): the cashier, on a weekday last month (this
+  // month's payroll stays free of it, so building and approving it in a demo isn't blocked)
+  {
+    const d = new Date(Date.now() + 345 * 60_000); // Nepal time
+    d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); d.setUTCDate(10);
+    while (d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1); // never the Saturday off
+    const cashier = await db.user.findUniqueOrThrow({ where: { email: "cashier@asson.test" }, select: { id: true } });
+    await db.absence.create({ data: { userId: cashier.id, storeId: flagship.id, date: d.toISOString().slice(0, 10), start: "10:00", end: "18:00" } });
+  }
 
   const FIRST = ["Sita", "Bikash", "Anjali", "Prakash", "Sunita", "Rohan", "Pooja", "Nabin", "Srijana", "Suman", "Kritika", "Bibek", "Asmita", "Ramesh", "Manisha", "Sagar", "Pratiksha", "Aayush", "Sabina", "Dipesh"];
   const LAST = ["Shrestha", "Maharjan", "Thapa", "Gurung", "Adhikari", "Rai", "Karki", "Tamang", "Bhandari", "Poudel", "KC", "Joshi", "Sharma", "Lama", "Yadav", "Magar", "Limbu", "Basnet"];

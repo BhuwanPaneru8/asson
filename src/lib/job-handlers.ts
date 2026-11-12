@@ -7,6 +7,7 @@ import { birthdayRun } from "./referrals";
 import { autoDraftReplenishment } from "./replenishment";
 import { watchdog } from "./health";
 import { autoCloseForgotten } from "./people";
+import { findNoShows } from "./absences";
 import { escalateOverdue } from "./issues";
 import { postRecurring } from "./shop-pl";
 import { runPriceEvents } from "./markdowns";
@@ -38,6 +39,7 @@ export const HANDLERS = {
   "costs.recurring": { label: "Post this month's recurring costs (rent, internet…) to Expenses", run: () => postRecurring(), maxAttempts: 3 },
   "issues.escalate": { label: "Flag shop issues past their due time to HQ", run: () => escalateOverdue(), maxAttempts: 2 },
   "people.autoclose": { label: "Close forgotten clock-outs (for a manager to fix)", run: () => autoCloseForgotten(), maxAttempts: 2 },
+  "people.absences": { label: "Record missed shifts as absences (for a manager to decide)", run: () => findNoShows(), maxAttempts: 3 },
   "payments.expire": { label: "Release unpaid online orders", run: () => expireUnpaidOrders(), maxAttempts: 3 },
   // a mismatch is a bug, not a flaky network: fail once, loudly
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
@@ -59,6 +61,7 @@ export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "notifications.dispatch", everyMs: 1 * MIN },
   { type: "system.watchdog", everyMs: 5 * MIN },
   { type: "people.autoclose", everyMs: 60 * MIN },
+  { type: "people.absences", everyMs: 60 * MIN },
   { type: "issues.escalate", everyMs: 15 * MIN },
   { type: "costs.recurring", everyMs: DAY },
   { type: "payments.expire", everyMs: 10 * MIN },
