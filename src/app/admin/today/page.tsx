@@ -6,6 +6,8 @@ import { issueRef, openIssuesAt, STATUS_LABEL } from "@/lib/issues";
 import { vmRef, vmToDo } from "@/lib/vm";
 import { visitRef, visitToDo } from "@/lib/visits";
 import { targetProgress } from "@/lib/budgets";
+import { myShifts } from "@/lib/rosters";
+import { ktmDate } from "@/lib/pos";
 import { formatPrice } from "@/lib/utils";
 import { scopeFor, storeFilter } from "@/lib/scope";
 import { formatDateTime } from "@/lib/utils";
@@ -20,7 +22,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const locations = await db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } });
   const want = (await searchParams).store;
   const here = locations.find((l) => l.id === want) ?? locations[0];
-  const [news, lists, issues, displays, visits, target] = await Promise.all([announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
+  const [shifts, news, lists, issues, displays, visits, target] = await Promise.all([myShifts(me.id), announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
   const unread = news.filter((a) => a.requiresAck && !a.readAt);
   return (
     <>
@@ -65,6 +67,14 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             </Card>
           )}
         </div>
+        <div className="space-y-4">
+        <Card title="My shifts · next 7 days">
+          {!shifts.length ? <p className="p-5 text-[14px] text-muted">No published shifts for you this week.</p> : (
+            <ul className="divide-y divide-line text-[14px]">{shifts.map((s) => (
+              <li key={s.date} className={`flex items-center justify-between gap-3 px-5 py-2.5 ${s.date === ktmDate() ? "bg-accent-soft/40" : ""}`}><span><b>{s.date === ktmDate() ? "Today" : s.weekday}</b> <span className="text-muted">{s.date.slice(5)}</span>{s.holiday && <span className="ml-1 text-[12px] text-accent">{s.holiday}</span>}</span><span><span className="font-mono">{s.label}</span> · {s.store}</span></li>
+            ))}</ul>
+          )}
+        </Card>
         <Card title={unread.length ? `From HQ · ${unread.length} to read` : "From HQ"}>
           {!news.length ? <p className="p-5 text-[14px] text-muted">No announcements.</p> : (
             <ul className="divide-y divide-line">{news.map((a) => (
@@ -74,6 +84,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
             ))}</ul>
           )}
         </Card>
+        </div>
       </div>
     </>
   );
