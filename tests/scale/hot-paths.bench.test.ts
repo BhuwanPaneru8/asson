@@ -19,6 +19,7 @@ import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manif
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
 import { damageRegister } from "@/lib/damage";
+import { attention } from "@/lib/attention";
 import { exchangeFit, exchangeOptions, exchangesDesk } from "@/lib/exchanges";
 import { addItems, createEvent, endEvent, preview, scheduleEvent } from "@/lib/markdowns";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
@@ -144,6 +145,12 @@ it("hot paths stay within budget at national scale", async () => {
     const [one] = await db.$queryRaw<{ storeId: string }[]>`SELECT "storeId" FROM "DamageEntry" GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1`;
     await time("damaged register: whole network", STAFF, () => damageRegister({ all: true }));
     if (one) await time("damaged register: one shop", STAFF, () => damageRegister({ all: false, storeIds: [one.storeId] }));
+  }
+  {
+    const owner = { id: "bench-owner", role: "ADMIN" };
+    await time("dashboard: needs attention (owner, whole network)", STAFF, () => attention(owner, { all: true }));
+    const [shop] = await db.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Store" WHERE "kind" = 'SHOP' LIMIT 1`;
+    await time("dashboard: needs attention (a shop manager)", STAFF, () => attention({ id: "bench-mgr", role: "MANAGER" }, { all: false, storeIds: [shop.id] }));
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

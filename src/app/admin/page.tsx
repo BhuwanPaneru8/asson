@@ -1,3 +1,5 @@
+import { attention } from "@/lib/attention";
+import { scopeFor } from "@/lib/scope";
 import Image from "next/image";
 import { requirePermission } from "@/lib/auth";
 import Link from "next/link";
@@ -17,6 +19,7 @@ const DAY = 86400000;
 
 export default async function Dashboard() {
   const me = await requirePermission("dashboard");
+  const needs = await attention(me, await scopeFor(me));
   const now = nowMs();
   const since30 = new Date(now - 30 * DAY);
   const since60 = new Date(now - 60 * DAY);
@@ -43,11 +46,7 @@ export default async function Dashboard() {
     ? await Promise.all([db.errorEvent.count({ where: { resolvedAt: null, lastSeen: { gte: new Date(now - DAY) } } }), db.job.count({ where: { status: "DEAD" } })])
     : [0, 0];
   const systemAlert = [freshErrors && `${freshErrors} error${freshErrors > 1 ? "s" : ""} in the last 24 h.`, deadJobs && `${deadJobs} background job${deadJobs > 1 ? "s" : ""} failed.`].filter(Boolean).join(" ");
-  // owner: supplier bills past their due date
-  const overdueBills = can(me.role, "finance")
-    ? await db.supplierBill.aggregate({ where: { status: "OPEN", dueDate: { lt: new Date(`${ktmDate()}T00:00:00+05:45`) } }, _count: { _all: true }, _sum: { amount: true, paid: true } })
-    : null;
-  const overdueCount = overdueBills?._count._all ?? 0;
+  // overdue supplier bills are in "Needs attention" now
 
   const rev = cur._sum.total ?? 0, prevRev = prev._sum.total ?? 0;
   const aov = cur._count._all ? Math.round(rev / cur._count._all) : 0;
@@ -70,11 +69,16 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Dashboard" description={`${newCustomers} new customers in the last 30 days`} />
-      {overdueCount > 0 && (
-        <Link href="/admin/payables" className="mb-4 flex items-center gap-2 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn hover:underline">
-          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> {overdueCount} supplier bill{overdueCount > 1 ? "s" : ""} overdue ({formatPrice((overdueBills?._sum.amount ?? 0) - (overdueBills?._sum.paid ?? 0))}). Open Payables →
-        </Link>
-      )}
+      <Card title={needs.length ? `Needs attention · ${needs.length}` : "Needs attention"} className="mb-4">
+        {!needs.length ? <p className="px-5 py-4 text-[14px] text-muted">Nothing needs you right now. 👏</p> : (
+          <ul className="divide-y divide-line">{needs.map((a) => (
+            <li key={a.key}><Link href={a.href} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[14px] hover:bg-cloud/40">
+              <span className="flex items-center gap-2"><span aria-hidden className={a.tone === "danger" ? "text-danger" : "text-warn"}>●</span>{a.text}</span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden />
+            </Link></li>
+          ))}</ul>
+        )}
+      </Card>
       {systemAlert && (
         <Link href="/admin/system" className="mb-4 flex items-center gap-2 rounded-md bg-[#fbe9e7] px-4 py-3 text-[14px] text-danger hover:underline">
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden /> {systemAlert} Open System →
