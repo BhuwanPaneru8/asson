@@ -34,9 +34,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Products" description={`${total} products`} actions={<div className="flex flex-wrap gap-2">{canEdit && <Link href="/admin/products/import" className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-4 text-[14px] hover:border-ink">Import / export</Link>}<Link href="/admin/products/new" className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-4 text-[14px] text-white"><Plus className="h-4 w-4" /> Add product</Link></div>} />
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={sp.q} placeholder="Search name, brand or exact SKU" className="h-10 w-full max-w-xs rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
-        <select name="status" defaultValue={sp.status ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select>
-        <select name="category" defaultValue={sp.category ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All departments</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <input name="q" aria-label="Search products" defaultValue={sp.q} placeholder="Search name, brand or exact SKU" className="h-10 w-full max-w-xs rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
+        <select name="status" aria-label="Status" defaultValue={sp.status ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DRAFT">Draft</option><option value="ARCHIVED">Archived</option></select>
+        <select name="category" aria-label="Department" defaultValue={sp.category ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All departments</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <button className="h-10 rounded-md bg-ink px-4 text-[14px] text-white">Filter</button>
       </form>
       <Card>

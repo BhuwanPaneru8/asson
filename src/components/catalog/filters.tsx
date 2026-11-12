@@ -79,11 +79,11 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
       <div className="space-y-3 border-b border-line pb-4">
         <label className="flex cursor-pointer items-center justify-between text-[14px]">
           <span>{t("f.inStock")}</span>
-          <Toggle on={!!filters.inStock} onClick={() => update((p) => (filters.inStock ? p.delete("stock") : p.set("stock", "1")))} />
+          <Toggle label={t("f.inStock")} on={!!filters.inStock} onClick={() => update((p) => (filters.inStock ? p.delete("stock") : p.set("stock", "1")))} />
         </label>
         <label className="flex cursor-pointer items-center justify-between text-[14px]">
           <span>{t("nav.onSale")}</span>
-          <Toggle on={!!filters.sale} onClick={() => update((p) => (filters.sale ? p.delete("sale") : p.set("sale", "1")))} />
+          <Toggle label={t("nav.onSale")} on={!!filters.sale} onClick={() => update((p) => (filters.sale ? p.delete("sale") : p.set("sale", "1")))} />
         </label>
       </div>
 
@@ -156,9 +156,9 @@ export function FilterPanel({ facets, filters }: { facets: Facets; filters: Prod
   );
 }
 
-function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+function Toggle({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
   return (
-    <button type="button" role="switch" aria-checked={on} onClick={onClick} className={cn("relative h-5 w-9 rounded-full transition-colors", on ? "bg-ink" : "bg-line")}>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onClick} className={cn("relative h-5 w-9 rounded-full transition-colors", on ? "bg-ink" : "bg-line")}>
       <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
     </button>
   );

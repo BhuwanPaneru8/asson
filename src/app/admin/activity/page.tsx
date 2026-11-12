@@ -45,7 +45,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
       )}
 
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={sp.q} placeholder="Search: product, order, name, IP…" className={`${field} w-full max-w-xs`} />
+        <input name="q" aria-label="Search the activity log" defaultValue={sp.q} placeholder="Search: product, order, name, IP…" className={`${field} w-full max-w-xs`} />
         <select name="group" defaultValue={sp.group ?? ""} className={field} aria-label="Area">
           <option value="">Everything</option>
           {Object.entries(AUDIT_GROUPS).map(([k, g]) => <option key={k} value={k}>{g.label}</option>)}
