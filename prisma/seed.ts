@@ -172,7 +172,7 @@ async function main() {
     // own production first: it points at products, suppliers and locations
     db.productionReceipt.deleteMany(), db.materialLog.deleteMany(), db.productionLine.deleteMany(), db.productionOrder.deleteMany(),
     db.bomLine.deleteMany(), db.materialStock.deleteMany(), db.material.deleteMany(),
-    db.paymentAllocation.deleteMany(), db.supplierPayment.deleteMany(), db.supplierBill.deleteMany(),
+    db.creditAllocation.deleteMany(), db.supplierCredit.deleteMany(), db.paymentAllocation.deleteMany(), db.supplierPayment.deleteMany(), db.supplierBill.deleteMany(),
     db.attendance.deleteMany(), db.leaveRequest.deleteMany(),
     db.statutoryDeposit.deleteMany(), db.payslip.deleteMany(), db.payrollRun.deleteMany(), db.employment.deleteMany(), db.payrollTaxYear.deleteMany(),
     db.commissionRule.deleteMany(),

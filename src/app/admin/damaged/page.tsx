@@ -6,7 +6,7 @@ import { scopeFor } from "@/lib/scope";
 import { damageRegister, KIND_LABEL } from "@/lib/damage";
 import { cn, formatDateTime, formatPrice } from "@/lib/utils";
 import { Card, PageHeader } from "@/components/admin/ui";
-import { RecordCredit, TakeOut } from "@/components/admin/damage-forms";
+import { TakeOut } from "@/components/admin/damage-forms";
 
 export const metadata = { title: "Damaged stock" };
 
@@ -42,7 +42,7 @@ export default async function DamagedPage() {
           <Card title={`Credits owed by suppliers · ${r.owed.length}`}>
             {!r.owed.length ? <p className="p-5 text-[14px] text-muted">None waiting.</p> : (
               <ul className="divide-y divide-line text-[13.5px]">{r.owed.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"><span><b>{c.supplier?.name}</b> · {-c.quantity} × {c.variant.product.name}<span className="block text-[12px] text-muted">{c.store.name} · sent {formatDateTime(c.createdAt)} · {formatPrice(c.creditExpected ?? 0)} expected</span></span>{finance ? <RecordCredit entryId={c.id} expected={c.creditExpected ?? 0} /> : <span className="text-[12px] text-muted">finance records it</span>}</li>
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"><span><b>{c.supplier?.name}</b> · {-c.quantity} × {c.variant.product.name}<span className="block text-[12px] text-muted">{c.store.name} · sent {formatDateTime(c.createdAt)} · {formatPrice(c.creditExpected ?? 0)} expected</span></span>{finance ? <Link href="/admin/payables" className="text-[12.5px] underline underline-offset-4">Record the credit note</Link> : <span className="text-[12px] text-muted">finance records it</span>}</li>
               ))}</ul>
             )}
           </Card>
@@ -51,7 +51,7 @@ export default async function DamagedPage() {
               <li key={e.id} className="px-4 py-2"><span className={cn("font-medium", e.kind === "IN" ? "text-danger" : "text-success")}>{e.quantity > 0 ? `+${e.quantity}` : e.quantity}</span> {e.variant.product.name} {e.variant.size} · {e.store.name}<span className="block text-[12px] text-muted">{KIND_LABEL[e.kind]} · {e.source}{e.note ? ` · ${e.note}` : ""} · {formatDateTime(e.createdAt)}</span></li>
             ))}{!r.recent.length && <li className="px-4 py-3 text-muted">Nothing yet.</li>}</ul>
           </Card>
-          <p className="px-1 text-[12px] text-muted">Damaged units have already left stock value, so writing them off changes nothing in the books. A supplier credit is money back: give the credit note to the accountant (Payables doesn&apos;t take credit notes yet). <Link href="/admin/inventory" className="underline">Inventory</Link> → adjust with &ldquo;Damaged&rdquo; to take a unit off sale.</p>
+          <p className="px-1 text-[12px] text-muted">Damaged units have already left stock value, so writing them off changes nothing in the books. A supplier credit is money back: record their credit note in Payables and tick the goods it covers. <Link href="/admin/inventory" className="underline">Inventory</Link> → adjust with &ldquo;Damaged&rdquo; to take a unit off sale.</p>
         </div>
       </div>
     </>

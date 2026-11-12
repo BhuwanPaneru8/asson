@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { reportError } from "@/lib/errors";
 import { ScopeError } from "@/lib/scope";
-import { DamageError, recordCredit, takeOut } from "@/lib/damage";
+import { DamageError, takeOut } from "@/lib/damage";
 
 async function run<T>(where: string, f: () => Promise<T>) {
   try { const r = await f(); refresh(); return { ok: true as const, result: r }; } catch (e) {
@@ -24,8 +24,4 @@ export async function takeOutAction(input: z.input<typeof outSchema>) {
   const r = await run("damageTakeOut", async () => { await db.$transaction((tx) => takeOut(tx, me, p.data)); return null; });
   if (r.ok && p.data.kind === "REPAIRED") revalidateTag("products", { expire: 60 });
   return r;
-}
-export async function recordCreditAction(entryId: string, amount: number) {
-  const me = await requirePermission("finance");
-  return run("damageCredit", () => db.$transaction((tx) => recordCredit(tx, me, String(entryId), Number(amount))));
 }

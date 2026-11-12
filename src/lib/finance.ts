@@ -23,13 +23,15 @@ export function monthBounds(month: string) {
  */
 export async function profitAndLoss(start: Date, end: Date, expenseFrom: string, expenseTo: string) {
   const live = { createdAt: { gte: start, lt: end }, status: { not: "CANCELLED" as const } };
-  const [orders, items, storeReturns, fullReturns, expenses] = await Promise.all([
+  const [orders, items, storeReturns, fullReturns, expenses, damageCredits] = await Promise.all([
     db.order.aggregate({ where: live, _sum: { subtotal: true, discount: true, pointsDiscount: true, shippingFee: true }, _count: { _all: true } }),
     db.orderItem.findMany({ where: { order: live }, select: { productId: true, name: true, unitPrice: true, unitCost: true, quantity: true, order: { select: { subtotal: true, discount: true, pointsDiscount: true } } } }),
     db.returnItem.findMany({ where: { return: { createdAt: { gte: start, lt: end } } }, select: { quantity: true, amount: true, condition: true, orderItem: { select: { unitCost: true } } } }),
     // online orders returned through the admin workflow (no store Return rows): everything came back
     db.order.findMany({ where: { status: "RETURNED", updatedAt: { gte: start, lt: end }, returns: { none: {} } }, select: { subtotal: true, discount: true, pointsDiscount: true, items: { select: { unitCost: true, quantity: true } } } }),
     db.expense.groupBy({ by: ["category"], where: { date: { gte: expenseFrom, lt: expenseTo } }, _sum: { amount: true } }),
+    // supplier credit notes for damaged goods sent back: their cost was already in COGS, so the credit comes off it
+    db.supplierCredit.findMany({ where: { voidedAt: null, date: { gte: start, lt: end }, damage: { some: {} } }, select: { amount: true, vatAmount: true } }),
   ]);
 
   const gross = orders._sum.subtotal ?? 0;
@@ -55,6 +57,8 @@ export async function profitAndLoss(start: Date, end: Date, expenseFrom: string,
     storeReturns.filter((r) => r.condition === "RESELLABLE").reduce((s, r) => s + (r.orderItem.unitCost ?? 0) * r.quantity, 0) +
     fullReturns.flatMap((o) => o.items).reduce((s, i) => s + (i.unitCost ?? 0) * i.quantity, 0);
   cogs -= returnedCost;
+  const supplierCredits = damageCredits.reduce((s, c) => s + c.amount - c.vatAmount, 0);
+  cogs -= supplierCredits;
 
   const grossProfit = netSales - cogs;
   const expenseRows = expenses.map((e) => ({ category: e.category, label: EXPENSE_LABEL[e.category], amount: e._sum.amount ?? 0 })).sort((a, b) => b.amount - a.amount);
@@ -63,7 +67,7 @@ export async function profitAndLoss(start: Date, end: Date, expenseFrom: string,
   return {
     orders: orders._count._all,
     gross, discounts, refunds, netSales, deliveryIncome,
-    cogs, grossProfit, grossMargin: marginPercent(netSales, cogs),
+    cogs, supplierCredits, grossProfit, grossMargin: marginPercent(netSales, cogs),
     expenses: expenseRows, totalExpenses,
     netProfit: grossProfit + deliveryIncome - totalExpenses,
     unitsWithoutCost,

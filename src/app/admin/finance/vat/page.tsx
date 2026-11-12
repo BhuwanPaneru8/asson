@@ -25,7 +25,7 @@ export default async function VatPage() {
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <dl className="space-y-1 text-[14px]">
                 <div className="flex justify-between"><dt>Output VAT (sales less returns)</dt><dd className="tabular-nums">{money(f.outputVat)}</dd></div>
-                <div className="flex justify-between"><dt>Input VAT (bills with a supplier PAN)</dt><dd className="tabular-nums">−{money(f.inputVat)}</dd></div>
+                <div className="flex justify-between"><dt>Input VAT (bills with a supplier PAN, less their credit notes)</dt><dd className="tabular-nums">−{money(f.inputVat)}</dd></div>
                 {f.broughtForward > 0 && <div className="flex justify-between"><dt>Credit from the last return</dt><dd className="tabular-nums">−{money(f.broughtForward)}</dd></div>}
                 <div className={cn("flex justify-between border-t border-line pt-1 font-semibold", f.payable ? "" : "text-success")}><dt>{f.payable ? "VAT payable" : "Credit to carry forward"}</dt><dd className="tabular-nums">{money(f.payable || f.carryForward)}</dd></div>
                 {f.unclaimableVat > 0 && <p className="pt-1 text-[12.5px] text-warn">{money(f.unclaimableVat)} of VAT on bills from suppliers with no PAN can&apos;t be claimed: {f.noPan.map((b) => `${b.supplier} (${b.invoice})`).join(", ")}. Add the supplier&apos;s PAN to claim it.</p>}

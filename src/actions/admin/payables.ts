@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { reportError } from "@/lib/errors";
-import { PayablesError, recordBill, recordPayment, voidBill, voidPayment } from "@/lib/payables";
+import { PayablesError, recordBill, recordCreditNote, recordPayment, voidBill, voidCreditNote, voidPayment } from "@/lib/payables";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -87,5 +87,41 @@ export async function voidSupplierPayment(id: string, reason: string): Promise<R
     return { ok: true };
   } catch (e) {
     return failure(e, "voidSupplierPayment");
+  }
+}
+
+const creditSchema = z.object({
+  supplierId: z.string().min(1, "Pick the supplier"),
+  reference: z.string().trim().min(1, "Enter the supplier's credit note number").max(60),
+  date: day,
+  amount: rupees.refine((n) => n > 0, "Enter the credit total"),
+  vatAmount: rupees.default(0),
+  reason: z.string().trim().min(3, "Say what the credit is for").max(200),
+  billIds: z.array(z.string()).max(100).optional(),
+  damageEntryIds: z.array(z.string()).max(200).optional(),
+});
+
+/** Finance records a supplier's credit note: it settles bills, the rest is credit; it can cover damaged returns. */
+export async function recordSupplierCredit(input: z.input<typeof creditSchema>): Promise<R<{ number: number; credit: number }>> {
+  const me = await requirePermission("finance");
+  const p = creditSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  try {
+    const r = await db.$transaction((tx) => recordCreditNote(tx, me, p.data));
+    refresh();
+    return { ok: true, number: r.number, credit: r.credit };
+  } catch (e) {
+    return failure(e, "recordSupplierCredit");
+  }
+}
+
+export async function voidSupplierCredit(id: string, reason: string): Promise<R> {
+  const me = await requirePermission("finance");
+  try {
+    await db.$transaction((tx) => voidCreditNote(tx, me, id, reason.trim().slice(0, 300)));
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return failure(e, "voidSupplierCredit");
   }
 }

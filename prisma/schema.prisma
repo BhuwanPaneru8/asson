@@ -814,6 +814,7 @@ model Supplier {
   bills            SupplierBill[]
   payments         SupplierPayment[]
   damageReturns    DamageEntry[]
+  creditNotes      SupplierCredit[]
   /// days after the bill date that a bill falls due
   paymentTermsDays Int               @default(30)
 }
@@ -1205,28 +1206,29 @@ enum SupplierPayMethod {
 
 /// A supplier's invoice: what we owe them. Never deleted; mistakes are voided with a reason.
 model SupplierBill {
-  id              String              @id @default(cuid())
-  number          Int                 @unique @default(autoincrement())
-  supplierId      String
-  supplier        Supplier            @relation(fields: [supplierId], references: [id])
-  purchaseOrderId String?
-  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  id                String              @id @default(cuid())
+  number            Int                 @unique @default(autoincrement())
+  supplierId        String
+  supplier          Supplier            @relation(fields: [supplierId], references: [id])
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   /// the supplier's own invoice number
-  reference       String
-  billDate        DateTime
-  dueDate         DateTime
+  reference         String
+  billDate          DateTime
+  dueDate           DateTime
   /// total payable in paisa, VAT included
-  amount          Int
+  amount            Int
   /// VAT part of `amount` (input VAT for the VAT return)
-  vatAmount       Int                 @default(0)
+  vatAmount         Int                 @default(0)
   /// sum of live payment allocations, kept in step in each transaction (CHECK 0 <= paid <= amount)
-  paid            Int                 @default(0)
-  status          BillStatus          @default(OPEN)
-  note            String?
-  voidReason      String?
-  createdById     String
-  createdAt       DateTime            @default(now())
-  allocations     PaymentAllocation[]
+  paid              Int                 @default(0)
+  status            BillStatus          @default(OPEN)
+  note              String?
+  voidReason        String?
+  createdById       String
+  createdAt         DateTime            @default(now())
+  allocations       PaymentAllocation[]
+  creditAllocations CreditAllocation[]
 
   @@unique([supplierId, reference])
   @@index([status, dueDate])
@@ -2612,11 +2614,11 @@ enum DamageKind {
 
 /// Append-only: damaged units in (+) and out (−) per location and size. The balance is what's in the back room.
 model DamageEntry {
-  id             String     @id @default(cuid())
+  id             String          @id @default(cuid())
   storeId        String
-  store          Store      @relation(fields: [storeId], references: [id])
+  store          Store           @relation(fields: [storeId], references: [id])
   variantId      String
-  variant        Variant    @relation(fields: [variantId], references: [id])
+  variant        Variant         @relation(fields: [variantId], references: [id])
   kind           DamageKind
   /// + for IN, − for the rest
   quantity       Int
@@ -2624,17 +2626,59 @@ model DamageEntry {
   unitCost       Int?
   /// where it came from or went: "Store return R12", "EX-3", "AS000123 back from courier"
   source         String
-  note           String     @default("")
+  note           String          @default("")
   supplierId     String?
-  supplier       Supplier?  @relation(fields: [supplierId], references: [id])
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
   /// for TO_SUPPLIER: what we expect back, and when finance saw it arrive
   creditExpected Int?
   creditReceived Int?
   creditAt       DateTime?
+  creditNoteId   String?
+  creditNote     SupplierCredit? @relation(fields: [creditNoteId], references: [id])
   createdById    String?
-  createdAt      DateTime   @default(now())
+  createdAt      DateTime        @default(now())
 
   @@index([storeId, variantId])
   @@index([kind, createdAt])
   @@index([supplierId, kind])
+}
+
+// ---------- Supplier credit notes (Phase 19b) ----------
+
+/// A supplier's credit note (goods returned, damaged stock, a price correction): it settles open bills like a
+/// payment with no money, and what isn't used is credit for later bills. Its VAT reduces input VAT.
+model SupplierCredit {
+  id          String             @id @default(cuid())
+  number      Int                @unique @default(autoincrement())
+  supplierId  String
+  supplier    Supplier           @relation(fields: [supplierId], references: [id])
+  /// the supplier's own credit note number
+  reference   String
+  date        DateTime
+  /// total credit in paisa, VAT included, and the VAT part
+  amount      Int
+  vatAmount   Int                @default(0)
+  /// not yet set against a bill
+  unallocated Int
+  reason      String
+  voidedAt    DateTime?
+  voidReason  String?
+  createdById String
+  createdAt   DateTime           @default(now())
+  allocations CreditAllocation[]
+  damage      DamageEntry[]
+
+  @@unique([supplierId, reference])
+  @@index([supplierId, date])
+  @@index([date])
+}
+
+model CreditAllocation {
+  creditId String
+  credit   SupplierCredit @relation(fields: [creditId], references: [id])
+  billId   String
+  bill     SupplierBill   @relation(fields: [billId], references: [id])
+  amount   Int
+
+  @@id([creditId, billId])
 }

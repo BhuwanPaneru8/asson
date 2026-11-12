@@ -59,18 +59,6 @@ export async function takeOut(tx: Tx, user: Actor, d: { storeId: string; variant
   return e;
 }
 
-/** Finance: the supplier's credit for returned damaged goods has come in (credit note or deduction). */
-export async function recordCredit(tx: Tx, finance: Actor, entryId: string, amount: number, now = new Date()) {
-  const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "DamageEntry" WHERE "id" = ${entryId} FOR UPDATE`;
-  if (!row) throw new DamageError("Not found.");
-  const e = await tx.damageEntry.findUniqueOrThrow({ where: { id: entryId }, include: { supplier: { select: { name: true } } } });
-  if (e.kind !== "TO_SUPPLIER") throw new DamageError("Only goods sent back to a supplier get a credit.");
-  if (e.creditAt) throw new DamageError("The credit is already recorded.");
-  if (!Number.isInteger(amount) || amount < 0) throw new DamageError("Enter the credit received (0 if they refused).");
-  await tx.damageEntry.update({ where: { id: entryId }, data: { creditReceived: amount, creditAt: now } });
-  await audit(tx, finance, { action: "damage.credit", entity: ["DamageEntry", entryId], summary: `Credit from ${e.supplier?.name ?? "supplier"} for ${-e.quantity} damaged unit(s): ${formatPrice(amount)} received of ${formatPrice(e.creditExpected ?? 0)} expected` });
-}
-
 /** The register: what's damaged where (oldest first), what went out lately, supplier credits still owed. */
 export async function damageRegister(scope: Scope, now = new Date()) {
   const where = scope.all ? {} : { storeId: { in: scope.storeIds } };

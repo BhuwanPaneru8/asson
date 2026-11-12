@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { recordCreditAction, takeOutAction } from "@/actions/admin/damage";
+import { takeOutAction } from "@/actions/admin/damage";
 import { cn } from "@/lib/utils";
 
 const input = "h-9 rounded-md border border-line bg-white px-2 text-[13.5px] outline-none focus:border-ink";
@@ -34,16 +34,5 @@ export function TakeOut({ storeId, variantId, units, unitCost, suppliers }: { st
         <button className="h-9 rounded-md border border-line px-3 text-[13px]" onClick={() => setOpen(false)}>Close</button>
       </span>
     </div>
-  );
-}
-
-export function RecordCredit({ entryId, expected }: { entryId: string; expected: number }) {
-  const [v, setV] = useState(String(expected / 100));
-  const [pending, start] = useTransition();
-  return (
-    <span className="flex items-center gap-1.5">
-      <input className={cn(input, "w-24 text-right")} inputMode="decimal" value={v} onChange={(e) => setV(e.target.value.replace(/[^\d.]/g, ""))} aria-label="Credit received Rs" />
-      <button className={btn} disabled={pending} onClick={() => start(async () => { const r = await recordCreditAction(entryId, Math.round(Number(v) * 100)); if (r.ok) toast.success("Credit recorded"); else toast.error(r.error); })}>Received</button>
-    </span>
   );
 }

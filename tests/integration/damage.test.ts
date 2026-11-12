@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { damageRegister, quarantine, recordCredit, takeOut } from "@/lib/damage";
+import { damageRegister, quarantine, takeOut } from "@/lib/damage";
+import { recordCreditNote, voidCreditNote } from "@/lib/payables";
 import { makeLocation, makeProduct, makeUser, resetDb } from "../support/db";
 
 type U = Awaited<ReturnType<typeof makeUser>>;
@@ -50,10 +51,15 @@ describe("damaged stock register", () => {
     const e2 = await tx((t) => takeOut(t, mgr, { storeId: ktm.id, variantId: v().id, quantity: 1, kind: "TO_SUPPLIER", supplierId, creditExpected: 50_000 }));
     let r = await damageRegister({ all: true });
     expect([r.owed.length, r.owedTotal, r.units]).toEqual([2, 230_000, 1]);
-    await tx((t) => recordCredit(t, owner, e.id, 150_000));
-    await expect(tx((t) => recordCredit(t, owner, e.id, 1))).rejects.toThrow(/already recorded/);
+    // the supplier's credit note in Payables covers the first return
+    const today = new Date().toISOString().slice(0, 10);
+    const cn = await tx((t) => recordCreditNote(t, owner, { supplierId, reference: "CN-77", date: today, amount: 169_500, vatAmount: 19_500, reason: "damaged returned", damageEntryIds: [e.id] }));
+    await expect(tx((t) => recordCreditNote(t, owner, { supplierId, reference: "CN-78", date: today, amount: 1000, vatAmount: 0, reason: "again", damageEntryIds: [e.id] }))).rejects.toThrow(/already have a credit/);
     r = await damageRegister({ all: true });
-    expect([r.owed.map((c) => c.id), r.settled.map((c) => c.creditReceived)]).toEqual([[e2.id], [150_000]]);
+    expect([r.owed.map((c) => c.id), r.settled.map((c) => c.creditReceived)]).toEqual([[e2.id], [150_000]]); // goods value, without VAT
+    // voiding the credit note puts the return back to waiting
+    await tx((t) => voidCreditNote(t, owner, cn.id, "entered twice"));
+    expect((await damageRegister({ all: true })).owed.map((c) => c.id).sort()).toEqual([e.id, e2.id].sort());
   });
 
   it("is append-only: entries can't be deleted or changed, and the sign must match the kind", async () => {
