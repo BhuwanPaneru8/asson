@@ -111,7 +111,7 @@ export function ProductExperience({ product, fitSummary, swapFit, rates }: { pro
         <Gallery key={color} images={images} name={product.name} />
       </div>
       <div className="md:col-span-5">
-        <div className="md:sticky md:top-24">
+        <div className="md:sticky md:top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300">
           <p className="text-[12.5px] font-semibold uppercase tracking-[0.14em] text-muted">{product.brand}</p>
           <h1 className="mt-1.5 font-display text-3xl leading-tight md:text-[38px]">{product.name}</h1>
           {product.ratingCount > 0 && (

@@ -75,9 +75,9 @@ export default async function HomePage() {
           </Link>
         </div>
         <div className="flex gap-2 p-4 md:hidden">
-          <Link href="/c/men" className={buttonClass("secondary", "md", "flex-1")}>{t("home.shopMen")}</Link>
-          <Link href="/c/women" className={buttonClass("primary", "md", "flex-1")}>{t("home.shopWomen")}</Link>
-          <Link href="/c/kids" className={buttonClass("secondary", "md", "flex-1")}>{t("g.kids")}</Link>
+          <Link href="/c/men" className={buttonClass("secondary", "md", "flex-1 whitespace-nowrap px-2")}>{t("g.men")}</Link>
+          <Link href="/c/women" className={buttonClass("primary", "md", "flex-1 whitespace-nowrap px-2")}>{t("g.women")}</Link>
+          <Link href="/c/kids" className={buttonClass("secondary", "md", "flex-1 whitespace-nowrap px-2")}>{t("g.kids")}</Link>
         </div>
       </section>
 

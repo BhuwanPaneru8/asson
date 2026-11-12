@@ -221,7 +221,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
         </div>
 
         <aside className="lg:col-span-5">
-          <div className="sticky top-24 border border-line bg-white p-6">
+          <div className="sticky top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300 border border-line bg-white p-6">
             <h2 className="text-[16px] font-semibold">{t("sum.title")} <span className="font-normal text-muted">({cart.count})</span></h2>
             <ul className="mt-4 max-h-72 space-y-4 overflow-y-auto pr-1">
               {cart.lines.map((l) => (
@@ -283,6 +283,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
             <Button type="submit" size="lg" className="mt-5 w-full" loading={placing} disabled={!totals || (pickup ? !pickupId : notServiceable) || (payment === "COD" && codBlocked)}>
               {payment === "COD" ? t("co.place") : t("co.continuePay")}
             </Button>
+            <p className="mt-3 text-center text-[12.5px] leading-relaxed text-muted">{rich(t("policies.agree"), { terms: <Link href="/policies/terms" target="_blank" className="underline underline-offset-2 hover:text-ink">{t("policies.terms")}</Link>, privacy: <Link href="/policies/privacy" target="_blank" className="underline underline-offset-2 hover:text-ink">{t("policies.privacy")}</Link> })}</p>
             <p className="mt-3 text-center text-[12px] text-muted">{rich(t("co.agree"), { terms: <Link href="/help#terms" className="underline">{t("co.termsLink")}</Link>, privacy: <Link href="/help#privacy" className="underline">{t("co.privacyLink")}</Link> })}</p>
           </div>
         </aside>

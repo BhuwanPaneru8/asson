@@ -1,3 +1,4 @@
+import { POLICIES } from "@/lib/policies";
 import type { MetadataRoute } from "next";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
@@ -30,5 +31,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...products.map((p) => ({ url: `${base}/p/${p.slug}`, lastModified: p.updatedAt, priority: 0.7 })),
     ...(looks.length ? [{ url: `${base}/lookbook`, changeFrequency: "weekly" as const, priority: 0.7 }] : []),
     ...looks.map((l) => ({ url: `${base}/lookbook/${l.slug}`, lastModified: l.updatedAt, priority: 0.6 })),
+    ...["/about", "/stores", "/help", "/size-guide", "/policies", ...POLICIES.map((p) => `/policies/${p.slug}`)].map((path) => ({ url: `${base}${path}`, changeFrequency: "monthly" as const, priority: 0.4 })),
   ];
 }

@@ -41,7 +41,7 @@ export default async function CartPage() {
           </div>
         </div>
         <aside className="lg:col-span-4">
-          <div className="sticky top-24 border border-line bg-white p-6">
+          <div className="sticky top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300 border border-line bg-white p-6">
             <h2 className="text-[16px] font-semibold">{t("sum.title")}</h2>
             <dl className="mt-4 space-y-2.5 text-[14.5px]">
               <div className="flex justify-between"><dt>{t("bag.subtotal")}</dt><dd>{formatPrice(cart.subtotal)}</dd></div>

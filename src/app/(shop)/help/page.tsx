@@ -73,8 +73,14 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
           <CareForm defaults={{ name: me?.name ?? "", phone: me?.phone ?? "", email: me?.email ?? "", order: String(sp.order ?? "").slice(0, 20), category: topic }} />
         </div>
       </section>
-      <section id="privacy" className="mt-12 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.privacy")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">{t("help.privacyBody")} Replace this with your full privacy policy.</p></section>
-      <section id="terms" className="mt-8 scroll-mt-24"><h2 className="text-[20px] font-semibold">{t("footer.terms")}</h2><p className="mt-2 text-[14.5px] text-ink-soft">Replace this with your terms of sale.</p></section>
+      {/* old #privacy / #terms links still land here, then go on to the full policies */}
+      <section id="policies" className="mt-12 scroll-mt-24">
+        <h2 id="privacy" className="scroll-mt-24 text-[20px] font-semibold"><span id="terms" className="scroll-mt-24" />{t("policies.title")}</h2>
+        <p className="mt-2 text-[14.5px] text-ink-soft">{t("help.privacyBody")}</p>
+        <ul className="mt-4 grid gap-2 text-[14.5px] sm:grid-cols-2">
+          {(["terms", "privacy", "shipping", "returns", "payments", "rewards", "cookies"] as const).map((s) => <li key={s}><Link href={`/policies/${s}`} className="underline underline-offset-4 hover:text-accent">{t(`policies.${s}`)}</Link></li>)}
+        </ul>
+      </section>
     </div>
   );
 }
