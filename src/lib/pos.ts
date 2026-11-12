@@ -17,7 +17,7 @@ export const TENDER_LABEL: Record<TenderMethod, string> = {
 };
 
 export const REFUND_LABEL: Record<RefundMethod, string> = {
-  CASH: "Cash", ESEWA_QR: "eSewa", KHALTI_QR: "Khalti", FONEPAY_QR: "Fonepay", CARD: "Card", BANK: "Bank transfer", STORE_CREDIT: "Store credit",
+  CASH: "Cash", ESEWA_QR: "eSewa", KHALTI_QR: "Khalti", FONEPAY_QR: "Fonepay", CARD: "Card", BANK: "Bank transfer", STORE_CREDIT: "Store credit", EXCHANGE: "Size exchange (no refund)",
 };
 
 /** Calendar date (YYYY-MM-DD) in Nepal for a moment in time. */
@@ -89,7 +89,7 @@ export async function buildDaySummary(storeId: string, date: string) {
       take: 200,
     }),
     db.user.findMany({ where: { role: { not: "CUSTOMER" } }, select: { id: true, name: true } }),
-    db.return.findMany({ where: { createdAt: { gte: start, lt: end } }, select: { id: true, number: true, refundAmount: true, refundMethod: true, reason: true, processedById: true, approvedById: true, voucherCode: true, items: { select: { quantity: true, condition: true } } }, orderBy: { createdAt: "asc" } }),
+    db.return.findMany({ where: { createdAt: { gte: start, lt: end }, refundMethod: { not: "EXCHANGE" } }, select: { id: true, number: true, refundAmount: true, refundMethod: true, reason: true, processedById: true, approvedById: true, voucherCode: true, items: { select: { quantity: true, condition: true } } }, orderBy: { createdAt: "asc" } }),
     db.orderItem.findMany({ where: { order: storeSales }, select: { unitPrice: true, unitCost: true, quantity: true, order: { select: { subtotal: true, discount: true } } } }),
     // click-and-collect orders paid at this shop's counter (online orders, so not in store sales)
     db.tender.findMany({ where: { createdAt: { gte: start, lt: end }, order: { channel: "ONLINE", shift: { storeId } } }, select: { method: true, amount: true } }),
