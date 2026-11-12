@@ -28,3 +28,27 @@ test("a customer calls before packing: staff swap the size, and the timeline say
   await expect(page.getByText("Size swapped: the new one is reserved")).toBeVisible();
   await expect(page.getByText(/^Changed: Oxford Button-Down Shirt: 1 × .* M → /)).toBeVisible();
 });
+
+test("a guest changes their delivery address from the order page before it's packed", async ({ page }) => {
+  await page.goto("/p/oxford-button-down-shirt");
+  await page.getByRole("button", { name: /^Size L/ }).click();
+  await page.getByRole("button", { name: /Add to bag/ }).first().click();
+  await expect(page.getByRole("dialog", { name: /Your bag/ })).toBeVisible();
+  await page.goto("/checkout");
+  await page.getByLabel("Email", { exact: true }).fill("e2e.selfchange@example.com");
+  await page.getByLabel("Mobile number").fill("9841234570");
+  await page.getByLabel("Full name").fill("E2E Self");
+  await page.getByLabel("Phone", { exact: true }).fill("9841234570");
+  await page.getByLabel("District").selectOption("Bhaktapur");
+  await page.getByLabel("City / municipality").fill("Bhaktapur");
+  await page.getByLabel("Tole / street, house no.").fill("Durbar Square 2");
+  await page.getByRole("button", { name: "Place order" }).click();
+  await expect(page.getByRole("heading", { name: /Thank you/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Change delivery address or phone" }).click();
+  await page.getByLabel("City / municipality").fill("Madhyapur Thimi");
+  await page.getByLabel("Tole / street, house no.").fill("Bode 5");
+  await page.getByRole("button", { name: "Save address" }).click();
+  await expect(page.getByText("Your order has been changed")).toBeVisible();
+  await expect(page.getByText("Bode 5")).toBeVisible();
+});

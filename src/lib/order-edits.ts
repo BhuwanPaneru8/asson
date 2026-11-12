@@ -20,6 +20,9 @@ type Actor = NonNullable<AuditActor>;
 export class EditError extends Error {}
 
 const EDITABLE = ["PENDING", "CONFIRMED"] as const;
+/** Customers change their own orders too: their changes go on the order timeline, not the staff audit log. */
+const isCustomer = (u: Actor) => u.role === "CUSTOMER";
+const log = (tx: Tx, u: Actor, e: Parameters<typeof audit>[2]) => (isCustomer(u) ? Promise.resolve() : audit(tx, u, e));
 
 async function load(tx: Tx, orderId: string) {
   const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Order" WHERE "id" = ${orderId} FOR UPDATE`;
@@ -38,7 +41,7 @@ async function release(tx: Tx, o: Loaded, item: Loaded["items"][number], quantit
   for (const a of [...item.allocations].sort((x, y) => +y.createdAt - +x.createdAt)) {
     if (!left) break;
     const n = Math.min(left, a.quantity);
-    if (a.variantId) await moveStock(tx, { variantId: a.variantId, storeId: a.storeId, delta: n, reason: "CANCEL_RESTOCK", orderId: o.id, actorId, note });
+    if (a.variantId) await moveStock(tx, { variantId: a.variantId, storeId: a.storeId, delta: n, reason: "CANCEL_RESTOCK", orderId: o.id, actorId: actorId || null, note });
     if (n === a.quantity) await tx.orderAllocation.delete({ where: { id: a.id } });
     else await tx.orderAllocation.update({ where: { id: a.id }, data: { quantity: { decrement: n } } });
     left -= n;
@@ -81,7 +84,7 @@ export async function reduceItem(tx: Tx, user: Actor, d: { orderId: string; orde
   const what = `${item.name} ${item.color} ${item.size}: ${item.quantity} → ${d.quantity}`;
   await tx.orderEvent.create({ data: { orderId: o.id, actor: user.name, message: `Changed: ${what}. New total ${formatPrice(m.total)}` } });
   await queueOrderNotice(tx, o.id, "updated");
-  await audit(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}; total ${formatPrice(was)} → ${formatPrice(m.total)}` });
+  await log(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}; total ${formatPrice(was)} → ${formatPrice(m.total)}` });
   return m;
 }
 
@@ -107,7 +110,7 @@ export async function swapSize(tx: Tx, user: Actor, d: { orderId: string; orderI
   }
   const a = o.shippingAddress as { district?: string } | null;
   try {
-    await allocateOrder(tx, { orderId: o.id, lines: [{ orderItemId: lineId, variantId: v.id, quantity: qty, label: `${item.name} (${v.size})` }], toDistrict: a?.district ?? null, prefer: o.pickupStoreId ?? undefined, actorId: user.id, note: `${ref}: swapped from ${item.size}` });
+    await allocateOrder(tx, { orderId: o.id, lines: [{ orderItemId: lineId, variantId: v.id, quantity: qty, label: `${item.name} (${v.size})` }], toDistrict: a?.district ?? null, prefer: o.pickupStoreId ?? undefined, actorId: user.id || null, note: `${ref}: swapped from ${item.size}` });
   } catch (e) {
     if (e instanceof StockError) throw new EditError(`${item.name} in ${v.color} ${v.size} isn't in stock anywhere that sends orders.`);
     throw e;
@@ -115,7 +118,7 @@ export async function swapSize(tx: Tx, user: Actor, d: { orderId: string; orderI
   const what = `${item.name}: ${qty} × ${item.color} ${item.size} → ${v.color} ${v.size}`;
   await tx.orderEvent.create({ data: { orderId: o.id, actor: user.name, message: `Changed: ${what}` } });
   await queueOrderNotice(tx, o.id, "updated");
-  await audit(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}` });
+  await log(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}` });
 }
 
 /** A new delivery address or phone. The fee follows the district for unpaid orders; a paid order keeps its fee. */
@@ -132,6 +135,6 @@ export async function changeAddress(tx: Tx, user: Actor, d: { orderId: string; a
   const ref = formatOrderNumber(o.number);
   const what = `address ${before?.line1 ?? ""}, ${before?.city ?? ""}, ${before?.district ?? ""} → ${p.data.line1}, ${p.data.city}, ${p.data.district}${before?.phone !== p.data.phone ? `; phone ${before?.phone ?? ""} → ${p.data.phone}` : ""}`;
   await tx.orderEvent.create({ data: { orderId: o.id, actor: user.name, message: `Changed ${what}${m && m.total !== o.total ? `. New total ${formatPrice(m.total)}` : ""}` } });
-  await audit(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}${m && m.total !== o.total ? `; total ${formatPrice(o.total)} → ${formatPrice(m.total)}` : ""}` });
+  await log(tx, user, { action: "order.edit", entity: ["Order", o.id], summary: `${ref}: ${what}${m && m.total !== o.total ? `; total ${formatPrice(o.total)} → ${formatPrice(m.total)}` : ""}` });
   return m;
 }
