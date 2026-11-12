@@ -2,7 +2,7 @@
 
 import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag, revalidatePath } from "next/cache";
-import { queueBackInStock } from "@/lib/stock-alerts";
+import { queueBackInStock, queuePriceDrops } from "@/lib/stock-alerts";
 import { requireStoreAccess, ScopeError } from "@/lib/scope";
 import { activeLocation, defaultReceivingLocation, moveStock, moveStockOrThrow, StockError, zeroVariant, type StockReason } from "@/lib/stock";
 import { dispatchNotifications } from "@/lib/notifications";
@@ -143,6 +143,8 @@ export async function saveProduct(input: ProductInput, id?: string): Promise<R> 
           changes: { ...changes, ...(vCount.cost.length ? { costPrice: vCount.cost.map(([sku, a, b]) => ({ sku, costPrice: [a, b] })) } : {}) },
         });
       }
+      // a lower price: text the people who asked to hear about a price drop
+      if (before && base.price < before.price) await queuePriceDrops(tx, [p.id]);
       return p.id;
     }, { timeout: 30_000 });
     revalidateTag("products", { expire: 0 });

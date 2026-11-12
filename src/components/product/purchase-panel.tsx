@@ -16,6 +16,7 @@ import type { RateMap } from "@/lib/delivery-shared";
 import { cn, formatPrice } from "@/lib/utils";
 import { Gallery } from "./gallery";
 import { NotifyMe } from "./notify-me";
+import { PriceDropAlert } from "./price-drop";
 import { useT } from "@/components/site/i18n-provider";
 
 type Variant = { id: string; color: string; colorHex: string; size: string; stock: number };
@@ -120,6 +121,7 @@ export function ProductExperience({ product, fitSummary, swapFit, rates }: { pro
           )}
           <Price price={product.price} compareAt={product.compareAtPrice} size="lg" className="mt-4" offWord={t("price.off")} />
           <p className="mt-1 text-[12.5px] text-muted">{l(store.vatLabel)}</p>
+          <PriceDropAlert productId={product.id} />
 
           {/* Colour */}
           <div className="mt-7">

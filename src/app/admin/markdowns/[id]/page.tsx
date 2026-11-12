@@ -50,7 +50,7 @@ export default async function MarkdownPage({ params }: { params: Promise<{ id: s
         <Card title="Products">
           {!p.rows.length ? <p className="p-5 text-[14px] text-muted">No products yet.</p> : (
             <div className="overflow-x-auto"><table className="w-full text-[13.5px]">
-              <thead className="border-b border-line bg-cloud/40 text-left text-[11.5px] uppercase tracking-wider text-muted"><tr><th className="px-4 py-2">Product</th><th className="px-3 text-right">Shelf</th><th className="px-3 text-right">Sale</th><th className="px-3 text-right">Off</th><th className="px-3 text-right">Margin</th><th className="px-3 text-right">Stock</th><th className="px-3 text-right">Sold 30d</th>{editable && <th className="px-4" />}</tr></thead>
+              <thead className="border-b border-line bg-cloud/40 text-left text-[11.5px] uppercase tracking-wider text-muted"><tr><th className="px-4 py-2">Product</th><th className="px-3 text-right">Shelf</th><th className="px-3 text-right">Sale</th><th className="px-3 text-right">Off</th><th className="px-3 text-right">Margin</th><th className="px-3 text-right">Stock</th><th className="px-3 text-right">Sold 30d</th><th className="px-3 text-right" title="Waiting for a price drop">Watching</th>{editable && <th className="px-4" />}</tr></thead>
               <tbody className="divide-y divide-line">{p.rows.map((r) => (
                 <tr key={r.productId} className={cn(r.belowCost ? "bg-danger/5" : r.belowMin || r.clash || r.notLower ? "bg-warn/5" : "")}>
                   <td className="min-w-[180px] px-4 py-2"><Link href={`/p/${r.slug}`} target="_blank" className="hover:underline">{r.name}</Link>{r.clash && <span className="block text-[11.5px] text-warn">also in {r.clash}</span>}{r.restoreSkipped && <span className="block text-[11.5px] text-warn">price changed during the sale: left as it was</span>}</td>
@@ -59,7 +59,7 @@ export default async function MarkdownPage({ params }: { params: Promise<{ id: s
                   <td className="px-3 text-right tabular-nums">{r.off}%</td>
                   <td className={cn("px-3 text-right tabular-nums", r.belowCost ? "font-semibold text-danger" : r.belowMin && "text-warn")}>{r.margin != null ? `${r.margin}%` : "—"}</td>
                   <td className="px-3 text-right tabular-nums">{r.stock}</td>
-                  <td className="px-3 text-right tabular-nums">{r.sold30}</td>
+                  <td className="px-3 text-right tabular-nums">{r.sold30}</td><td className="px-3 text-right tabular-nums">{r.watching || "—"}</td>
                   {editable && <td className="px-4 py-1.5"><ItemPrice eventId={e.id} productId={r.productId} price={r.newPrice} editable /></td>}
                 </tr>
               ))}</tbody>

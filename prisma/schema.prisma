@@ -307,6 +307,7 @@ model Product {
   pairedBy         Product[]         @relation("CompleteTheLook")
   reviews          Review[]
   priceEventItems  PriceEventItem[]
+  priceAlerts      PriceAlert[]
   wishlistBy       WishlistItem[]
   stats            ProductStat[]
   lookItems        LookItem[]
@@ -2579,4 +2580,20 @@ model PriceEventItem {
 
   @@unique([eventId, productId])
   @@index([productId])
+}
+
+/// "Text me if the price drops": fires once, when the product's price goes below what it was when asked.
+model PriceAlert {
+  id         String    @id @default(cuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  phone      String
+  userId     String?
+  /// the price when they asked (paisa)
+  price      Int
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+
+  @@unique([productId, phone])
+  @@index([productId, notifiedAt])
 }
