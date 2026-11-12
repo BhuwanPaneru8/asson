@@ -56,7 +56,7 @@ export default async function HomePage() {
       <section className="relative">
         <div className="grid md:grid-cols-2">
           <Link href="/c/women" className="group relative block aspect-[4/5] overflow-hidden md:aspect-auto md:h-[min(82vh,820px)]">
-            <Image src={U("1483985988355-763728e1935b")} alt={t("home.altWomen")} fill priority sizes="(min-width:768px) 50vw, 100vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
+            <Image src={U("1483985988355-763728e1935b")} alt={t("home.altWomen")} fill loading="eager" fetchPriority="high" sizes="(min-width:768px) 50vw, 100vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-6 text-white md:p-12">
               <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">{t("g.women")}</p>
@@ -65,7 +65,7 @@ export default async function HomePage() {
             </div>
           </Link>
           <Link href="/c/men" className="group relative hidden overflow-hidden md:block md:h-[min(82vh,820px)]">
-            <Image src={U("1490114538077-0a7f8cb49891")} alt={t("home.altMen")} fill priority sizes="50vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
+            <Image src={U("1490114538077-0a7f8cb49891")} alt={t("home.altMen")} fill sizes="50vw" className="object-cover transition-transform duration-[1.5s] group-hover:scale-[1.03]" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
             <div className="absolute inset-x-0 bottom-0 p-12 text-white">
               <p className="text-[12px] font-semibold uppercase tracking-[0.2em]">{t("g.men")}</p>

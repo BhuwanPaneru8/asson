@@ -45,7 +45,7 @@ export function ProductSkeleton() {
 
 export function PageSkeleton() {
   return (
-    <div className="container-page space-y-4 py-10" aria-busy="true" aria-label="Loading">
+    <div className="container-page min-h-[100svh] space-y-4 py-10" aria-busy="true" aria-label="Loading">
       <Skeleton className="h-10 w-72" />
       <Skeleton className="h-4 w-96 max-w-full" />
       <Skeleton className="h-64 w-full" />

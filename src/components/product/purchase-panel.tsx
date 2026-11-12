@@ -149,7 +149,7 @@ export function ProductExperience({ product, fitSummary, swapFit, rates }: { pro
                   const oos = v.stock <= 0;
                   return (
                     <button key={s} onClick={() => { setSize(s); setSizeError(false); }} aria-pressed={size === s} aria-label={`${t("f.sizeChip", { s })}${oos ? t("pp.ariaSoldOut") : v.stock <= 3 ? t("pp.ariaLeft", { n: v.stock }) : ""}`}
-                      className={cn("relative h-12 border text-[14px] font-medium transition-colors", size === s ? (oos ? "border-ink bg-cloud text-ink" : "border-ink bg-ink text-white") : oos ? "border-line bg-cloud/50 text-muted/70 hover:border-ink-soft" : "border-line bg-white hover:border-ink", sizeError && !oos && size !== s && "border-danger/50")}>
+                      className={cn("relative h-12 border text-[14px] font-medium transition-colors", size === s ? (oos ? "border-ink bg-cloud text-ink" : "border-ink bg-ink text-white") : oos ? "border-line bg-cloud/50 text-muted hover:border-ink-soft" : "border-line bg-white hover:border-ink", sizeError && !oos && size !== s && "border-danger/50")}>
                       <span className={cn(oos && "line-through")}>{s}</span>
                       {!oos && v.stock <= 3 && <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-warn px-1 text-[9.5px] font-semibold uppercase leading-4 text-white">{t("pp.left", { n: v.stock })}</span>}
                     </button>
