@@ -7,10 +7,14 @@ import { deadStock, marginPct, reorderPlan, searchInsights, sizeColourMix, type 
 import { cn, formatDate, formatPrice } from "@/lib/utils";
 import { customerInsights, funnelInsights } from "@/lib/customer-insights";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
+import { Demand } from "./demand";
+import { Pulse } from "./pulse";
 
 export const metadata = { title: "Insights" };
 
 const TABS = [
+  { id: "pulse", label: "KPI pulse" },
+  { id: "demand", label: "Demand forecast" },
   { id: "reorder", label: "What to reorder" },
   { id: "dead", label: "Dead stock" },
   { id: "mix", label: "Sizes & colours" },
@@ -27,7 +31,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
   const me = await requirePermission("insights");
   const showCost = can(me.role, "finance");
   const sp = await searchParams;
-  const tab: Tab = TABS.find((t) => t.id === sp.tab)?.id ?? "reorder";
+  const tab: Tab = TABS.find((t) => t.id === sp.tab)?.id ?? "pulse";
   const href = (q: Record<string, string | undefined>) => {
     const p = new URLSearchParams({ tab });
     for (const [k, v] of Object.entries(q)) if (v) p.set(k, v);
@@ -36,12 +40,14 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Insights" description="Buying and merchandising signals from your own sales: what to reorder, what isn't moving, which sizes and colours earn, and what shoppers look for." />
+      <PageHeader title="Insights" description="Buying and merchandising signals from your own sales: what's going to sell, what to reorder, what isn't moving, which sizes and colours earn, and what shoppers look for." />
       <nav className="-mx-1 mb-4 flex gap-1 overflow-x-auto border-b border-line px-1" aria-label="Insights">
         {TABS.map((t) => (
           <Link key={t.id} href={`/admin/insights?tab=${t.id}`} aria-current={tab === t.id ? "page" : undefined} className={cn("-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-[14px]", tab === t.id ? "border-ink font-medium" : "border-transparent text-muted hover:text-ink")}>{t.label}</Link>
         ))}
       </nav>
+      {tab === "pulse" && <Pulse showCost={showCost} />}
+      {tab === "demand" && <Demand />}
       {tab === "reorder" && <Reorder showCost={showCost} />}
       {tab === "dead" && <Dead showCost={showCost} />}
       {tab === "mix" && <Mix showCost={showCost} days={[30, 90, 365].includes(Number(sp.days)) ? Number(sp.days) : 90} category={sp.category} href={href} />}
