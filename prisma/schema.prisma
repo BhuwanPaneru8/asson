@@ -372,6 +372,7 @@ model Variant {
   inventoryLogs   InventoryLog[]
   purchaseItems   PurchaseOrderItem[]
   stockAlerts     StockAlert[]
+  damage          DamageEntry[]
   storeStock      StoreStock[]
   allocations     OrderAllocation[]
   transferItems   StockTransferItem[]
@@ -573,6 +574,7 @@ model Store {
   returns          Return[]
   rosterShifts     RosterShift[]
   rosterWeeks      RosterWeek[]
+  damage           DamageEntry[]
   /// fewest people the roster should have on each open day
   minStaff         Int               @default(2)
 
@@ -811,6 +813,7 @@ model Supplier {
   productionOrders ProductionOrder[] @relation("Workshop")
   bills            SupplierBill[]
   payments         SupplierPayment[]
+  damageReturns    DamageEntry[]
   /// days after the bill date that a bill falls due
   paymentTermsDays Int               @default(30)
 }
@@ -2596,4 +2599,42 @@ model PriceAlert {
 
   @@unique([productId, phone])
   @@index([productId, notifiedAt])
+}
+
+// ---------- Damaged stock register (Phase 19a) ----------
+
+enum DamageKind {
+  IN // came back damaged (store return, exchange, parcel back, staff found it)
+  REPAIRED // fixed: back on sale
+  WRITTEN_OFF // thrown away or given away
+  TO_SUPPLIER // sent back to the supplier for a credit
+}
+
+/// Append-only: damaged units in (+) and out (−) per location and size. The balance is what's in the back room.
+model DamageEntry {
+  id             String     @id @default(cuid())
+  storeId        String
+  store          Store      @relation(fields: [storeId], references: [id])
+  variantId      String
+  variant        Variant    @relation(fields: [variantId], references: [id])
+  kind           DamageKind
+  /// + for IN, − for the rest
+  quantity       Int
+  /// cost of one unit when it came in (from the sale, else the size's cost)
+  unitCost       Int?
+  /// where it came from or went: "Store return R12", "EX-3", "AS000123 back from courier"
+  source         String
+  note           String     @default("")
+  supplierId     String?
+  supplier       Supplier?  @relation(fields: [supplierId], references: [id])
+  /// for TO_SUPPLIER: what we expect back, and when finance saw it arrive
+  creditExpected Int?
+  creditReceived Int?
+  creditAt       DateTime?
+  createdById    String?
+  createdAt      DateTime   @default(now())
+
+  @@index([storeId, variantId])
+  @@index([kind, createdAt])
+  @@index([supplierId, kind])
 }

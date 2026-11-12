@@ -90,6 +90,7 @@ describe("online size exchanges", () => {
     await tx((t) => receiveExchange(t, staff, { ref: `EX-${a.exchange.number}`, storeId: wh.id, conditions: { [it.id]: "DAMAGED" } }));
     expect(await stockAt("S")).toBe(sBefore);
     expect(await db.inventoryLog.findFirst({ where: { orderId: o.id, reason: "DAMAGED" } })).toMatchObject({ delta: 0 });
+    expect(await db.damageEntry.findFirst({ where: { storeId: wh.id } })).toMatchObject({ kind: "IN", quantity: 1, source: `EX-${a.exchange.number} old item` }); // in the damaged register
 
     const b = await tx((t) => createExchange(t, { orderId: o.id, lines: [{ orderItemId: o.items[0].id, quantity: 1, newVariantId: v("M").id }], reason: "", actor: "g@t.l" }));
     const mBefore = await stockAt("M");

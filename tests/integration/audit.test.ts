@@ -67,6 +67,7 @@ describe("audit trail", () => {
     actAs(manager);
     await adjustStock(p.variants[0].id, -2, "DAMAGED", "Torn seam");
     expect((await db.auditLog.findFirstOrThrow({ where: { action: "stock.adjust" } })).summary).toMatch(/at FLAGSHIP: -2 damaged — Torn seam → 3 there, 3 in stock/);
+    expect(await db.damageEntry.findFirstOrThrow()).toMatchObject({ kind: "IN", quantity: 2, source: "Found damaged by staff", note: "Torn seam" }); // in the damaged register
 
     const owner = await makeUser("ADMIN");
     const cashier = await makeUser("CASHIER", { name: "Ram" });

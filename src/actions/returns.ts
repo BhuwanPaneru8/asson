@@ -1,5 +1,6 @@
 "use server";
 
+import { quarantine } from "@/lib/damage";
 import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag } from "next/cache";
 import { queueBackInStock } from "@/lib/stock-alerts";
@@ -163,6 +164,7 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
             variantId: r.item.variantId, storeId: shop.id, delta: resellable ? r.quantity : 0, reason: resellable ? "RETURN_RESTOCK" : "DAMAGED",
             note: resellable ? `Store return R${created.number}` : `Returned damaged ×${r.quantity} — quarantined (R${created.number})`, orderId: order.id, actorId: me.id,
           });
+          if (!resellable) await quarantine(tx, { storeId: shop.id, variantId: r.item.variantId, quantity: r.quantity, source: `Store return R${created.number}`, unitCost: r.item.unitCost, actorId: me.id, ledger: false });
         }
         await tx.product.update({ where: { id: r.item.productId }, data: { soldCount: { decrement: r.quantity } } });
       }

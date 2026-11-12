@@ -3,6 +3,7 @@
 import { reportError, reportErrorSoon } from "@/lib/errors";
 import { refresh, revalidateTag, revalidatePath } from "next/cache";
 import { queueBackInStock, queuePriceDrops } from "@/lib/stock-alerts";
+import { quarantine } from "@/lib/damage";
 import { requireStoreAccess, ScopeError } from "@/lib/scope";
 import { activeLocation, defaultReceivingLocation, moveStock, moveStockOrThrow, StockError, zeroVariant, type StockReason } from "@/lib/stock";
 import { dispatchNotifications } from "@/lib/notifications";
@@ -182,6 +183,8 @@ export async function adjustStock(variantId: string, delta: number, reason: stri
       const v = await tx.variant.findUniqueOrThrow({ where: { id: variantId }, select: { sku: true, color: true, size: true, stock: true, productId: true, product: { select: { name: true } }, storeStock: { where: { storeId: at.id }, select: { quantity: true } } } });
       const here = v.storeStock[0]?.quantity ?? 0;
       await audit(tx, staff, { action: "stock.adjust", entity: ["Product", v.productId], summary: `${v.product.name} ${v.color} ${v.size} (${v.sku}) at ${at.name}: ${delta > 0 ? "+" : ""}${delta} ${reason.toLowerCase().replace("_", " ")}${note ? ` — ${note.slice(0, 80)}` : ""} → ${here} there, ${v.stock} in stock`, changes: { sku: v.sku, storeId: at.id, delta, reason, stockAfter: v.stock, locationAfter: here } });
+      // taken off sale as damaged: counted in the damaged register until repaired, written off or sent back
+      if (reason === "DAMAGED" && delta < 0) await quarantine(tx, { storeId: at.id, variantId, quantity: -delta, source: "Found damaged by staff", actorId: staff.id, note, ledger: false });
       if (delta > 0) await queueBackInStock(tx, [variantId]);
       return { stock: v.stock, here };
     });

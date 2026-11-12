@@ -7,6 +7,7 @@ import { requireAnyStoreAccess, requireStoreAccess, type Scope } from "./scope";
 import { transitionOrder, TransitionError } from "./orders";
 import { queueOrderNotice } from "./notifications";
 import { moveStock } from "./stock";
+import { quarantine } from "./damage";
 import { formatOrderNumber, formatPrice, parseOrderNumber } from "./utils";
 
 // After the courier has the parcel. Failed attempts are recorded as the courier reports them (the customer gets
@@ -88,7 +89,10 @@ export async function receiveReturn(tx: Tx, user: Actor, d: { order: string; sto
   else if (o.status !== "RETURNING") throw new DeliveryError(o.rto && o.rto.state !== "IN_TRANSIT" ? `${ref} has already been ${o.rto.state === "LOST" ? "reported lost" : "received back"}.` : `${ref} is ${o.status.toLowerCase().replace(/_/g, " ")}, not coming back from a courier.`);
   const here = await tx.store.findUniqueOrThrow({ where: { id: d.storeId }, select: { name: true } });
   await wrap(() => transitionOrder({ orderId: o.id, to: "CANCELLED", actor: user.name, actorId: user.id, rto: { restockTo: d.damaged ? null : d.storeId }, message: `Came back undelivered: received at ${here.name}${d.damaged ? ", damaged (not back on sale)" : ", back on sale"}` }, tx));
-  if (d.damaged) for (const it of o.items) if (it.variantId && it.quantity > 0) await moveStock(tx, { variantId: it.variantId, storeId: d.storeId, delta: 0, reason: "DAMAGED", orderId: o.id, actorId: user.id, note: `${ref} came back damaged from the courier (${it.quantity} unit${it.quantity > 1 ? "s" : ""})` });
+  if (d.damaged) for (const it of o.items) if (it.variantId && it.quantity > 0) {
+    await moveStock(tx, { variantId: it.variantId, storeId: d.storeId, delta: 0, reason: "DAMAGED", orderId: o.id, actorId: user.id, note: `${ref} came back damaged from the courier (${it.quantity} unit${it.quantity > 1 ? "s" : ""})` });
+    await quarantine(tx, { storeId: d.storeId, variantId: it.variantId, quantity: it.quantity, source: `${ref} back from ${o.carrier ?? "the courier"}`, actorId: user.id, ledger: false });
+  }
   await tx.returnToOrigin.update({ where: { orderId: o.id }, data: { state: "RECEIVED", storeId: d.storeId, closedAt: now, closedById: user.id, damaged: d.damaged, courierCharge: d.courierCharge, note: [unannounced ? "Arrived back without notice" : o.rto?.note, note].filter(Boolean).join(" · ").slice(0, 300) } });
   await audit(tx, user, { action: "delivery.received", entity: ["Order", o.id], summary: `${ref} back from ${o.carrier ?? "the courier"} at ${here.name}${d.damaged ? " (damaged)" : ""}${d.courierCharge ? `; return fee ${formatPrice(d.courierCharge)}` : ""}` });
   return { number: o.number, damaged: d.damaged };
