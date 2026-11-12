@@ -39,7 +39,7 @@ export type PurchaseProduct = {
   categoryName: string;
 };
 
-export function ProductExperience({ product, fitSummary, rates }: { product: PurchaseProduct; fitSummary?: string; rates: RateMap }) {
+export function ProductExperience({ product, fitSummary, swapFit, rates }: { product: PurchaseProduct; fitSummary?: string; swapFit?: "up" | "down"; rates: RateMap }) {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -155,6 +155,7 @@ export function ProductExperience({ product, fitSummary, rates }: { product: Pur
                 })}
               </div>
               {fitSummary && <p className="mt-3 text-[13px] text-muted">{t("pp.fit", { fit: locale === "en" ? fitSummary.toLowerCase() : l(fitSummary) })}</p>}
+              {swapFit && <p className="mt-2 text-[13px] font-medium text-ink-soft">{t(swapFit === "up" ? "pp.swapUp" : "pp.swapDown")}</p>}
             </div>
           )}
 

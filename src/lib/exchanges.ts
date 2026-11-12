@@ -2,7 +2,7 @@ import "server-only";
 import type { ItemCondition, Prisma } from "@prisma/client";
 import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
-import { store as storeCfg } from "./config";
+import { SIZE_ORDER, store as storeCfg } from "./config";
 import { allocateOrder, moveStock, StockError } from "./stock";
 import { queueOrderNotice } from "./notifications";
 import { requireStoreAccess } from "./scope";
@@ -150,4 +150,32 @@ export async function exchangesDesk(now = new Date()) {
   ]);
   const count = (s: string) => recent.find((r) => r.status === s)?._count._all ?? 0;
   return { open: open.map((e) => ({ ...e, days: Math.floor((now.getTime() - e.createdAt.getTime()) / DAY), name: (e.order.shippingAddress as { fullName?: string } | null)?.fullName ?? "" })), last30: { total: count("OPEN") + count("DONE") + count("CANCELLED"), done: count("DONE"), cancelled: count("CANCELLED") }, swaps: why };
+}
+
+/**
+ * Fit advice for a product page from what customers swapped in the last 180 days: if at least 5 units were
+ * exchanged and 70% or more went the same way (a bigger or a smaller size), say so. Sizes compare in the store's
+ * size order (S < M < L, 28 < 30, 6-7Y < 8-9Y); unknown sizes are left out. An exchange is always within one colour.
+ */
+export async function exchangeFit(productId: string, now = new Date()): Promise<{ direction: "up" | "down"; units: number } | null> {
+  const since = new Date(now.getTime() - 180 * DAY);
+  const rows = await db.$queryRaw<{ from: string; to: string; n: number }[]>`
+    SELECT oi."size" AS "from", nv."size" AS "to", SUM(ei."quantity")::int AS "n"
+    FROM "ExchangeItem" ei
+    JOIN "Exchange" e ON e."id" = ei."exchangeId"
+    JOIN "OrderItem" oi ON oi."id" = ei."orderItemId"
+    JOIN "Variant" nv ON nv."id" = ei."newVariantId"
+    WHERE oi."productId" = ${productId} AND e."status" <> 'CANCELLED' AND e."createdAt" >= ${since}
+    GROUP BY 1, 2`;
+  let up = 0, down = 0;
+  for (const r of rows) {
+    const a = SIZE_ORDER.indexOf(r.from), b = SIZE_ORDER.indexOf(r.to);
+    if (a < 0 || b < 0 || a === b) continue;
+    if (b > a) up += r.n; else down += r.n;
+  }
+  const total = up + down;
+  if (total < 5) return null;
+  if (up / total >= 0.7) return { direction: "up", units: total };
+  if (down / total >= 0.7) return { direction: "down", units: total };
+  return null;
 }

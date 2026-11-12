@@ -117,7 +117,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - Nepal Can Move API: create shipment on "Packed", label printing, tracking-status sync, COD remittance reconciliation
 - SMS (e.g. Sparrow or Aakash) plus WhatsApp templates: placed, confirmed, shipped (with tracking), out for delivery, delivered, payment received
 - COD controls: confirmation-call queue for high-value COD; flag repeat refusers; OTP on first COD order
-- ✅ Exchange flow (size swap) separate from returns *(12 Nov 2026: customer self-service, free replacement order, doorstep collection, Fulfilment → Exchanges)*
+- ✅ Exchange flow (size swap) separate from returns *(12 Nov 2026: customer self-service and care staff for phone customers, free replacement order, doorstep collection, Fulfilment → Exchanges, fit advice on product pages from swap data)*
 
 **Exit criteria:** 95% of orders ship without manual address entry; every status change sends a notification.
 
