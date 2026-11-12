@@ -7,6 +7,7 @@ import { CartLine, FreeShippingBar } from "@/components/cart/cart-line";
 import { EmptyState } from "@/components/ui/misc";
 import { buttonClass } from "@/components/ui/button";
 import { ProductRail } from "@/components/product/product-rail";
+import { BagSuggestions } from "@/components/cart/bag-suggestions";
 import { store } from "@/lib/config";
 import { getDeliveryRates } from "@/lib/delivery";
 import { DeliveryEstimator } from "@/components/cart/delivery-estimator";
@@ -39,6 +40,7 @@ export default async function CartPage() {
           <div className="divide-y divide-line border-y border-line">
             {cart.lines.map((l) => <div key={l.id} className="py-6"><CartLine line={l} /></div>)}
           </div>
+          <BagSuggestions />
         </div>
         <aside className="lg:col-span-4">
           <div className="sticky top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300 border border-line bg-white p-6">
@@ -57,7 +59,7 @@ export default async function CartPage() {
           </div>
         </aside>
       </div>
-      <div className="-mx-4 mt-10 md:-mx-8 xl:-mx-12"><ProductRail title={t("pdp.completeLook")} products={recs} /></div>
+      <div className="-mx-4 mt-10 md:-mx-8 xl:-mx-12"><ProductRail title={t("cat.popularNow")} products={recs} /> {/* best sellers; what goes with the bag is above */}</div>
     </div>
   );
 }

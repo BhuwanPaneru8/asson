@@ -6,7 +6,8 @@ import { after } from "next/server";
 import { isBot, recordFunnel } from "@/lib/funnel";
 import { getLookbookForProduct } from "@/lib/looks";
 import { ChevronRight } from "lucide-react";
-import { getLiveStock, getLook, getProduct, getRelated, getReviews } from "@/lib/catalog";
+import { getLiveStock, getLook, getProduct, getReviews } from "@/lib/catalog";
+import { alsoLike, frequentlyBoughtTogether } from "@/lib/recommend";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
 import { getCurrentUser } from "@/lib/auth";
 import { ProductExperience } from "@/components/product/purchase-panel";
@@ -42,15 +43,16 @@ export default async function ProductPage({ params }: Props) {
   if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
   const inLooks = await getLookbookForProduct(product.id);
 
-  const [stock, related, reviews, user, rates, look, { t, locale }, swapFit] = await Promise.all([
+  const [stock, related, reviews, user, rates, look, { t, locale }, swapFit, together] = await Promise.all([
     getLiveStock(product.id),
-    getRelated(product.id, product.categoryId, product.gender),
+    alsoLike(product.id, product.categoryId, product.gender),
     getReviews(product.id),
     getCurrentUser(),
     getDeliveryRates(),
     getLook(product.id),
     getT(),
     exchangeFit(product.id),
+    frequentlyBoughtTogether(product.id),
   ]);
   const lookIds = new Set(look.map((l) => l.id));
   const variants = product.variants.map((v) => ({ id: v.id, color: v.color, colorHex: v.colorHex, size: v.size, stock: stock[v.id] ?? v.stock }));
@@ -92,13 +94,16 @@ export default async function ProductPage({ params }: Props) {
           }}
         />
       </div>
-      {look.length > 0 && <div className="mt-16"><ProductRail eyebrow={t("home.styledBy")} title={t("pdp.completeLook")} products={look} /></div>}
+      {/* bought together (from real orders) replaces the owner's look when there's enough data; else the look shows */}
+      {together.length >= 2 && together.some((c) => !lookIds.has(c.id))
+        ? <div className="mt-16"><ProductRail eyebrow={t("reco.fromOrders")} title={t("reco.together")} products={together} /></div>
+        : look.length > 0 && <div className="mt-16"><ProductRail eyebrow={t("home.styledBy")} title={t("pdp.completeLook")} products={look} /></div>}
       {inLooks.length > 0 && (
         <p className="mt-6 text-[14px] text-ink-soft">
           {t("pdp.inLookbook")} {inLooks.map((l, i) => <span key={l.slug}>{i > 0 && " · "}<Link href={`/lookbook/${l.slug}`} className="font-medium underline underline-offset-4">{l.title}</Link></span>)}
         </p>
       )}
-      <div className={look.length ? "" : "mt-16"}><ProductRail title={t("pdp.alsoLike")} products={related.filter((r) => !lookIds.has(r.id))} /></div>
+      <div className={look.length ? "" : "mt-16"}><ProductRail title={t("pdp.alsoLike")} products={related.filter((r) => !lookIds.has(r.id) && !together.some((c) => c.id === r.id))} /></div>
       <RecentlyViewed currentId={product.id} />
       <Reviews productId={product.id} avg={product.ratingAvg} count={product.ratingCount} data={reviews} canReview={!!user} t={t} locale={locale} />
     </>

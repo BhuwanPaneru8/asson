@@ -4,6 +4,7 @@ import { Truck, RotateCcw, ShieldCheck, Banknote } from "lucide-react";
 import { getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
 import { ProductRail } from "@/components/product/product-rail";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
+import { ForYou } from "@/components/product/for-you";
 import { LookCard } from "@/components/lookbook/look-card";
 import { getLookbook } from "@/lib/looks";
 import { buttonClass } from "@/components/ui/button";
@@ -155,6 +156,7 @@ export default async function HomePage() {
 
       <ProductRail eyebrow={t("home.justLanded")} title={t("nav.newArrivals")} href="/shop?sort=new" products={fresh} viewAll={t("rail.viewAll")} />
       <RecentlyViewed title={t("home.pickUp")} />
+      <ForYou eyebrow={t("reco.forYouEyebrow")} title={t("reco.forYou")} />
 
       <section className="container-page py-8">
         <div className="grid gap-4 md:grid-cols-2">

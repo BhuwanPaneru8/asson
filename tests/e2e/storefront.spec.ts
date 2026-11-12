@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("smart search: a misspelt colour, word and price are understood, shown back, and lead to the right products", async ({ page }) => {
   await page.goto("/");
+  await page.waitForLoadState("networkidle"); // a tap before the page's JavaScript is ready does nothing
   await page.getByRole("button", { name: "Search" }).click();
   // typed straight after opening: no letters lost
   await page.keyboard.type("blu shrt under 4000");
@@ -26,6 +27,7 @@ test("a search with no matches is never a dead end", async ({ page }) => {
 test("phones: search covers the screen, the footer folds, shops are listed with directions", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
+  await page.waitForLoadState("networkidle"); // a tap before the page's JavaScript is ready does nothing
   await page.getByRole("button", { name: "Search" }).click();
   await page.keyboard.type("hodie");
   const panel = page.locator("#search-results");
@@ -69,6 +71,7 @@ test("policies: every page is reachable from the footer, numbers come from the s
 
 test("search remembers: the results page shows the search, clicking it again reopens it to edit; recent searches can be removed", async ({ page }) => {
   await page.goto("/shop?q=linen%20shirt");
+  await page.waitForLoadState("networkidle");
   const bar = page.getByRole("button", { name: "Search: linen shirt" });
   await expect(bar).toBeVisible();
   await bar.click();
