@@ -5,6 +5,7 @@ import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
 import { store as storeCfg } from "./config";
 import { deadStock } from "./insights";
+import { queuePriceDrops } from "./stock-alerts";
 import { can, type Role } from "./permissions";
 import { formatPrice } from "./utils";
 
@@ -78,10 +79,12 @@ export async function preview(eventId: string, reader: Tx | typeof db = db, now 
   const e = await reader.priceEvent.findUnique({ where: { id: eventId }, include: { items: { include: { product: { select: { id: true, name: true, slug: true, price: true, compareAtPrice: true, variants: { select: { costPrice: true, stock: true } } } } } } } });
   if (!e) return null;
   const ids = e.items.map((i) => i.productId);
-  const [sold, others] = await Promise.all([
+  const [sold, others, watching] = await Promise.all([
     ids.length ? reader.orderItem.groupBy({ by: ["productId"], where: { productId: { in: ids }, order: { createdAt: { gte: new Date(now.getTime() - 30 * DAY) }, status: { not: "CANCELLED" } } }, _sum: { quantity: true } }) : Promise.resolve([]),
     // the same product in another live or scheduled sale whose dates overlap
     ids.length ? reader.priceEventItem.findMany({ where: { productId: { in: ids }, eventId: { not: eventId }, event: { status: { in: ["SCHEDULED", "LIVE"] }, ...(e.endsAt ? { startsAt: { lt: e.endsAt } } : {}), OR: [{ endsAt: null }, { endsAt: { gt: e.startsAt } }] } }, select: { productId: true, event: { select: { number: true } } } }) : Promise.resolve([]),
+    // people waiting for a price drop on it: a sign the markdown will sell
+    ids.length ? reader.priceAlert.groupBy({ by: ["productId"], where: { productId: { in: ids }, notifiedAt: null }, _count: { _all: true } }) : Promise.resolve([]),
   ]);
   const rows = e.items.map((i) => {
     const costs = i.product.variants.map((v) => v.costPrice).filter((c): c is number => c != null);
@@ -92,7 +95,7 @@ export async function preview(eventId: string, reader: Tx | typeof db = db, now 
     const clash = others.find((o) => o.productId === i.productId);
     return {
       productId: i.productId, name: i.product.name, slug: i.product.slug, shelf, newPrice: i.newPrice, off: shelf ? Math.round((1 - i.newPrice / shelf) * 100) : 0,
-      cost, margin, stock, sold30: sold.find((s) => s.productId === i.productId)?._sum.quantity ?? 0, restoreSkipped: i.restoreSkipped,
+      cost, margin, stock, sold30: sold.find((s) => s.productId === i.productId)?._sum.quantity ?? 0, watching: watching.find((w) => w.productId === i.productId)?._count._all ?? 0, restoreSkipped: i.restoreSkipped,
       belowCost: cost != null && i.newPrice < cost, belowMin: margin != null && margin < cfg().minMarginPct, noCost: cost == null, notLower: i.newPrice >= shelf,
       clash: clash ? eventRef(clash.event.number) : null,
     };
@@ -133,6 +136,7 @@ export async function startEvent(tx: Tx, eventId: string, actor: Actor | null, n
     await tx.product.update({ where: { id: p.id }, data: { price: i.newPrice, compareAtPrice: Math.max(p.compareAtPrice ?? 0, p.price) } });
   }
   await tx.priceEvent.update({ where: { id: eventId }, data: { status: "LIVE", startedAt: now } });
+  await queuePriceDrops(tx, e.items.map((i) => i.productId));
   await audit(tx, actor, { action: "markdown.start", entity: ["PriceEvent", eventId], summary: `${eventRef(e.number)} "${e.name}" started: ${e.items.length} product(s) marked down` });
   refreshShop();
 }
