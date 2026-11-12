@@ -26,7 +26,7 @@ export default async function CollectionPage({ params, searchParams }: Props) {
     <>
       {col.image && (
         <div className="relative h-56 overflow-hidden md:h-80">
-          <Image src={col.image} alt="" fill priority sizes="100vw" className="object-cover" />
+          <Image src={col.image} alt="" fill loading="eager" fetchPriority="high" sizes="100vw" className="object-cover" />
           <div className="absolute inset-0 bg-black/35" />
           <div className="container-page relative flex h-full flex-col justify-end pb-8 text-white">
             <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-white/80">{t("col.label")}</p>

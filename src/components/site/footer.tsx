@@ -36,8 +36,9 @@ export async function Footer() {
         ))}
         <div className="md:col-span-2">
           <p className="mb-4 text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">{t("footer.contact")}</p>
-          <p className="text-[14.5px] text-ink-soft"><a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="hover:text-accent">{store.supportPhone}</a><br /><a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="hover:text-accent">WhatsApp {store.supportWhatsApp}</a><br />{t("footer.hours")}</p>
-          <p className="mt-2 break-all text-[14.5px] text-ink-soft"><a href={`mailto:${store.supportEmail}`} className="hover:text-accent">{store.supportEmail}</a></p>
+          {/* each link at least 24px tall, so a thumb can hit the right one (WCAG 2.5.8) */}
+          <p className="flex flex-col items-start text-[14.5px] text-ink-soft"><a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="inline-flex min-h-6 items-center hover:text-accent">{store.supportPhone}</a><a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-6 items-center hover:text-accent">WhatsApp {store.supportWhatsApp}</a><span>{t("footer.hours")}</span></p>
+          <p className="mt-2 break-all text-[14.5px] text-ink-soft"><a href={`mailto:${store.supportEmail}`} className="inline-flex min-h-6 items-center hover:text-accent">{store.supportEmail}</a></p>
         </div>
       </div>
       <div className="border-t border-line">

@@ -35,7 +35,7 @@ export function Gallery({ images, name }: { images: { url: string; alt: string }
         <div ref={scroller} onScroll={onScroll} className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
           {images.map((im, i) => (
             <button key={im.url + i} aria-label={`View image ${i + 1} larger`} onClick={() => { setIdx(i); setZoom(true); }} className="relative aspect-[3/4] w-full shrink-0 snap-center bg-cloud">
-              <Image src={im.url} alt={im.alt || name} fill priority={i === 0} sizes="100vw" className="object-cover" />
+              <Image src={im.url} alt={im.alt || name} fill loading={i === 0 ? "eager" : undefined} fetchPriority={i === 0 ? "high" : undefined} sizes="100vw" className="object-cover" />
             </button>
           ))}
         </div>
@@ -50,7 +50,7 @@ export function Gallery({ images, name }: { images: { url: string; alt: string }
       <div className="hidden gap-2 md:grid md:grid-cols-2">
         {images.map((im, i) => (
           <button key={im.url + i} aria-label={`View image ${i + 1} larger`} onClick={() => { setIdx(i); setZoom(true); }} className={cn("relative cursor-zoom-in overflow-hidden bg-cloud", i === 0 && images.length % 2 === 1 ? "col-span-2 aspect-[4/5]" : "aspect-[3/4]")}>
-            <Image src={im.url} alt={im.alt || name} fill priority={i < 2} sizes="(min-width:1280px) 30vw, 40vw" className="object-cover transition-transform duration-700 hover:scale-[1.02]" />
+            <Image src={im.url} alt={im.alt || name} fill loading={i < 2 ? "eager" : undefined} fetchPriority={i === 0 ? "high" : undefined} sizes="(min-width:1280px) 30vw, 40vw" className="object-cover transition-transform duration-700 hover:scale-[1.02]" />
           </button>
         ))}
       </div>

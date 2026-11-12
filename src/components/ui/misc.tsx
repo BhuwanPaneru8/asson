@@ -19,7 +19,7 @@ export function Price({ price, compareAt, className, size = "md", offWord = "off
 
 export function Stars({ value, size = 14, className }: { value: number; size?: number; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-0.5", className)} aria-label={`${value.toFixed(1)} out of 5 stars`}>
+    <span role="img" className={cn("inline-flex items-center gap-0.5", className)} aria-label={`${value.toFixed(1)} out of 5 stars`}>
       {[1, 2, 3, 4, 5].map((i) => {
         const fill = Math.max(0, Math.min(1, value - (i - 1)));
         return (

@@ -39,7 +39,7 @@ export default async function LookPage({ params }: Props) {
       <div className="grid gap-8 lg:grid-cols-12 lg:gap-12">
         <div className="lg:col-span-7">
           <div className="relative aspect-[4/5] overflow-hidden bg-cloud lg:sticky lg:top-24">
-            {l.hero && <Image src={l.hero} alt={t("look.alt", { title: l.title })} fill priority sizes="(min-width:1024px) 58vw, 100vw" className="object-cover" />}
+            {l.hero && <Image src={l.hero} alt={t("look.alt", { title: l.title })} fill loading="eager" fetchPriority="high" sizes="(min-width:1024px) 58vw, 100vw" className="object-cover" />}
           </div>
         </div>
         <div className="lg:col-span-5">

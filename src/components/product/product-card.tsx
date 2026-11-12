@@ -53,7 +53,7 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
     <div className="group relative flex flex-col">
       <div className="relative aspect-[3/4] overflow-hidden bg-cloud">
         <Link href={href} className="absolute inset-0" aria-label={name}>
-          {primary && <Image src={primary.url} alt={primary.alt || name} fill priority={priority} sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className={cn("object-cover transition-all duration-700", secondary && "group-hover:opacity-0", !p.inStock && "opacity-60")} />}
+          {primary && <Image src={primary.url} alt={primary.alt || name} fill loading={priority ? "eager" : undefined} fetchPriority={priority ? "high" : undefined} sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className={cn("object-cover transition-all duration-700", secondary && "group-hover:opacity-0", !p.inStock && "opacity-60")} />}
           {secondary && <Image src={secondary.url} alt="" fill sizes="(min-width:1280px) 22vw, (min-width:768px) 30vw, 48vw" className="object-cover opacity-0 transition-opacity duration-700 group-hover:opacity-100" />}
         </Link>
         <div className="pointer-events-none absolute left-2 top-2 flex flex-col items-start gap-1">
@@ -82,9 +82,11 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
       </div>
       <div className="mt-3 flex flex-col gap-1">
         {p.colors.length > 1 && (
-          <div className="mb-0.5 flex items-center gap-1.5">
+          <div className="-ml-1 mb-0.5 flex items-center">
             {p.colors.slice(0, 5).map((c) => (
-              <button key={c.name} onMouseEnter={() => setColor(c.name)} onFocus={() => setColor(c.name)} onClick={() => setColor(c.name)} className={cn("h-4 w-4 rounded-full border ring-offset-2 transition", color === c.name ? "ring-1 ring-ink" : "border-black/10")} style={{ background: c.hex }} aria-label={c.name} title={c.name} />
+              <button key={c.name} onMouseEnter={() => setColor(c.name)} onFocus={() => setColor(c.name)} onClick={() => setColor(c.name)} className="flex h-6 w-6 items-center justify-center rounded-full" aria-label={c.name} aria-pressed={color === c.name} title={c.name}>
+                <span className={cn("h-4 w-4 rounded-full border ring-offset-2 transition", color === c.name ? "ring-1 ring-ink" : "border-black/10")} style={{ background: c.hex }} />
+              </button>
             ))}
             {p.colors.length > 5 && <span className="text-[12px] text-muted">+{p.colors.length - 5}</span>}
           </div>
