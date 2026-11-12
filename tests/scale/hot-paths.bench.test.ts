@@ -18,6 +18,7 @@ import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manifests";
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
+import { exchangeOptions, exchangesDesk } from "@/lib/exchanges";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
 import { ktmDate } from "@/lib/pos";
 import { deadStock, reorderPlan, sizeColourMix } from "@/lib/insights";
@@ -110,6 +111,11 @@ it("hot paths stay within budget at national scale", async () => {
       await time("rosters: roster vs clock-ins, 14 days, one location", STAFF, () => rosterVsActual([shop.storeId], addDays(ktmDate(), -13), ktmDate()));
       await time("rosters: roster vs clock-ins, 14 days, whole network", REPORT, () => rosterVsActual(null, addDays(ktmDate(), -13), ktmDate()));
     }
+  }
+  {
+    const recent = await db.order.findFirst({ where: { status: "DELIVERED", channel: "ONLINE" }, orderBy: { createdAt: "desc" }, select: { id: true } });
+    if (recent) await time("exchanges: options on a customer's order page", SHOPPER, () => exchangeOptions(recent.id));
+    await time("exchanges: desk", STAFF, () => exchangesDesk());
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

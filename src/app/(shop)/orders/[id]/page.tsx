@@ -6,6 +6,7 @@ import { CheckCircle2, Package, Store, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewOrder } from "@/lib/order-access";
+import { exchangeOptions } from "@/lib/exchanges";
 import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
 import { store } from "@/lib/config";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
@@ -29,7 +30,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const a = order.shippingAddress as Addr;
   const pickup = !!order.pickupStoreId;
   const deliveredAt = order.events.find((e) => e.status === "DELIVERED")?.createdAt;
-  const canReturn = order.status === "DELIVERED" && !!deliveredAt && now() - deliveredAt.getTime() < store.returnWindowDays * 86400000;
+  const ex = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
+  const exchanged = !!ex && (ex.order.exchangeFor != null || (await db.exchange.count({ where: { orderId: order.id, status: { not: "CANCELLED" } } })) > 0);
+  const canReturn = order.status === "DELIVERED" && !exchanged && !!deliveredAt && now() - deliveredAt.getTime() < store.returnWindowDays * 86400000;
   const etaDays = a?.etaMaxDays ?? (order.shippingMethod === "express" ? 1 : a?.zone === "VALLEY" ? 2 : a?.zone === "REMOTE" ? 10 : 5);
   const eta = new Date(order.createdAt); eta.setDate(eta.getDate() + etaDays);
 
@@ -85,7 +88,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               </li>
             ))}
           </ul>
-          <div className="mt-6"><OrderActions orderId={order.id} canCancel={CUSTOMER_CANCELLABLE.includes(order.status)} canReturn={canReturn} /></div>
+          {ex && ex.open.length > 0 && <p className="mt-6 bg-accent-soft/50 p-3 text-[14px]">{t("ex.open", { ref: ex.open.join(", ") })}</p>}
+          <div className="mt-6"><OrderActions orderId={order.id} canCancel={CUSTOMER_CANCELLABLE.includes(order.status)} canReturn={canReturn} exchange={ex && !ex.blocked ? ex.items : []} /></div>
         </div>
         <div className="space-y-6 md:col-span-5">
           <div className="border border-line bg-white p-5">

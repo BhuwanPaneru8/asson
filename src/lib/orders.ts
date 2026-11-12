@@ -8,6 +8,7 @@ import { earnForOrder, refundRedeemed, reverseForReturn } from "./loyalty";
 import { audit } from "./audit";
 import { reverseReferral, rewardReferrer } from "./referrals";
 import { formatOrderNumber, formatPrice } from "./utils";
+import { cancelExchangeFor } from "./exchanges";
 
 export { STATUS_LABEL, TRANSITIONS, CUSTOMER_CANCELLABLE } from "./order-status";
 import { statusLabel, transitionsFor } from "./order-status";
@@ -38,6 +39,10 @@ export async function transitionOrder(opts: {
     const label = (s: OrderStatus) => statusLabel(s, pickup);
     if (!transitionsFor(order.status, pickup).includes(to)) throw new TransitionError(`Can't move an order from ${label(order.status)} to ${label(to)}.`);
     if ((to === "RETURNING" || order.status === "RETURNING") && !opts.rto) throw new TransitionError("Undelivered parcels are handled in Fulfilment → Deliveries, so they're counted back in where they arrive.");
+    if (to === "RETURN_REQUESTED") {
+      const ex = await tx.exchange.count({ where: { OR: [{ replacementId: orderId }, { orderId, status: { not: "CANCELLED" } }] } });
+      if (ex) throw new TransitionError("Items from a size exchange can be exchanged again but not returned for a refund. Ask us if something's wrong.");
+    }
     if (pickup && to === "DELIVERED" && !opts.handover) throw new TransitionError("Hand pickup orders over at the shop's till (Point of sale → Pickups) so the payment is recorded.");
 
     const data: Prisma.OrderUpdateManyMutationInput = { status: to };
@@ -79,7 +84,7 @@ export async function transitionOrder(opts: {
     }
     // loyalty: earn on delivery, give back spent points on cancel, take back earned points on return
     if (to === "DELIVERED") { await earnForOrder(tx, orderId); await rewardReferrer(tx, orderId); }
-    if (to === "CANCELLED") await refundRedeemed(tx, orderId);
+    if (to === "CANCELLED") { await refundRedeemed(tx, orderId); await cancelExchangeFor(tx, orderId); }
     if (to === "RETURNED") {
       await reverseReferral(tx, orderId);
       const alreadyRefunded = await tx.returnItem.aggregate({ where: { orderItem: { orderId } }, _sum: { amount: true } });

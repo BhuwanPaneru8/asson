@@ -44,6 +44,7 @@ enum RefundMethod {
   CARD
   BANK
   STORE_CREDIT // issues a single-use voucher code (also used for exchanges)
+  EXCHANGE // online size exchange: no money back, the customer got a replacement order
 }
 
 enum ItemCondition {
@@ -498,6 +499,8 @@ model Order {
   manifestOrder    ManifestOrder?
   deliveryAttempts DeliveryAttempt[]
   rto              ReturnToOrigin?
+  exchanges        Exchange[]        @relation("ExchangeFrom")
+  exchangeFor      Exchange?         @relation("ExchangeReplacement")
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -735,8 +738,9 @@ model OrderItem {
   /// cost of goods at the moment of sale (from Variant.costPrice) — profit never changes retroactively
   unitCost  Int?
 
-  returnItems ReturnItem[]
-  allocations OrderAllocation[]
+  returnItems   ReturnItem[]
+  exchangeItems ExchangeItem[]
+  allocations   OrderAllocation[]
 
   @@index([orderId])
   @@index([productId])
@@ -764,6 +768,7 @@ model Return {
   note          String?
   createdAt     DateTime     @default(now())
   items         ReturnItem[]
+  exchange      Exchange?
 
   @@index([orderId])
   @@index([shiftId])
@@ -2445,4 +2450,47 @@ model Holiday {
   date      String   @id
   name      String
   createdAt DateTime @default(now())
+}
+
+// ---------- Online size exchanges (Phase 17a) ----------
+
+enum ExchangeStatus {
+  OPEN // replacement on its way; the old items aren't back yet
+  DONE // old items received back
+  CANCELLED // the replacement never reached the customer: they keep the original
+}
+
+/// A delivered online order's items swapped for other sizes: a free replacement order goes out, the courier
+/// collects the old items at the door, and they're received back as a zero-refund return.
+model Exchange {
+  id            String         @id @default(cuid())
+  number        Int            @unique @default(autoincrement())
+  orderId       String
+  order         Order          @relation("ExchangeFrom", fields: [orderId], references: [id])
+  replacementId String         @unique
+  replacement   Order          @relation("ExchangeReplacement", fields: [replacementId], references: [id])
+  reason        String
+  requestedBy   String
+  status        ExchangeStatus @default(OPEN)
+  /// the zero-refund return recorded when the old items arrive
+  returnId      String?        @unique
+  return        Return?        @relation(fields: [returnId], references: [id])
+  createdAt     DateTime       @default(now())
+  closedAt      DateTime?
+  items         ExchangeItem[]
+
+  @@index([orderId])
+  @@index([status, createdAt])
+}
+
+model ExchangeItem {
+  id           String    @id @default(cuid())
+  exchangeId   String
+  exchange     Exchange  @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+  orderItemId  String
+  orderItem    OrderItem @relation(fields: [orderItemId], references: [id])
+  quantity     Int
+  newVariantId String
+
+  @@index([orderItemId])
 }

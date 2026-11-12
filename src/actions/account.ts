@@ -10,6 +10,8 @@ import { store } from "@/lib/config";
 import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
 import { localiseResult } from "@/lib/i18n/server";
+import { createExchange, ExchangeError } from "@/lib/exchanges";
+import { StockError } from "@/lib/stock";
 
 type R = { ok: boolean; error?: string; fieldErrors?: Record<string, string> };
 
@@ -111,6 +113,25 @@ async function requestReturnImpl(orderId: string, reason: string): Promise<R> {
   return { ok: true };
 }
 
+const exchangeSchema = z.object({ lines: z.array(z.object({ orderItemId: z.string(), quantity: z.number().int().min(0).max(99), newVariantId: z.string() })).min(1).max(50), reason: z.string().max(300) });
+
+async function requestExchangeImpl(orderId: string, input: unknown): Promise<R> {
+  const o = await ownOrder(orderId);
+  if (!o) return { ok: false, error: "Order not found." };
+  const p = exchangeSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Choose the new size for at least one item." };
+  try {
+    await db.$transaction((tx) => createExchange(tx, { orderId, lines: p.data.lines, reason: p.data.reason, actor: o.actor }), { timeout: 15_000 });
+  } catch (e) {
+    if (e instanceof ExchangeError || e instanceof StockError) return { ok: false, error: e.message };
+    throw e;
+  }
+  revalidateTag("products", { expire: 60 });
+  after(() => dispatchNotifications().catch(() => {}));
+  refresh();
+  return { ok: true };
+}
+
 const reviewSchema = z.object({
   productId: z.string(),
   rating: z.number().int().min(1).max(5),
@@ -147,4 +168,5 @@ export async function setDefaultAddress(...args: Parameters<typeof setDefaultAdd
 export async function updateProfile(...args: Parameters<typeof updateProfileImpl>) { return localiseResult(await updateProfileImpl(...args)); }
 export async function cancelOrder(...args: Parameters<typeof cancelOrderImpl>) { return localiseResult(await cancelOrderImpl(...args)); }
 export async function requestReturn(...args: Parameters<typeof requestReturnImpl>) { return localiseResult(await requestReturnImpl(...args)); }
+export async function requestExchange(...args: Parameters<typeof requestExchangeImpl>) { return localiseResult(await requestExchangeImpl(...args)); }
 export async function submitReview(...args: Parameters<typeof submitReviewImpl>) { return localiseResult(await submitReviewImpl(...args)); }
