@@ -11,6 +11,7 @@ import { formatOrderNumber, formatPrice } from "@/lib/utils";
 import { TransitionError, transitionOrder } from "@/lib/orders";
 import { after } from "next/server";
 import { dispatchNotifications } from "@/lib/notifications";
+import { changeAddress, EditError, reduceItem, swapSize } from "@/lib/order-edits";
 
 const sendSoon = () => after(() => dispatchNotifications().catch(reportErrorSoon("dispatchNotifications")));
 
@@ -130,4 +131,32 @@ export async function recordCodRemittance(input: z.input<typeof remitSchema>): P
   }
   refresh();
   return { ok: true };
+}
+
+// ---------- Changing an order before it's packed ----------
+
+async function editRun(where: string, f: () => Promise<unknown>): Promise<R> {
+  try {
+    await f();
+    revalidateTag("products", { expire: 60 });
+    sendSoon();
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof EditError) return { ok: false, error: e.message };
+    reportErrorSoon(where)(e);
+    return { ok: false, error: "Couldn't change the order. Nothing was changed — please try again." };
+  }
+}
+export async function reduceItemAction(orderId: string, orderItemId: string, quantity: number): Promise<R> {
+  const me = await requirePermission("orders");
+  return editRun("reduceItem", () => db.$transaction((tx) => reduceItem(tx, me, { orderId: String(orderId), orderItemId: String(orderItemId), quantity: Number(quantity) })));
+}
+export async function swapSizeAction(orderId: string, orderItemId: string, newVariantId: string, quantity?: number): Promise<R> {
+  const me = await requirePermission("orders");
+  return editRun("swapSize", () => db.$transaction((tx) => swapSize(tx, me, { orderId: String(orderId), orderItemId: String(orderItemId), newVariantId: String(newVariantId), quantity: quantity == null ? undefined : Number(quantity) })));
+}
+export async function changeAddressAction(orderId: string, address: unknown): Promise<R> {
+  const me = await requirePermission("orders");
+  return editRun("changeAddress", () => db.$transaction((tx) => changeAddress(tx, me, { orderId: String(orderId), address })));
 }
