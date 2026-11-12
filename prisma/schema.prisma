@@ -2687,3 +2687,47 @@ model CreditAllocation {
 
   @@id([creditId, billId])
 }
+
+// ---------- Training: standard operating procedures (Phase 22a) ----------
+
+enum SopArea {
+  SALES
+  CASH
+  FULFILMENT
+  STOCK
+  CUSTOMERS
+  PEOPLE
+}
+
+/// How we do something (opening the shop, cash at closing, packing an order), and who must read and sign it.
+/// A significant change raises the version: everyone signs again.
+model Sop {
+  id          String       @id @default(cuid())
+  slug        String       @unique
+  title       String
+  area        SopArea
+  /// roles that must sign it (CASHIER, STAFF, MANAGER, ADMIN)
+  roles       String[]
+  /// plain text: "## " headings, "- " points, "1. " steps
+  body        String
+  version     Int          @default(1)
+  active      Boolean      @default(true)
+  updatedById String
+  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime     @default(now())
+  signoffs    SopSignoff[]
+
+  @@index([active, area])
+}
+
+/// "I've read this and will follow it", for one version.
+model SopSignoff {
+  sopId    String
+  sop      Sop      @relation(fields: [sopId], references: [id], onDelete: Cascade)
+  userId   String
+  version  Int
+  signedAt DateTime @default(now())
+
+  @@id([sopId, userId])
+  @@index([userId])
+}
