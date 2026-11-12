@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { closeShift, createPosSale, openShift, posLookup, type PosItem } from "@/actions/pos";
 import { ReturnPanel } from "./return-panel";
 import { PickupPanel } from "./pickup-panel";
+import { OrderPanel } from "./order-panel";
 import { cn, formatDateTime, formatPrice } from "@/lib/utils";
 
 type Line = PosItem & { quantity: number };
@@ -24,18 +25,18 @@ const rupees = (s: string) => Math.round((Number(s.replace(/[^\d.]/g, "")) || 0)
 const newRef = () => `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 export function PosTerminal({ cashier, shift, shops }: { cashier: { name: string; discountLimit: number; canApproveReturns: boolean }; shift: Shift; shops: { id: string; name: string }[] }) {
-  const [mode, setMode] = useState<"sale" | "return" | "pickup">("sale");
+  const [mode, setMode] = useState<"sale" | "order" | "return" | "pickup">("sale");
   if (!shift) return <OpenShift name={cashier.name} shops={shops} />;
   return (
     <div>
-      <div className="-mx-4 -mt-4 mb-4 flex gap-1 border-b border-line bg-white px-4 md:-mx-8 md:-mt-8 md:px-8">
-        {(["sale", "return", "pickup"] as const).map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={cn("-mb-px border-b-2 px-4 py-3 text-[14px] font-medium", mode === m ? "border-ink" : "border-transparent text-muted hover:text-ink")}>
-            {m === "sale" ? "Sale" : m === "return" ? "Return / exchange" : "Pickups"}
+      <div className="no-scrollbar -mx-4 -mt-4 mb-4 flex gap-1 overflow-x-auto border-b border-line bg-white px-4 md:-mx-8 md:-mt-8 md:px-8">
+        {(["sale", "order", "return", "pickup"] as const).map((m) => (
+          <button key={m} onClick={() => setMode(m)} className={cn("-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-[14px] font-medium", mode === m ? "border-ink" : "border-transparent text-muted hover:text-ink")}>
+            {m === "sale" ? "Sale" : m === "order" ? "Order for a customer" : m === "return" ? "Return / exchange" : "Pickups"}
           </button>
         ))}
       </div>
-      {mode === "sale" ? <Terminal cashier={cashier} shift={shift} /> : mode === "return" ? <ReturnPanel canApprove={cashier.canApproveReturns} /> : <PickupPanel shop={shift.store} />}
+      {mode === "sale" ? <Terminal cashier={cashier} shift={shift} /> : mode === "order" ? <OrderPanel shop={shift.store} /> : mode === "return" ? <ReturnPanel canApprove={cashier.canApproveReturns} /> : <PickupPanel shop={shift.store} />}
     </div>
   );
 }

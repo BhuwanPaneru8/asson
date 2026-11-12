@@ -4,8 +4,13 @@ import { signIn } from "./helpers";
 test("cashier sells at the till and is kept out of the back office", async ({ page }) => {
   await signIn(page, "cashier");
   await expect(page).toHaveURL(/\/admin\/pos/);
-  await page.getByLabel("Opening cash (Rs.)").fill("5000");
-  await page.getByRole("button", { name: "Open shift" }).click();
+  // another test may have opened this cashier's shift already
+  const opening = page.getByLabel("Opening cash (Rs.)");
+  await expect(opening.or(page.getByLabel("Scan or search"))).toBeVisible();
+  if (await opening.isVisible()) {
+    await opening.fill("5000");
+    await page.getByRole("button", { name: "Open shift" }).click();
+  }
 
   const scan = page.getByLabel("Scan or search");
   await scan.fill("AS-01104");

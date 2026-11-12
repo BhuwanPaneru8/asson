@@ -17,6 +17,9 @@ import { findApproverByPin } from "@/lib/approvals";
 import { scopeFor } from "@/lib/scope";
 import { transitionOrder, TransitionError } from "@/lib/orders";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
+import { createShopOrder, ShopOrderError, stockElsewhere } from "@/lib/shop-orders";
+import { dispatchNotifications } from "@/lib/notifications";
+import { after } from "next/server";
 
 type R<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -282,7 +285,7 @@ export async function collectPickup(input: z.input<typeof collectSchema>): Promi
   const d = p.data;
   const shift = await getOpenShift(me.id);
   if (!shift) return { ok: false, error: "Open your shift before handing over orders." };
-  const order = await db.order.findUnique({ where: { id: d.orderId }, select: { number: true, status: true, total: true, paymentStatus: true, pickupStoreId: true, pickupStore: { select: { name: true } } } });
+  const order = await db.order.findUnique({ where: { id: d.orderId }, select: { number: true, status: true, total: true, paymentStatus: true, pickupStoreId: true, shiftId: true, pickupStore: { select: { name: true } } } });
   if (!order?.pickupStoreId) return { ok: false, error: "This isn't a pickup order." };
   if (order.pickupStoreId !== shift.storeId) return { ok: false, error: `This order is for pickup at ${order.pickupStore?.name}, not this shop.` };
   if (order.status !== "PACKED") return { ok: false, error: "This order isn't ready for pickup." };
@@ -301,7 +304,8 @@ export async function collectPickup(input: z.input<typeof collectSchema>): Promi
       orderId: d.orderId, to: "DELIVERED", actor: me.email, actorId: me.id, handover: true,
       message: `Collected at ${order.pickupStore?.name}${due ? ` · paid ${formatPrice(due)} at the counter` : ""}`,
       within: async (tx) => {
-        await tx.order.update({ where: { id: d.orderId }, data: { shiftId: shift.id, cashierId: me.id } });
+        // money taken now goes on this shift; an order already paid at a till keeps that shift (its cash is in that drawer)
+        await tx.order.update({ where: { id: d.orderId }, data: { cashierId: me.id, ...(due > 0 || !order.shiftId ? { shiftId: shift.id } : {}) } });
         if (due > 0) await tx.tender.create({ data: { orderId: d.orderId, method: d.method!, amount: due, tendered: d.method === "CASH" ? d.tendered ?? due : null, reference: d.reference || null } });
       },
     });
@@ -348,4 +352,50 @@ export async function setApprovalPin(password: string, pin: string): Promise<R> 
   await db.user.update({ where: { id: me.id }, data: { approvalPinHash: await bcrypt.hash(pin, 10) } });
   await audit(db, me, { action: "auth.pin_set", entity: ["User", me.id], summary: `${me.name} set a new approval PIN` });
   return { ok: true };
+}
+
+// ---------- Ordering from another location ----------
+
+export type ElsewhereItem = PosItem & { elsewhere: { storeId: string; name: string; quantity: number }[] };
+
+/** Search for the "order for a customer" panel: this shop's count and where else it is. */
+export async function posOrderLookup(query: string): Promise<ElsewhereItem[]> {
+  const me = await requirePermission("pos.sell");
+  const shift = await getOpenShift(me.id);
+  if (!shift) return [];
+  const hits = await posLookup(query);
+  const other = await stockElsewhere(hits.map((h) => h.variantId), shift.storeId);
+  return hits.map((h) => ({ ...h, elsewhere: other.get(h.variantId) ?? [] }));
+}
+
+const shopOrderSchema = z.object({
+  clientRef: z.string().min(8).max(64),
+  lines: z.array(z.object({ variantId: z.string(), quantity: z.number().int().min(1).max(50) })).min(1).max(30),
+  customer: z.object({ name: z.string().max(80), phone: z.string().max(20) }),
+  fulfil: z.enum(["PICKUP", "DELIVERY"]),
+  address: z.object({ line1: z.string().max(200), city: z.string().max(80), district: z.string().max(40) }).optional(),
+  pay: z.enum(["NOW", "LATER"]),
+  tender: z.object({ method: z.enum(["CASH", "ESEWA_QR", "KHALTI_QR", "FONEPAY_QR", "CARD", "BANK"]), tendered: z.number().int().positive().optional(), reference: z.string().max(60).optional() }).optional(),
+});
+
+/** The cashier orders sizes the shop doesn't have, from another location: collect here later, or delivered. */
+export async function createShopOrderAction(input: z.input<typeof shopOrderSchema>): Promise<R<{ orderId: string; number: string; total: number; change: number }>> {
+  const me = await requirePermission("pos.sell");
+  const p = shopOrderSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "Check the order details." };
+  const shift = await getOpenShift(me.id);
+  if (!shift) return { ok: false, error: "Open your shift first." };
+  try {
+    const o = await db.$transaction((tx) => createShopOrder(tx, { ...me, email: me.email }, shift, p.data), { timeout: 15_000 });
+    revalidateTag("products", { expire: 60 });
+    after(() => dispatchNotifications().catch(() => {}));
+    refresh();
+    return { ok: true, orderId: o.id, number: formatOrderNumber(o.number), total: o.total, change: o.change };
+  } catch (e) {
+    if (e instanceof ShopOrderError) return { ok: false, error: e.message };
+    const dup = await db.order.findUnique({ where: { clientRef: p.data.clientRef }, select: { id: true, number: true, total: true } });
+    if (dup) return { ok: true, orderId: dup.id, number: formatOrderNumber(dup.number), total: dup.total, change: 0 };
+    void reportError("createShopOrder", e);
+    return { ok: false, error: "The order didn't go through and nothing was taken. Please try again." };
+  }
 }
