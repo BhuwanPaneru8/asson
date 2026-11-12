@@ -43,6 +43,26 @@ export function computeSlip(i: SlipInput, year: TaxYear): Slip {
   return { earnedBasic, earnedAllowance, unpaidDeduction, gross, ssfEmployee, ssfEmployer, taxable, incomeTax, net: gross - ssfEmployee - incomeTax, costToCompany: gross + ssfEmployer };
 }
 
+// Year-end settlement: the monthly method projects one month × 12, so pay that changes during the year (a raise,
+// unpaid days, bonus, commission) leaves the year's TDS off. The last month of the fiscal year corrects it:
+//   assessable = Σ gross + Σ employer SSF over the year's payslips
+//   deduction  = min(Σ employee + employer SSF, assessable ÷ 3, Rs 5,00,000)   (SSF members)
+//   annual tax = bands on (assessable − deduction)
+//   last month's TDS = annual tax − TDS already deducted (never below 0; any excess is refundable by the IRD)
+// Tax rises with income, so projecting single months can only over-deduct when pay varies (a raise, a bonus month,
+// joining mid-year): in practice the settlement gives tax back. It tops up only if the bands or SSF status changed.
+export type YearTotals = { gross: number; ssfEmployee: number; ssfEmployer: number; inSsf: boolean; married: boolean };
+
+export function annualTax(t: YearTotals, year: TaxYear) {
+  const assessable = t.gross + t.ssfEmployer;
+  const deduction = t.inSsf ? Math.min(t.ssfEmployee + t.ssfEmployer, Math.floor(assessable / 3), RETIREMENT_CAP) : 0;
+  const taxable = Math.max(0, assessable - deduction);
+  return { assessable, deduction, taxable, tax: bandTax(taxable, t.married ? year.married : year.single, t.inSsf && year.ssfFirstBandZero) };
+}
+
+/** The last payroll month of a fiscal year ("2083/84" → "2027-07"): its run settles the year's tax. */
+export const lastMonthOf = (fiscalYear: string) => `${Number(fiscalYear.slice(0, 4)) - 57 + 1}-07`;
+
 /** Working days in a month (YYYY-MM): every day except the weekly day off. */
 export function workingDaysIn(month: string, weeklyOff: number) {
   const d = new Date(`${month}-01T00:00:00Z`);

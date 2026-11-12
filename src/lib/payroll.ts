@@ -6,14 +6,15 @@ import { audit, type AuditActor } from "./audit";
 import { store } from "./config";
 import { ktmDate } from "./pos";
 import { timesheet } from "./people";
-import { computeSlip, fiscalYearOf, workingDaysIn, type Band, type TaxYear } from "./payroll-rules";
+import { annualTax, computeSlip, fiscalYearOf, lastMonthOf, workingDaysIn, type Band, type TaxYear } from "./payroll-rules";
 import { formatPrice } from "./utils";
 import { commissionByPerson } from "./commissions";
 import { absencesForPayroll } from "./absences";
 
 // Monthly payroll, owner only. A run for a month is built from each person's salary terms (Employment) and
 // the timesheet (unpaid leave) and no-shows a manager decided were unpaid (Absence), with tax from the fiscal year's confirmed bands. While DRAFT it can be
-// rebuilt and adjusted (bonus, extra unpaid days); APPROVED freezes it; PAID posts the cost to Expenses
+// rebuilt and adjusted (bonus, extra unpaid days); the fiscal year's last month (July) also settles the year's
+// tax (settle below); APPROVED freezes it; PAID posts the cost to Expenses
 // (gross salaries + employer SSF) so it shows in the P&L. Approved runs are never edited, only reopened
 // before they're paid.
 
@@ -68,7 +69,34 @@ export async function saveEmployment(tx: Tx, owner: Actor, userId: string, d: Em
   await audit(tx, owner, { action: "payroll.employment", entity: ["User", userId], summary: `${u.name}'s pay terms ${before ? "changed" : "set"}: basic ${formatPrice(d.basic)}, allowance ${formatPrice(d.allowance)}${d.inSsf ? ", in SSF" : ""}${d.active ? "" : ", off payroll"}` });
 }
 
-const slipFields = (s: ReturnType<typeof computeSlip>) => ({ earnedBasic: s.earnedBasic, unpaidDeduction: s.unpaidDeduction, gross: s.gross, ssfEmployee: s.ssfEmployee, ssfEmployer: s.ssfEmployer, incomeTax: s.incomeTax, net: s.net });
+const slipFields = (s: ReturnType<typeof computeSlip>) => ({ earnedBasic: s.earnedBasic, unpaidDeduction: s.unpaidDeduction, gross: s.gross, ssfEmployee: s.ssfEmployee, ssfEmployer: s.ssfEmployer, incomeTax: s.incomeTax, net: s.net, taxAdjustment: 0, yearTax: null as number | null, taxRefundDue: 0 });
+
+type Prior = Map<string, { gross: number; ssfEmployee: number; ssfEmployer: number; tds: number }>;
+
+/** The fiscal year's earlier payslips per person, for the last month's settlement. Every earlier run must be
+ * approved or paid: settling against a draft would be settling against numbers that can still change. */
+async function priorInYear(tx: Tx, fiscalYear: string, month: string): Promise<Prior> {
+  const runs = await tx.payrollRun.findMany({ where: { fiscalYear, month: { lt: month } }, select: { month: true, status: true } });
+  const open = runs.filter((r) => r.status === "DRAFT").map((r) => r.month);
+  if (open.length) throw new PayrollError(`Approve ${open.join(", ")} first: ${month} settles the year's tax against every earlier month.`);
+  const slips = await tx.payslip.findMany({ where: { run: { fiscalYear, month: { lt: month } } }, select: { userId: true, gross: true, ssfEmployee: true, ssfEmployer: true, incomeTax: true } });
+  const by: Prior = new Map();
+  for (const x of slips) {
+    const p = by.get(x.userId) ?? { gross: 0, ssfEmployee: 0, ssfEmployer: 0, tds: 0 };
+    p.gross += x.gross; p.ssfEmployee += x.ssfEmployee; p.ssfEmployer += x.ssfEmployer; p.tds += x.incomeTax;
+    by.set(x.userId, p);
+  }
+  return by;
+}
+
+/** Last month of the year: this month's TDS becomes whatever makes the year's total right (see payroll-rules). */
+function settle(fields: ReturnType<typeof slipFields>, prior: { gross: number; ssfEmployee: number; ssfEmployer: number; tds: number } | undefined, who: { inSsf: boolean; married: boolean }, year: TaxYear) {
+  const p = prior ?? { gross: 0, ssfEmployee: 0, ssfEmployer: 0, tds: 0 };
+  const y = annualTax({ gross: p.gross + fields.gross, ssfEmployee: p.ssfEmployee + fields.ssfEmployee, ssfEmployer: p.ssfEmployer + fields.ssfEmployer, inSsf: who.inSsf, married: who.married }, year);
+  const due = y.tax - p.tds;
+  const incomeTax = Math.max(0, due);
+  return { ...fields, incomeTax, net: fields.gross - fields.ssfEmployee - incomeTax, taxAdjustment: incomeTax - fields.incomeTax, yearTax: y.tax, taxRefundDue: Math.max(0, -due) };
+}
 
 /** Create or rebuild a month's draft: everyone on the payroll, unpaid leave from the timesheet. */
 export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmDate()) {
@@ -86,6 +114,7 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
     absencesForPayroll(tx, month),
   ]);
   const workingDays = workingDaysIn(month, store.people.weeklyOff);
+  const prior = month === lastMonthOf(fy) ? await priorInYear(tx, fy, month) : null;
   const keep = new Set<string>();
   for (const e of staff.filter((x) => x.user.role !== "CUSTOMER")) {
     const t = sheet.find((x) => x.userId === e.userId);
@@ -95,7 +124,7 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
     const unpaidDays = Math.min(workingDays, (t?.unpaidLeaveDays ?? 0) + absenceDays + extra);
     const earned = commission.get(e.userId) ?? 0;
     const s = computeSlip({ basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, unpaidDays, inSsf: e.inSsf, married: e.married }, year);
-    const data = { basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, absenceDays, inSsf: e.inSsf, married: e.married, ...slipFields(s) };
+    const data = { basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, absenceDays, inSsf: e.inSsf, married: e.married, ...(prior ? settle(slipFields(s), prior.get(e.userId), e, year) : slipFields(s)) };
     await tx.payslip.upsert({ where: { runId_userId: { runId: r.id, userId: e.userId } }, create: { runId: r.id, userId: e.userId, ...data }, update: data });
     keep.add(e.userId);
   }
@@ -114,7 +143,9 @@ export async function adjustSlip(tx: Tx, owner: Actor, slipId: string, d: { bonu
   const timesheetUnpaid = s.unpaidDays - s.extraUnpaidDays;
   const unpaidDays = Math.min(s.workingDays, timesheetUnpaid + d.extraUnpaidDays);
   const c = computeSlip({ basic: s.basic, allowance: s.allowance, bonus: d.bonus, commission: s.commission, workingDays: s.workingDays, unpaidDays, inSsf: s.inSsf, married: s.married }, year);
-  await tx.payslip.update({ where: { id: slipId }, data: { bonus: d.bonus, extraUnpaidDays: d.extraUnpaidDays, unpaidDays, note: d.note || null, ...slipFields(c) } });
+  const prior = s.run.month === lastMonthOf(s.run.fiscalYear) ? (await priorInYear(tx, s.run.fiscalYear, s.run.month)).get(s.userId) : null;
+  const fields = prior !== null ? settle(slipFields(c), prior, s, year) : slipFields(c);
+  await tx.payslip.update({ where: { id: slipId }, data: { bonus: d.bonus, extraUnpaidDays: d.extraUnpaidDays, unpaidDays, note: d.note || null, ...fields } });
   await audit(tx, owner, { action: "payroll.adjust", entity: ["Payslip", slipId], summary: `${s.user.name} ${s.run.month}: bonus ${formatPrice(d.bonus)}, ${d.extraUnpaidDays} extra unpaid day(s)${d.note ? ` (${d.note})` : ""}` });
 }
 
@@ -184,3 +215,28 @@ export const runTotals = (slips: { gross: number; net: number; incomeTax: number
   ssfEmployer: slips.reduce((s, x) => s + x.ssfEmployer, 0),
   cost: slips.reduce((s, x) => s + x.gross + x.ssfEmployer, 0),
 });
+
+/** Year-end check for a fiscal year, any time: per person, TDS deducted so far against what the actual pay so far
+ * would owe over a full year at the same pace. After the last month is built it's exact (the settlement). */
+export async function yearEndCheck(fiscalYear: string) {
+  const [year, slips] = await Promise.all([
+    taxYearFor(db, fiscalYear),
+    db.payslip.findMany({ where: { run: { fiscalYear } }, select: { userId: true, gross: true, ssfEmployee: true, ssfEmployer: true, incomeTax: true, inSsf: true, married: true, yearTax: true, taxRefundDue: true, taxAdjustment: true, run: { select: { month: true, status: true } }, user: { select: { name: true } } }, orderBy: { run: { month: "asc" } } }),
+  ]);
+  const last = lastMonthOf(fiscalYear);
+  const by = new Map<string, { name: string; months: number; gross: number; ssfEmployee: number; ssfEmployer: number; tds: number; inSsf: boolean; married: boolean; settled: { yearTax: number; refund: number; adjustment: number; status: string } | null }>();
+  for (const x of slips) {
+    const r = by.get(x.userId) ?? { name: x.user.name, months: 0, gross: 0, ssfEmployee: 0, ssfEmployer: 0, tds: 0, inSsf: x.inSsf, married: x.married, settled: null };
+    r.months++; r.gross += x.gross; r.ssfEmployee += x.ssfEmployee; r.ssfEmployer += x.ssfEmployer; r.tds += x.incomeTax; r.inSsf = x.inSsf; r.married = x.married;
+    if (x.run.month === last && x.yearTax != null) r.settled = { yearTax: x.yearTax, refund: x.taxRefundDue, adjustment: x.taxAdjustment, status: x.run.status };
+    by.set(x.userId, r);
+  }
+  const rows = [...by.values()].map((r) => {
+    // pay so far at the same pace for 12 months, its tax, and the share of that tax the months so far should carry
+    const scale = 12 / r.months;
+    const projected = year ? annualTax({ gross: Math.round(r.gross * scale), ssfEmployee: Math.round(r.ssfEmployee * scale), ssfEmployer: Math.round(r.ssfEmployer * scale), inSsf: r.inSsf, married: r.married }, year).tax : null;
+    const expected = r.settled ? r.settled.yearTax : projected == null ? null : Math.round(projected / scale);
+    return { name: r.name, months: r.months, gross: r.gross, tds: r.tds, expected, gap: expected == null ? null : expected - r.tds, settled: r.settled };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  return { fiscalYear, lastMonth: last, hasBands: !!year, rows };
+}

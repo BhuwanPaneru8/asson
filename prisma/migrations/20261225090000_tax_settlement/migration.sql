@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "Payslip" ADD COLUMN     "taxAdjustment" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "taxRefundDue" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "yearTax" INTEGER;
+

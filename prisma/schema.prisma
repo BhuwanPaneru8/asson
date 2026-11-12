@@ -1680,6 +1680,11 @@ model Payslip {
   extraUnpaidDays Int        @default(0)
   /// no-shows a manager decided were unpaid (Absence UNPAID in the month); part of unpaidDays
   absenceDays     Int        @default(0)
+  /// year-end settlement (the fiscal year's last month only): TDS changed by this much from the monthly method,
+  /// the year's actual tax, and TDS deducted beyond it (refundable by the IRD)
+  taxAdjustment   Int        @default(0)
+  yearTax         Int?
+  taxRefundDue    Int        @default(0)
   inSsf           Boolean
   married         Boolean
   earnedBasic     Int

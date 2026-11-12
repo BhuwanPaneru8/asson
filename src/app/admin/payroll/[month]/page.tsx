@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { runTotals } from "@/lib/payroll";
+import { lastMonthOf } from "@/lib/payroll-rules";
 import { formatDateTime, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { RunActions, SlipAdjust } from "@/components/admin/payroll-forms";
@@ -26,6 +27,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
           <div key={k as string} className="rounded-lg border border-line bg-white p-4"><p className="text-[12px] uppercase tracking-wider text-muted">{k}</p><p className="mt-1 text-[20px] font-semibold tabular-nums">{formatPrice(v as number)}</p></div>
         ))}
       </div>
+      {r.month === lastMonthOf(r.fiscalYear) && <p className="mb-4 rounded-lg border border-line bg-cloud/50 px-5 py-3 text-[13.5px]"><span className="font-medium">Year-end settlement for FY {r.fiscalYear}.</span> This month&apos;s TDS is each person&apos;s tax for the whole year (from every payslip this year) minus what the earlier months deducted, so the year adds up. Never below zero: anything deducted beyond the year&apos;s tax is shown as over-deducted, for the person to claim from the IRD. <Link href="/admin/payroll/tax" className="underline underline-offset-4">Year-end check</Link></p>}
       <Card title={`Payslips (${t.people})`} action={<Pill tone={r.status === "PAID" ? "success" : r.status === "APPROVED" ? "warn" : "neutral"}>{r.status.toLowerCase()}</Pill>}>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-[13.5px]">
@@ -40,7 +42,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
                 <td className={td}>{s.commission ? formatPrice(s.commission) : "—"}</td>
                 <td className={td}>{formatPrice(s.gross)}</td>
                 <td className={td}>{formatPrice(s.ssfEmployee)}</td>
-                <td className={td}>{formatPrice(s.incomeTax)}</td>
+                <td className={td}>{formatPrice(s.incomeTax)}{s.yearTax != null && (s.taxAdjustment || s.taxRefundDue) ? <span className="block text-[12px] text-muted">{s.taxAdjustment ? `${s.taxAdjustment > 0 ? "+" : "−"}${formatPrice(Math.abs(s.taxAdjustment))} year-end` : ""}{s.taxRefundDue ? `${s.taxAdjustment ? " · " : ""}${formatPrice(s.taxRefundDue)} over-deducted` : ""}</span> : null}</td>
                 <td className={`${td} font-semibold`}>{formatPrice(s.net)}</td>
                 <td className="px-3 py-2">{draft && <SlipAdjust id={s.id} bonus={s.bonus} extraUnpaidDays={s.extraUnpaidDays} note={s.note ?? ""} />}</td>
               </tr>
