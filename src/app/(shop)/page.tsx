@@ -50,6 +50,8 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* the page's main heading, for screen readers and search (the hero's lines are pictures with words) */}
+      <h1 className="sr-only">{store.name}: {store.tagline}</h1>
       {/* Hero */}
       <section className="relative">
         <div className="grid md:grid-cols-2">

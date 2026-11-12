@@ -206,6 +206,6 @@ Goal (owner, Nov 2026): at least one shop in every one of the 77 districts, ware
 - [ ] Payments: success, cancel, tamper and closed-tab tested; refunds rehearsed
 - [ ] Backups verified by restore; monitoring and alerts firing to a real phone
 - [ ] Rate limits on Redis; secrets rotated; demo accounts removed
-- [ ] Lighthouse mobile ≥ 90; accessibility audit passed
+- [ ] Lighthouse mobile ≥ 90 (not run yet); 🟡 accessibility: basics automated on every shop page and 48 staff pages (`tests/e2e/a11y.spec.ts`: lang, one h1, one main, alt text, named controls, labelled fields, unique ids) and the palette meets AA contrast (12 Nov 2026); a screen-reader and keyboard walk-through by a person is still to do
 - [ ] Staff trained on SOPs (opening, closing, packing, returns, cash handling)
 - [ ] [Memory](Memory.md) updated with the release state

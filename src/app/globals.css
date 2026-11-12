@@ -3,7 +3,7 @@
 @theme {
   --color-ink: #141414;
   --color-ink-soft: #3d3d3d;
-  --color-muted: #6f6f6f;
+  --color-muted: #666666; /* 4.5:1+ on every background we use (cloud, accent-soft, line): WCAG AA */
   --color-line: #e7e5e1;
   --color-paper: #fbfaf8;
   --color-cloud: #f3f1ed;

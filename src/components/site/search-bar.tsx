@@ -115,7 +115,7 @@ export function SearchBar() {
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={t("search.placeholder")}
-              className="h-full flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted/70"
+              className="h-full flex-1 bg-transparent text-[16px] outline-none placeholder:text-muted"
               aria-label={t("search.label")}
               role="combobox"
               aria-expanded={!!data}

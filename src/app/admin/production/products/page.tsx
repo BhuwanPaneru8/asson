@@ -16,7 +16,7 @@ export default async function BomListPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader title="Products & bills of materials" description="For each product we make: the fabric and trims one piece uses, and the workshop's stitching charge. Production orders use this to issue materials and cost each piece." />
-      <form className="mb-4"><input name="q" defaultValue={q} placeholder="Find a product" className="h-10 w-full max-w-sm rounded-md border border-line bg-white px-3 text-[14px]" /></form>
+      <form className="mb-4"><input name="q" aria-label="Find a product" defaultValue={q} placeholder="Find a product" className="h-10 w-full max-w-sm rounded-md border border-line bg-white px-3 text-[14px]" /></form>
       <Card>
         <ul className="divide-y divide-line text-[14px]">{products.map((p) => (
           <li key={p.id}><Link href={`/admin/production/products/${p.id}`} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-cloud/40">

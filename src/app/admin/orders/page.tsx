@@ -67,8 +67,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
       </div>
       <form className="mb-4 flex flex-wrap gap-2" action="/admin/orders">
         {status && <input type="hidden" name="status" value={status} />}
-        <input name="q" defaultValue={q} placeholder="Search order #, email, phone or AWB" className="h-10 w-full max-w-sm rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
-        <select name="pay" defaultValue={sp.pay ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All payments</option><option value="COD">COD</option><option value="ONLINE">Prepaid</option><option value="IN_STORE">Store sales</option></select>
+        <input name="q" aria-label="Search orders" defaultValue={q} placeholder="Search order #, email, phone or AWB" className="h-10 w-full max-w-sm rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
+        <select name="pay" aria-label="Payment" defaultValue={sp.pay ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">All payments</option><option value="COD">COD</option><option value="ONLINE">Prepaid</option><option value="IN_STORE">Store sales</option></select>
         <button className="h-10 rounded-md bg-ink px-4 text-[14px] text-white">Search</button>
         {(q || sp.pay) && <Link href={qs({ q: undefined, pay: undefined })} className="flex h-10 items-center px-2 text-[14px] underline">Clear</Link>}
       </form>

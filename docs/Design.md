@@ -38,7 +38,7 @@ Write short sentences. Lead with the benefit. Be precise about money, time and f
 |---|---|---|---|
 | `ink` | `#141414` | Primary text, primary buttons, active states | 17.7 : 1 |
 | `ink-soft` | `#3d3d3d` | Secondary text, body copy in long reads | 10.4 : 1 |
-| `muted` | `#6f6f6f` | Captions, metadata, placeholders, helper text | 4.8 : 1 |
+| `muted` | `#666666` | Captions, metadata, placeholders, helper text | 5.5 : 1 on paper, ≥ 4.5 : 1 on cloud, accent-soft and line (was #6f6f6f: under 4.5 on cloud and accent-soft; 12 Nov 2026) |
 | `line` | `#e7e5e1` | Borders, dividers, inactive tracks | decorative only |
 | `paper` | `#fbfaf8` | Page background (warm off-white) | — |
 | `cloud` | `#f3f1ed` | Image placeholders, subtle panels, hovers | — |

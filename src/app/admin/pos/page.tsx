@@ -16,6 +16,8 @@ export default async function PosPage() {
     ? await db.order.aggregate({ where: { shiftId: shift.id, channel: "STORE" }, _count: { _all: true }, _sum: { total: true } })
     : null;
   return (
+    <>
+    <h1 className="sr-only">Point of sale{store ? ` · ${store.name}` : ""}</h1>
     <PosTerminal
       cashier={{ name: me.name, discountLimit: discountLimitPercent(me.role), canApproveReturns: can(me.role, "approve.return") }}
       shops={shops.map((s) => ({ id: s.id, name: s.name }))}
@@ -28,5 +30,6 @@ export default async function PosPage() {
         total: stats?._sum.total ?? 0,
       }}
     />
+    </>
   );
 }

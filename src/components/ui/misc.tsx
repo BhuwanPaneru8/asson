@@ -51,11 +51,13 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse bg-cloud", className)} />;
 }
 
-export function EmptyState({ icon, title, body, action }: { icon?: React.ReactNode; title: string; body?: string; action?: React.ReactNode }) {
+/** `page`: the empty state is the whole page, so its title is the page's main heading. */
+export function EmptyState({ icon, title, body, action, page = false }: { icon?: React.ReactNode; title: string; body?: string; action?: React.ReactNode; page?: boolean }) {
+  const H = page ? "h1" : "h3";
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
       {icon && <div className="text-muted">{icon}</div>}
-      <h3 className="font-display text-2xl">{title}</h3>
+      <H className="font-display text-2xl">{title}</H>
       {body && <p className="max-w-sm text-muted">{body}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>

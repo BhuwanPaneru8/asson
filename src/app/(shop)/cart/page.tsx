@@ -22,7 +22,7 @@ export default async function CartPage() {
   if (cart.lines.length === 0)
     return (
       <>
-        <EmptyState icon={<ShoppingBag className="h-12 w-12" strokeWidth={1.1} />} title={t("bag.empty")} body={t("bag.emptyBody2")} action={<Link href="/shop" className={buttonClass()}>{t("bag.continue")}</Link>} />
+        <EmptyState page icon={<ShoppingBag className="h-12 w-12" strokeWidth={1.1} />} title={t("bag.empty")} body={t("bag.emptyBody2")} action={<Link href="/shop" className={buttonClass()}>{t("bag.continue")}</Link>} />
         <ProductRail title={t("bag.popular")} products={recs} />
       </>
     );

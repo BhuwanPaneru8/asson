@@ -30,8 +30,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Customers" description={`${total.toLocaleString("en-IN" /* lakh grouping, as used in Nepal */)} accounts`} />
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={sp.q} placeholder="Name, email or phone" className="h-10 w-full max-w-xs rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
-        <select name="role" defaultValue={sp.role ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">Everyone</option><option value="staff">Team only</option></select>
+        <input name="q" aria-label="Search customers and team" defaultValue={sp.q} placeholder="Name, email or phone" className="h-10 w-full max-w-xs rounded-md border border-line bg-white px-3 text-[14px] outline-none focus:border-ink" />
+        <select name="role" aria-label="Show" defaultValue={sp.role ?? ""} className="h-10 rounded-md border border-line bg-white px-3 text-[14px]"><option value="">Everyone</option><option value="staff">Team only</option></select>
         <button className="h-10 rounded-md bg-ink px-4 text-[14px] text-white">Search</button>
       </form>
       <Card>
