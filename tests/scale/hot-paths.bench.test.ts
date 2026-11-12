@@ -18,6 +18,7 @@ import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manifests";
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
+import { damageRegister } from "@/lib/damage";
 import { exchangeFit, exchangeOptions, exchangesDesk } from "@/lib/exchanges";
 import { addItems, createEvent, endEvent, preview, scheduleEvent } from "@/lib/markdowns";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
@@ -138,6 +139,11 @@ it("hot paths stay within budget at national scale", async () => {
       throw new Rollback();
     }, { timeout: 120_000 }).catch((e) => { if (!(e instanceof Rollback)) throw e; }));
     await db.priceEvent.delete({ where: { id: eventId } });
+  }
+  {
+    const [one] = await db.$queryRaw<{ storeId: string }[]>`SELECT "storeId" FROM "DamageEntry" GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1`;
+    await time("damaged register: whole network", STAFF, () => damageRegister({ all: true }));
+    if (one) await time("damaged register: one shop", STAFF, () => damageRegister({ all: false, storeIds: [one.storeId] }));
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

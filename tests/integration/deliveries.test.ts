@@ -77,6 +77,7 @@ describe("failed deliveries and returns to origin", () => {
     await tx((t) => receiveReturn(t, staff, { order: String(o.number), storeId: wh.id, damaged: true, courierCharge: 0 }));
     expect(await stockAt(wh.id)).toBe(before);
     expect(await db.inventoryLog.findFirst({ where: { orderId: o.id, reason: "DAMAGED" } })).toMatchObject({ delta: 0, storeId: wh.id });
+    expect(await db.damageEntry.findFirst({ where: { storeId: wh.id } })).toMatchObject({ kind: "IN", quantity: 1, source: "AS" + String(o.number).padStart(6, "0") + " back from Pathao Parcel" }); // in the damaged register
     expect(await db.returnToOrigin.findUniqueOrThrow({ where: { orderId: o.id } })).toMatchObject({ state: "RECEIVED", damaged: true, reason: "OTHER", note: "Arrived back without notice" });
     expect((await db.order.findUniqueOrThrow({ where: { id: o.id } })).status).toBe("CANCELLED");
   });

@@ -4,6 +4,7 @@ import { db } from "./db";
 import { audit, type AuditActor } from "./audit";
 import { SIZE_ORDER, store as storeCfg } from "./config";
 import { allocateOrder, moveStock, StockError } from "./stock";
+import { quarantine } from "./damage";
 import { queueOrderNotice } from "./notifications";
 import { requireStoreAccess } from "./scope";
 import { formatOrderNumber, parseOrderNumber } from "./utils";
@@ -122,6 +123,7 @@ export async function receiveExchange(tx: Tx, user: Actor, d: { ref: string; sto
     const ok = (d.conditions[i.id] ?? "RESELLABLE") === "RESELLABLE";
     if (!ok) damaged += i.quantity;
     await moveStock(tx, { variantId: i.orderItem.variantId, storeId: d.storeId, delta: ok ? i.quantity : 0, reason: ok ? "RETURN_RESTOCK" : "DAMAGED", orderId: ex.order.id, actorId: user.id, note: ok ? `${exchangeRef(ex.number)}: exchanged item back (R${ret.number})` : `${exchangeRef(ex.number)}: exchanged item back damaged ×${i.quantity}, quarantined (R${ret.number})` });
+    if (!ok) await quarantine(tx, { storeId: d.storeId, variantId: i.orderItem.variantId, quantity: i.quantity, source: `${exchangeRef(ex.number)} old item`, actorId: user.id, ledger: false });
   }
   await tx.exchange.update({ where: { id: ex.id }, data: { status: "DONE", returnId: ret.id, closedAt: now } });
   await tx.orderEvent.create({ data: { orderId: ex.order.id, actor: user.name, message: `${exchangeRef(ex.number)}: old item${ex.items.length > 1 ? "s" : ""} received back at ${here.name}${damaged ? ` (${damaged} damaged)` : ""}` } });

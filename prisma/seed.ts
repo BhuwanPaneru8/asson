@@ -162,8 +162,8 @@ async function main() {
     throw new Error("Refusing to seed: this wipes all data. Set SEED_FORCE=1 to override.");
   }
   console.log("Resetting data…");
-  // the cash book is append-only (a trigger blocks DELETE); TRUNCATE empties it for a fresh seed
-  await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit"`);
+  // the cash book and damaged register are append-only (triggers block DELETE); TRUNCATE empties them for a fresh seed
+  await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit", "DamageEntry"`);
   // closed months and filed VAT returns lock expenses, bills and payments (triggers): clear them before wiping
   await db.monthClose.deleteMany();
   await db.vatReturn.deleteMany();

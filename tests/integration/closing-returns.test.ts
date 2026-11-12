@@ -38,6 +38,7 @@ describe("daily closing: returns per shop", () => {
     const credit = await sellAndReturn(ktm.id, variantId, "STORE_CREDIT", "DAMAGED");
     const cashBack = await sellAndReturn(pkr.id, variantId, "CASH", "RESELLABLE");
     expect(await db.return.findUniqueOrThrow({ where: { id: credit.returnId } })).toMatchObject({ storeId: ktm.id });
+    expect(await db.damageEntry.findFirstOrThrow({ where: { storeId: ktm.id } })).toMatchObject({ kind: "IN", quantity: 1, unitCost: 90_000 }); // damaged return → register, at the sale's cost
     expect(await db.return.findUniqueOrThrow({ where: { id: cashBack.returnId } })).toMatchObject({ storeId: pkr.id });
 
     const k = await buildDaySummary(ktm.id, ktmDate());
