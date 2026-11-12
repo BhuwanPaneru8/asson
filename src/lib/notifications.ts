@@ -17,7 +17,7 @@ import { makeT, type Locale } from "./i18n";
  *   merchant account and API keys exist — implement them against the provider's official docs.
  */
 
-export type OrderNotice = "placed" | "confirmed" | "ready_for_pickup" | "collected" | "shipped" | "out_for_delivery" | "delivery_failed" | "exchange" | "delivered" | "cancelled" | "return_requested" | "returned" | "refund";
+export type OrderNotice = "placed" | "confirmed" | "ready_for_pickup" | "collected" | "shipped" | "out_for_delivery" | "delivery_failed" | "exchange" | "updated" | "delivered" | "cancelled" | "return_requested" | "returned" | "refund";
 
 const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 

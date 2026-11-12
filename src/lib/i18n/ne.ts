@@ -652,6 +652,7 @@ export const ne: Record<keyof typeof en, string> = {
   "sms.collected": "{store}: {n} लिनुभएकोमा धन्यवाद! समीक्षा लेख्नुहोस्: {link} साइज बदल्नु छ? {days} दिनभित्र ल्याउनुहोस्।",
   "sms.confirmed": "{store}: अर्डर {n} पक्का भयो, प्याक हुँदैछ। ट्र्याक: {link}",
   "sms.shipped": "{store}: अर्डर {n}{carrier}{tracking} पठाइयो।{cod} {link}",
+  "sms.updated": "{store}: तपाईंले भनेअनुसार अर्डर {n} परिवर्तन गरियो। अब जम्मा {total}।{cod} {link}",
   "sms.exchange": "{store}: तपाईंको साटफेर अर्डर {n} को रूपमा आउँदैछ। राइडर आउँदा पुरानो सामान दिनुहोला। {link}",
   "sms.delivery_failed": "{store}: अर्डर {n} आज डेलिभर गर्न सकिएन। डेलिभरी मिलाउन {phone} मा फोन गर्नुहोस्।",
   "sms.out_for_delivery": "{store}: अर्डर {n} आज डेलिभरीमा निस्कियो।{cod} राइडरले फोन गर्नुहुनेछ।",

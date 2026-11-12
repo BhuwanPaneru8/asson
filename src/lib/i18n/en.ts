@@ -669,6 +669,7 @@ export const en = {
   "sms.collected": "{store}: thanks for collecting {n}! Love it? Leave a review: {link} Size swap? Bring it back within {days} days.",
   "sms.confirmed": "{store}: order {n} is confirmed and being packed. Track: {link}",
   "sms.shipped": "{store}: order {n} is on its way{carrier}{tracking}.{cod} {link}",
+  "sms.updated": "{store}: your order {n} has been changed as you asked. Total now {total}.{cod} {link}",
   "sms.exchange": "{store}: your exchange is on its way as order {n}. Please hand the old item to the rider when it arrives. {link}",
   "sms.delivery_failed": "{store}: we couldn't deliver order {n} today. Please call {phone} so we can deliver it.",
   "sms.out_for_delivery": "{store}: order {n} is out for delivery today.{cod} Rider will call you.",

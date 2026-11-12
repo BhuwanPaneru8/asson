@@ -1,3 +1,4 @@
+import { OrderEdit } from "@/components/admin/order-edit";
 import { can } from "@/lib/permissions";
 import { exchangeOptions } from "@/lib/exchanges";
 import { StaffExchange } from "@/components/admin/exchange-forms";
@@ -26,6 +27,9 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
   if (!order) notFound();
   const a = order.shippingAddress as Addr;
   const exchange = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
+  // before packing: what each line could be swapped to (other sizes of the product in stock)
+  const editable = order.channel === "ONLINE" && (order.status === "PENDING" || order.status === "CONFIRMED") && !(await db.exchange.count({ where: { replacementId: order.id } }));
+  const swapTo = editable ? await db.variant.findMany({ where: { productId: { in: order.items.map((i) => i.productId) }, stock: { gt: 0 }, product: { status: "ACTIVE" } }, orderBy: { position: "asc" }, select: { id: true, productId: true, color: true, size: true, stock: true } }) : [];
 
   return (
     <>
@@ -93,6 +97,8 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <OrderControls orderId={order.id} status={order.status} next={transitionsFor(order.status, !!order.pickupStoreId).filter((s) => s !== "RETURNING" && order.status !== "RETURNING")} pickupAt={order.pickupStore?.name} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
           {exchange && !exchange.blocked && can(me.role, "care") && exchange.items.some((i) => i.left > 0 && i.sizes.length > 0) && <Card title="Size exchange for the customer"><StaffExchange orderId={order.id} items={exchange.items} /></Card>}
           {exchange && exchange.open.length > 0 && <p className="rounded-md bg-accent-soft/50 px-4 py-2.5 text-[13.5px]">Open exchange{exchange.open.length > 1 ? "s" : ""}: {exchange.open.join(", ")} · <Link href="/admin/fulfilment/exchanges" className="underline">Exchanges</Link></p>}
+          {editable && <OrderEdit orderId={order.id} paid={order.paymentStatus === "PAID"} addr={order.pickupStoreId ? null : { fullName: a.fullName, phone: a.phone, line1: a.line1, line2: a.line2, city: a.city, district: a.district ?? "", postalCode: a.postalCode }}
+            items={order.items.map((i) => ({ id: i.id, name: i.name, color: i.color, size: i.size, quantity: i.quantity, sizes: swapTo.filter((v) => v.productId === i.productId && v.id !== i.variantId).map((v) => ({ variantId: v.id, label: `${v.color} ${v.size} (${v.stock})` })) }))} />}
           <Card title="Customer">
             <div className="space-y-1 px-5 py-4 text-[14px]">
               {order.user ? <Link href={`/admin/customers?q=${encodeURIComponent(order.email)}`} className="font-medium hover:underline">{order.user.name}</Link> : <p className="font-medium">Guest checkout</p>}
