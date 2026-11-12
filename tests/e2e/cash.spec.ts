@@ -32,7 +32,7 @@ test("the manager counts the safe and banks cash; the owner finds a shortfall on
   await row.getByLabel("Amount on the bank statement").fill("4500");
   await row.getByLabel("Bank note").fill("Statement shows 4,500");
   await row.getByRole("button", { name: "Save" }).click();
-  await expect(owner.getByRole("button", { name: "Different" })).toHaveCount(0); // nothing left to check
+  await expect(row).toHaveCount(0); // this deposit has left the to-check list (others from other tests may still be there)
 
   await mgr.reload();
   expect(await bookTitle()).toBe(before - 4500); // the missing Rs 500 is back on the shop's book
