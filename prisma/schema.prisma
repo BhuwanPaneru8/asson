@@ -563,6 +563,7 @@ model Store {
   pickWaves        PickWave[]
   manifests        Manifest[]
   rtoReceipts      ReturnToOrigin[]
+  returns          Return[]
   rosterShifts     RosterShift[]
   rosterWeeks      RosterWeek[]
   /// fewest people the roster should have on each open day
@@ -748,6 +749,9 @@ model Return {
   orderId       String
   order         Order        @relation(fields: [orderId], references: [id])
   shiftId       String? // set when cash left the drawer
+  /// the shop the units went back to: whose closing the return belongs to
+  storeId       String?
+  store         Store?       @relation(fields: [storeId], references: [id])
   processedById String
   approvedById  String?
   reason        String
@@ -763,6 +767,7 @@ model Return {
 
   @@index([orderId])
   @@index([shiftId])
+  @@index([storeId, createdAt])
   @@index([createdAt])
 }
 
