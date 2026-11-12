@@ -19,6 +19,7 @@ import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manif
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
 import { exchangeFit, exchangeOptions, exchangesDesk } from "@/lib/exchanges";
+import { addItems, createEvent, endEvent, preview, scheduleEvent } from "@/lib/markdowns";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
 import { swapsFor, swapsToApprove } from "@/lib/shift-swaps";
 import { ktmDate } from "@/lib/pos";
@@ -122,6 +123,21 @@ it("hot paths stay within budget at national scale", async () => {
     await time("exchanges: desk", STAFF, () => exchangesDesk());
     const top = await db.product.findFirst({ orderBy: { soldCount: "desc" }, select: { id: true } });
     if (top) await time("exchanges: fit advice on a product page", SHOPPER, () => exchangeFit(top.id));
+  }
+  {
+    // a 500-product sale: preview, then start and end it inside a transaction that's rolled back
+    const owner = { id: "bench-owner", name: "Bench", role: "ADMIN" };
+    const ids = (await db.product.findMany({ where: { status: "ACTIVE" }, orderBy: { soldCount: "desc" }, take: 500, select: { id: true } })).map((p) => p.id);
+    let eventId = "";
+    await db.$transaction(async (tx) => { const e = await createEvent(tx, owner, { name: "Bench sale", startsAt: new Date(Date.now() + 86_400_000), endsAt: null }); eventId = e.id; await addItems(tx, owner, e.id, { productIds: ids, percentOff: 5 }); }, { timeout: 120_000 });
+    await time("markdowns: preview a 500-product sale", STAFF, () => preview(eventId));
+    await time("markdowns: start and end a 500-product sale", REPORT, () => db.$transaction(async (tx) => {
+      await tx.priceEvent.update({ where: { id: eventId }, data: { startsAt: new Date(Date.now() - 60_000) } });
+      await scheduleEvent(tx, owner, eventId, { allowBelowMargin: true });
+      await endEvent(tx, eventId, owner);
+      throw new Rollback();
+    }, { timeout: 120_000 }).catch((e) => { if (!(e instanceof Rollback)) throw e; }));
+    await db.priceEvent.delete({ where: { id: eventId } });
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

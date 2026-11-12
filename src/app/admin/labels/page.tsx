@@ -6,7 +6,7 @@ import { LabelSheet } from "@/components/admin/label-sheet";
 export const metadata = { title: "Print labels" };
 
 /** Barcode price labels. Open with ?product=<id> or ?po=<purchaseOrderId> (quantities = received units). */
-export default async function LabelsPage({ searchParams }: { searchParams: Promise<{ product?: string; po?: string }> }) {
+export default async function LabelsPage({ searchParams }: { searchParams: Promise<{ product?: string; po?: string; event?: string }> }) {
   await requirePermission("catalog.view");
   const sp = await searchParams;
   let rows: { id: string; sku: string; name: string; color: string; size: string; price: number; qty: number }[] = [];
@@ -16,6 +16,13 @@ export default async function LabelsPage({ searchParams }: { searchParams: Promi
     if (po) {
       title = `Labels for PO-${String(po.number).padStart(5, "0")}`;
       rows = po.items.map((i) => ({ id: i.variantId, sku: i.variant.sku, name: i.variant.product.name, color: i.variant.color, size: i.variant.size, price: i.variant.product.price, qty: i.quantityReceived }));
+    }
+  } else if (sp.event) {
+    // a sale's new price tags: every size in stock, at today's shelf price
+    const ev = await db.priceEvent.findUnique({ where: { id: sp.event }, include: { items: { include: { product: { include: { variants: { where: { stock: { gt: 0 } }, orderBy: { position: "asc" } } } } } } } });
+    if (ev) {
+      title = `Price tags for ${ev.name}`;
+      rows = ev.items.flatMap((i) => i.product.variants.map((v) => ({ id: v.id, sku: v.sku, name: i.product.name, color: v.color, size: v.size, price: i.product.price, qty: v.stock })));
     }
   } else if (sp.product) {
     const p = await db.product.findUnique({ where: { id: sp.product }, include: { variants: { orderBy: { position: "asc" } } } });

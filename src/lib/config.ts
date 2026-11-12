@@ -97,6 +97,8 @@ export const store = {
   statutoryDueDays: 25,
   /** deliveries desk: a shipped parcel not delivered after this many days is "stuck"; a parcel coming back after this many is chased with the courier */
   delivery: { stuckDays: 5, chaseReturnDays: 10 },
+  /** markdowns: sale prices round down to this (paisa); a sale price under cost + minMarginPct needs the owner to tick "below margin" */
+  markdown: { roundTo: 10_00, minMarginPct: 10 },
   /** COD risk on the confirmation-call queue: a district returning this share of parcels (with at least `minShipped` in 90 days) is risky; a first COD order at or over `bigFirstOrder` paisa too */
   codRisk: { districtRate: 0.15, minShipped: 20, bigFirstOrder: 1_000_000 },
   /** Cash per location (Finance → Cash). */
