@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { createExchange, exchangeOptions, exchangesDesk, receiveExchange } from "@/lib/exchanges";
+import { createExchange, exchangeFit, exchangeOptions, exchangesDesk, receiveExchange } from "@/lib/exchanges";
 import { transitionOrder } from "@/lib/orders";
 import { profitAndLoss } from "@/lib/finance";
 import { makeLocation, makeProduct, makeUser, resetDb } from "../support/db";
@@ -107,5 +107,24 @@ describe("online size exchanges", () => {
     const r = await Promise.allSettled([1, 2].map(() => tx((t) => createExchange(t, { orderId: o.id, lines: [{ orderItemId: o.items[0].id, quantity: 2, newVariantId: v("M").id }], reason: "", actor: "g@t.l" }))));
     expect(r.filter((x) => x.status === "fulfilled")).toHaveLength(1);
     expect(await db.exchange.count()).toBe(1);
+  });
+
+  it("care staff can start one for a caller (audited); fit advice appears once 5+ units were swapped mostly one way", async () => {
+    const o = await delivered();
+    await tx((t) => createExchange(t, { orderId: o.id, lines: [{ orderItemId: o.items[0].id, quantity: 1, newVariantId: v("M").id }], reason: "called: too tight", actor: staff.email, staff }));
+    expect(await db.auditLog.findFirst({ where: { action: "exchange.create" } })).toMatchObject({ actorId: staff.id });
+    expect(await exchangeFit(p.id)).toBeNull(); // 1 unit: too few to say
+
+    for (const size of ["S", "M"]) await db.storeStock.update({ where: { storeId_variantId: { storeId: wh.id, variantId: v(size).id } }, data: { quantity: 20 } });
+    for (let i = 0; i < 4; i++) { const x = await delivered(); await tx((t) => createExchange(t, { orderId: x.id, lines: [{ orderItemId: x.items[0].id, quantity: 1, newVariantId: v("M").id }], reason: "", actor: "c" })); }
+    expect(await exchangeFit(p.id)).toEqual({ direction: "up", units: 5 }); // S → M, all five
+    // three swaps the other way: 5 of 8 is under 70%, so no advice
+    for (let i = 0; i < 3; i++) {
+      const y = await db.order.create({ data: { email: "h@t.l", phone: "9822222222", status: "DELIVERED", paymentMethod: "COD", paymentStatus: "PAID", subtotal: 200000, total: 200000, shippingMethod: "standard", channel: "ONLINE", shippingAddress: { fullName: "H", district: "Kaski" },
+        items: { create: [{ variantId: v("M").id, productId: p.id, name: p.name, slug: p.slug, sku: v("M").sku, color: v("M").color, size: "M", image: "", unitPrice: 200000, unitCost: 80000, quantity: 1 }] },
+        events: { create: [{ status: "DELIVERED", message: "Delivered", actor: "x" }] } }, include: { items: true } });
+      await tx((t) => createExchange(t, { orderId: y.id, lines: [{ orderItemId: y.items[0].id, quantity: 1, newVariantId: v("S").id }], reason: "", actor: "h" }));
+    }
+    expect(await exchangeFit(p.id)).toBeNull();
   });
 });

@@ -1,3 +1,6 @@
+import { can } from "@/lib/permissions";
+import { exchangeOptions } from "@/lib/exchanges";
+import { StaffExchange } from "@/components/admin/exchange-forms";
 import { codRiskFor } from "@/lib/cod-risk";
 import { EntityHistory } from "@/components/admin/entity-history";
 import Image from "next/image";
@@ -17,11 +20,12 @@ import { CallPanel } from "@/components/admin/call-panel";
 type Addr = { fullName: string; phone: string; line1: string; line2?: string | null; city: string; district?: string; state: string; postalCode?: string | null; zone?: string };
 
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("orders");
+  const me = await requirePermission("orders");
   const { id } = await params;
   const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, pickupStore: { select: { name: true, address: true } }, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
   if (!order) notFound();
   const a = order.shippingAddress as Addr;
+  const exchange = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
 
   return (
     <>
@@ -87,6 +91,8 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         <div className="space-y-4">
           {order.status === "PENDING" && order.paymentMethod === "COD" && order.channel === "ONLINE" && <CallPanel orderId={order.id} phone={order.phone} attempts={order.callAttempts} outcome={order.callOutcome} risk={(await codRiskFor([order])).get(order.id) ?? null} />}
           <OrderControls orderId={order.id} status={order.status} next={transitionsFor(order.status, !!order.pickupStoreId).filter((s) => s !== "RETURNING" && order.status !== "RETURNING")} pickupAt={order.pickupStore?.name} paymentPending={order.paymentStatus === "PENDING" && order.paymentMethod === "ONLINE"} carrier={order.carrier} tracking={order.trackingNumber} />
+          {exchange && !exchange.blocked && can(me.role, "care") && exchange.items.some((i) => i.left > 0 && i.sizes.length > 0) && <Card title="Size exchange for the customer"><StaffExchange orderId={order.id} items={exchange.items} /></Card>}
+          {exchange && exchange.open.length > 0 && <p className="rounded-md bg-accent-soft/50 px-4 py-2.5 text-[13.5px]">Open exchange{exchange.open.length > 1 ? "s" : ""}: {exchange.open.join(", ")} · <Link href="/admin/fulfilment/exchanges" className="underline">Exchanges</Link></p>}
           <Card title="Customer">
             <div className="space-y-1 px-5 py-4 text-[14px]">
               {order.user ? <Link href={`/admin/customers?q=${encodeURIComponent(order.email)}`} className="font-medium hover:underline">{order.user.name}</Link> : <p className="font-medium">Guest checkout</p>}

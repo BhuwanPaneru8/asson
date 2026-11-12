@@ -18,7 +18,7 @@ import { cancelWave, createWave, wavePickList } from "@/lib/fulfilment";
 import { addParcel, handOver, manifestOverview, openManifest } from "@/lib/manifests";
 import { deliveriesDesk } from "@/lib/deliveries";
 import { codRiskFor } from "@/lib/cod-risk";
-import { exchangeOptions, exchangesDesk } from "@/lib/exchanges";
+import { exchangeFit, exchangeOptions, exchangesDesk } from "@/lib/exchanges";
 import { addDays, rosterOverview, rosterVsActual, rosterWeek, weekStartOf } from "@/lib/rosters";
 import { swapsFor, swapsToApprove } from "@/lib/shift-swaps";
 import { ktmDate } from "@/lib/pos";
@@ -120,6 +120,8 @@ it("hot paths stay within budget at national scale", async () => {
     const recent = await db.order.findFirst({ where: { status: "DELIVERED", channel: "ONLINE" }, orderBy: { createdAt: "desc" }, select: { id: true } });
     if (recent) await time("exchanges: options on a customer's order page", SHOPPER, () => exchangeOptions(recent.id));
     await time("exchanges: desk", STAFF, () => exchangesDesk());
+    const top = await db.product.findFirst({ orderBy: { soldCount: "desc" }, select: { id: true } });
+    if (top) await time("exchanges: fit advice on a product page", SHOPPER, () => exchangeFit(top.id));
   }
   await time("warehouse pick list", STAFF, () => getPickList("wh0"));
   await time("pick counts (sidebar badge)", STAFF, () => pickCounts());

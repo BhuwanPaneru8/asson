@@ -345,6 +345,8 @@ export const en = {
   "ord.returningNote": "We couldn't deliver this order, so the courier is bringing it back to us. Still want it? Call {phone}.",
   "ord.cancelledNote": "This order was cancelled. Any payment made will be refunded to the original method within 5–7 business days.",
   "ord.cancel": "Cancel order",
+  "pp.swapUp": "Customers who exchanged this usually went one size up: if you're between sizes, choose the larger.",
+  "pp.swapDown": "Customers who exchanged this usually went one size down: if you're between sizes, choose the smaller.",
   "ex.button": "Exchange a size",
   "ex.title": "Exchange a size",
   "ex.body": "Choose the new size. We'll deliver it free and the rider collects the old item at the door. Please keep the tags on.",

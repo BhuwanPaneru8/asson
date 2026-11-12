@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { lookupExchangeAction, receiveExchangeAction } from "@/actions/admin/exchanges";
+import { lookupExchangeAction, receiveExchangeAction, staffExchangeAction } from "@/actions/admin/exchanges";
 import { cn } from "@/lib/utils";
 
 const input = "h-10 rounded-md border border-line bg-white px-2.5 text-[14px] outline-none focus:border-ink placeholder:font-sans";
@@ -40,6 +40,42 @@ export function ReceiveExchange({ locations, defaultStoreId }: { locations: { id
         </div>
       )}
       {msg && <p role="status" className={cn("rounded-md px-3 py-2 text-[13.5px]", msg.ok ? "bg-success/10 text-success" : "bg-danger/10 text-danger")}>{msg.text}</p>}
+    </div>
+  );
+}
+
+type Option = { orderItemId: string; name: string; color: string; size: string; left: number; sizes: { variantId: string; size: string; stock: number }[] };
+
+/** On the admin order page: swap sizes for a customer who called (same rules as their own order page). */
+export function StaffExchange({ orderId, items }: { orderId: string; items: Option[] }) {
+  const [pick, setPick] = useState<Record<string, { variantId: string; quantity: number }>>({});
+  const [reason, setReason] = useState("");
+  const [pending, start] = useTransition();
+  const lines = Object.entries(pick).filter(([, p]) => p.variantId).map(([orderItemId, p]) => ({ orderItemId, newVariantId: p.variantId, quantity: p.quantity }));
+  return (
+    <div className="space-y-3 px-5 py-4 text-[13.5px]">
+      {items.filter((i) => i.left > 0).map((i) => {
+        const cur = pick[i.orderItemId];
+        return (
+          <div key={i.orderItemId}>
+            <p className="font-medium">{i.name} · {i.color} {i.size}{i.left > 1 ? ` (${i.left} can swap)` : ""}</p>
+            {!i.sizes.length ? <p className="text-muted">No other size in stock.</p> : (
+              <div className="mt-1 flex gap-2">
+                <select className={cn(input, "min-w-0 flex-1")} value={cur?.variantId ?? ""} onChange={(e) => setPick({ ...pick, [i.orderItemId]: { variantId: e.target.value, quantity: cur?.quantity ?? 1 } })} aria-label={`New size for ${i.name} ${i.size}`}>
+                  <option value="">Keep {i.size}</option>{i.sizes.map((s) => <option key={s.variantId} value={s.variantId}>{s.size} ({s.stock} in stock)</option>)}
+                </select>
+                {i.left > 1 && cur?.variantId && <select className={cn(input, "w-20")} value={String(cur.quantity)} onChange={(e) => setPick({ ...pick, [i.orderItemId]: { ...cur, quantity: Number(e.target.value) } })} aria-label="How many">{Array.from({ length: i.left }, (_, n) => <option key={n} value={n + 1}>×{n + 1}</option>)}</select>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <input className={cn(input, "w-full")} placeholder="Why (e.g. called: too tight)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Exchange reason" />
+      <button className={cn(btn, "w-full")} disabled={pending || !lines.length} onClick={() => start(async () => {
+        const r = await staffExchangeAction({ orderId, lines, reason });
+        if (r.ok) { toast.success(`EX-${r.result.number} created: the new size is ready to pick`); setPick({}); setReason(""); } else toast.error(r.error);
+      })}>Send the new size</button>
+      <p className="text-[12px] text-muted">Free, at the price paid. The rider collects the old item at the door; the customer gets an SMS.</p>
     </div>
   );
 }

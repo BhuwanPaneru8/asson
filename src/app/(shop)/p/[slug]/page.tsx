@@ -13,6 +13,7 @@ import { ProductExperience } from "@/components/product/purchase-panel";
 import { Reviews } from "@/components/product/reviews";
 import { ProductRail } from "@/components/product/product-rail";
 import { store } from "@/lib/config";
+import { exchangeFit } from "@/lib/exchanges";
 import { getDeliveryRates } from "@/lib/delivery";
 import { absoluteImageUrl } from "@/lib/media-url";
 import { getT } from "@/lib/i18n/server";
@@ -41,7 +42,7 @@ export default async function ProductPage({ params }: Props) {
   if (!isBot((await headers()).get("user-agent"))) after(() => recordFunnel("view", product.id));
   const inLooks = await getLookbookForProduct(product.id);
 
-  const [stock, related, reviews, user, rates, look, { t, locale }] = await Promise.all([
+  const [stock, related, reviews, user, rates, look, { t, locale }, swapFit] = await Promise.all([
     getLiveStock(product.id),
     getRelated(product.id, product.categoryId, product.gender),
     getReviews(product.id),
@@ -49,6 +50,7 @@ export default async function ProductPage({ params }: Props) {
     getDeliveryRates(),
     getLook(product.id),
     getT(),
+    exchangeFit(product.id),
   ]);
   const lookIds = new Set(look.map((l) => l.id));
   const variants = product.variants.map((v) => ({ id: v.id, color: v.color, colorHex: v.colorHex, size: v.size, stock: stock[v.id] ?? v.stock }));
@@ -81,6 +83,7 @@ export default async function ProductPage({ params }: Props) {
         <ProductExperience
           rates={rates}
           fitSummary={topFit}
+          swapFit={swapFit?.direction}
           product={{
             id: product.id, name: pick(locale, product.name, product.nameNe), brand: product.brand, price: product.price, compareAtPrice: product.compareAtPrice,
             ratingAvg: product.ratingAvg, ratingCount: product.ratingCount, description: pick(locale, product.description, product.descriptionNe), details: product.details,

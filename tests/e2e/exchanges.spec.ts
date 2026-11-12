@@ -53,4 +53,9 @@ test("a guest swaps the size of a delivered shirt; the new size goes out free an
   await page.getByLabel("Exchange or order number").fill(orderNumber);
   await page.getByRole("button", { name: "Find" }).click();
   await expect(page.getByText(/hasn't gone out yet|EX-\d+ · from/).first()).toBeVisible();
+  // the order page shows it too (and no second swap is offered: the one unit is already exchanged)
+  await page.goto(`/admin/orders?q=${orderNumber}`);
+  await page.getByRole("link", { name: orderNumber }).click();
+  await expect(page.getByText(/^Open exchange: EX-\d+/)).toBeVisible();
+  await expect(page.getByText("Size exchange for the customer")).toHaveCount(0);
 });

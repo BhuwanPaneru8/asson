@@ -6,7 +6,10 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { reportError } from "@/lib/errors";
 import { ScopeError } from "@/lib/scope";
-import { ExchangeError, exchangeRef, receiveExchange } from "@/lib/exchanges";
+import { createExchange, ExchangeError, exchangeRef, receiveExchange } from "@/lib/exchanges";
+import { StockError } from "@/lib/stock";
+import { dispatchNotifications } from "@/lib/notifications";
+import { after } from "next/server";
 import { formatOrderNumber, parseOrderNumber } from "@/lib/utils";
 
 /** Find the open exchange behind a scanned number (original order, replacement order or EX-). */
@@ -34,6 +37,24 @@ export async function receiveExchangeAction(input: z.input<typeof schema>) {
   } catch (e) {
     if (e instanceof ExchangeError || e instanceof ScopeError) return { ok: false as const, error: e.message };
     void reportError("receiveExchange", e);
+    return { ok: false as const, error: "Couldn't do that. Nothing changed — please try again." };
+  }
+}
+
+const staffSchema = z.object({ orderId: z.string(), reason: z.string().max(300), lines: z.array(z.object({ orderItemId: z.string(), quantity: z.number().int().min(0).max(99), newVariantId: z.string() })).min(1).max(50) });
+/** Care staff start an exchange for a customer who called or messaged (same rules as the customer's own). */
+export async function staffExchangeAction(input: z.input<typeof staffSchema>) {
+  const me = await requirePermission("care");
+  const p = staffSchema.safeParse(input);
+  if (!p.success) return { ok: false as const, error: "Choose the new size for at least one item." };
+  try {
+    const r = await db.$transaction((tx) => createExchange(tx, { orderId: p.data.orderId, lines: p.data.lines, reason: p.data.reason || "Size exchange (by phone)", actor: me.email ?? me.name, staff: me }), { timeout: 15_000 });
+    after(() => dispatchNotifications().catch(() => {}));
+    refresh();
+    return { ok: true as const, result: { number: r.exchange.number, replacementId: r.replacement.id } };
+  } catch (e) {
+    if (e instanceof ExchangeError || e instanceof StockError) return { ok: false as const, error: e.message };
+    void reportError("staffExchange", e);
     return { ok: false as const, error: "Couldn't do that. Nothing changed — please try again." };
   }
 }
