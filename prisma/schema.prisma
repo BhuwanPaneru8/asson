@@ -209,6 +209,8 @@ model User {
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
   rosterShifts       RosterShift[]
+  swapsOffered       ShiftSwap[]     @relation("SwapFrom")
+  swapsReceived      ShiftSwap[]     @relation("SwapTo")
   employment         Employment?
   payslips           Payslip[]
   issuesReported     Issue[]         @relation("IssueReporter")
@@ -2428,6 +2430,9 @@ model RosterShift {
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 
+  swaps     ShiftSwap[] @relation("SwapShift")
+  swapsBack ShiftSwap[] @relation("SwapBack")
+
   @@unique([userId, date])
   @@index([storeId, date])
 }
@@ -2493,4 +2498,38 @@ model ExchangeItem {
   newVariantId String
 
   @@index([orderItemId])
+}
+
+enum SwapStatus {
+  OFFERED // waiting for the colleague
+  ACCEPTED // colleague said yes; waiting for a manager
+  APPROVED // done: the shifts changed hands
+  DECLINED // colleague said no
+  REJECTED // manager said no
+  CANCELLED // withdrawn, or no longer possible (shift changed or passed)
+}
+
+/// A published shift handed to a colleague (give away) or traded for one of theirs (swap). Colleague accepts,
+/// a manager at that location approves; the shifts change hands only then.
+model ShiftSwap {
+  id           String       @id @default(cuid())
+  shiftId      String
+  shift        RosterShift  @relation("SwapShift", fields: [shiftId], references: [id], onDelete: Cascade)
+  fromUserId   String
+  fromUser     User         @relation("SwapFrom", fields: [fromUserId], references: [id])
+  toUserId     String
+  toUser       User         @relation("SwapTo", fields: [toUserId], references: [id])
+  /// a swap: the colleague's shift the requester takes in return (null = give away)
+  backShiftId  String?
+  backShift    RosterShift? @relation("SwapBack", fields: [backShiftId], references: [id], onDelete: Cascade)
+  note         String       @default("")
+  status       SwapStatus   @default(OFFERED)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String       @default("")
+  createdAt    DateTime     @default(now())
+
+  @@index([status, createdAt])
+  @@index([toUserId, status])
+  @@index([shiftId])
 }
