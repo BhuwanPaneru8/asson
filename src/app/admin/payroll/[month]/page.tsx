@@ -34,7 +34,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
               <tr key={s.id} className="align-top">
                 <td className="px-3 py-2"><Link href={`/admin/payroll/slip/${s.id}`} className="font-medium underline-offset-4 hover:underline">{s.user.name}</Link>{s.inSsf && <span className="text-[12px] text-muted"> · SSF</span>}{s.note && <span className="block text-[12px] text-muted">{s.note}</span>}</td>
                 <td className={td}>{s.daysWorked} / {s.workingDays}</td>
-                <td className={td}>{s.unpaidDays}{s.extraUnpaidDays ? <span className="text-[12px] text-muted"> ({s.extraUnpaidDays} added)</span> : null}</td>
+                <td className={td}>{s.unpaidDays}{s.absenceDays || s.extraUnpaidDays ? <span className="text-[12px] text-muted"> ({[s.absenceDays && `${s.absenceDays} missed`, s.extraUnpaidDays && `${s.extraUnpaidDays} added`].filter(Boolean).join(", ")})</span> : null}</td>
                 <td className={td}>{formatPrice(s.basic + s.allowance)}</td>
                 <td className={td}>{s.bonus ? formatPrice(s.bonus) : "—"}</td>
                 <td className={td}>{s.commission ? formatPrice(s.commission) : "—"}</td>
@@ -47,7 +47,7 @@ export default async function PayrollMonthPage({ params }: { params: Promise<{ m
             ))}</tbody>
           </table>
         </div>
-        <p className="border-t border-line px-5 py-3 text-[12.5px] text-muted">Unpaid days come from approved unpaid leave on the timesheet, plus any you add for absences. Monthly TDS projects this month&apos;s pay over 12 months; year-end differences are settled by your accountant. Deposit SSF within 15 days of month end and TDS by the IRD deadline.</p>
+        <p className="border-t border-line px-5 py-3 text-[12.5px] text-muted">Unpaid days come from approved unpaid leave on the timesheet, missed shifts a manager decided were unpaid (People → Missed shifts), plus any you add. Monthly TDS projects this month&apos;s pay over 12 months; year-end differences are settled by your accountant. Deposit SSF within 15 days of month end and TDS by the IRD deadline.</p>
       </Card>
     </>
   );

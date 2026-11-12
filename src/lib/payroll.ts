@@ -9,9 +9,10 @@ import { timesheet } from "./people";
 import { computeSlip, fiscalYearOf, workingDaysIn, type Band, type TaxYear } from "./payroll-rules";
 import { formatPrice } from "./utils";
 import { commissionByPerson } from "./commissions";
+import { absencesForPayroll } from "./absences";
 
 // Monthly payroll, owner only. A run for a month is built from each person's salary terms (Employment) and
-// the timesheet (unpaid leave), with tax from the fiscal year's confirmed bands. While DRAFT it can be
+// the timesheet (unpaid leave) and no-shows a manager decided were unpaid (Absence), with tax from the fiscal year's confirmed bands. While DRAFT it can be
 // rebuilt and adjusted (bonus, extra unpaid days); APPROVED freezes it; PAID posts the cost to Expenses
 // (gross salaries + employer SSF) so it shows in the P&L. Approved runs are never edited, only reopened
 // before they're paid.
@@ -78,10 +79,11 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
   const run = await tx.payrollRun.findUnique({ where: { month }, include: { slips: true } });
   if (run && run.status !== "DRAFT") throw new PayrollError(`${month} payroll is already ${run.status.toLowerCase()}. Reopen it first.`);
   const r = run ?? (await tx.payrollRun.create({ data: { month, fiscalYear: fy, createdById: owner.id }, include: { slips: true } }));
-  const [staff, sheet, commission] = await Promise.all([
+  const [staff, sheet, commission, absences] = await Promise.all([
     tx.employment.findMany({ where: { active: true }, include: { user: { select: { id: true, role: true } } } }),
     timesheet(month, { all: true }),
     commissionByPerson(month),
+    absencesForPayroll(tx, month),
   ]);
   const workingDays = workingDaysIn(month, store.people.weeklyOff);
   const keep = new Set<string>();
@@ -89,10 +91,11 @@ export async function buildRun(tx: Tx, owner: Actor, month: string, today = ktmD
     const t = sheet.find((x) => x.userId === e.userId);
     const prev = r.slips.find((s) => s.userId === e.userId);
     const extra = prev?.extraUnpaidDays ?? 0, bonus = prev?.bonus ?? 0;
-    const unpaidDays = Math.min(workingDays, (t?.unpaidLeaveDays ?? 0) + extra);
+    const absenceDays = absences.unpaid.get(e.userId) ?? 0;
+    const unpaidDays = Math.min(workingDays, (t?.unpaidLeaveDays ?? 0) + absenceDays + extra);
     const earned = commission.get(e.userId) ?? 0;
     const s = computeSlip({ basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, unpaidDays, inSsf: e.inSsf, married: e.married }, year);
-    const data = { basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, inSsf: e.inSsf, married: e.married, ...slipFields(s) };
+    const data = { basic: e.basic, allowance: e.allowance, bonus, commission: earned, workingDays, daysWorked: t?.days ?? 0, leaveDays: t?.leaveDays ?? 0, unpaidDays, extraUnpaidDays: extra, absenceDays, inSsf: e.inSsf, married: e.married, ...slipFields(s) };
     await tx.payslip.upsert({ where: { runId_userId: { runId: r.id, userId: e.userId } }, create: { runId: r.id, userId: e.userId, ...data }, update: data });
     keep.add(e.userId);
   }
@@ -119,6 +122,12 @@ export async function approveRun(tx: Tx, owner: Actor, month: string) {
   const r = await tx.payrollRun.findUnique({ where: { month }, include: { _count: { select: { slips: true } } } });
   if (!r) throw new PayrollError("No payroll for that month.");
   if (!r._count.slips) throw new PayrollError("Nobody is on this payroll.");
+  // every no-show in the month decided, and the draft built on those decisions
+  const absences = await absencesForPayroll(tx, month);
+  if (absences.open) throw new PayrollError(`${absences.open} missed shift(s) in ${month} still to decide (People → Absences). Decide them, then rebuild.`);
+  const slips = await tx.payslip.findMany({ where: { runId: r.id }, select: { userId: true, absenceDays: true } });
+  const stale = slips.some((x) => x.absenceDays !== (absences.unpaid.get(x.userId) ?? 0));
+  if (stale) throw new PayrollError("Absences were decided after this draft was built. Rebuild it first.");
   const upd = await tx.payrollRun.updateMany({ where: { id: r.id, status: "DRAFT" }, data: { status: "APPROVED", approvedById: owner.id, approvedAt: new Date() } });
   if (!upd.count) throw new PayrollError(`${month} payroll is already ${r.status.toLowerCase()}.`);
   await audit(tx, owner, { action: "payroll.approve", entity: ["PayrollRun", r.id], summary: `Payroll ${month} approved (${r._count.slips} payslip(s))` });

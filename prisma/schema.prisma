@@ -209,6 +209,7 @@ model User {
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
   rosterShifts       RosterShift[]
+  absences           Absence[]       @relation("AbsencePerson")
   swapsOffered       ShiftSwap[]     @relation("SwapFrom")
   swapsReceived      ShiftSwap[]     @relation("SwapTo")
   employment         Employment?
@@ -579,6 +580,7 @@ model Store {
   returns          Return[]
   rosterShifts     RosterShift[]
   rosterWeeks      RosterWeek[]
+  absences         Absence[]
   damage           DamageEntry[]
   /// fewest people the roster should have on each open day
   minStaff         Int               @default(2)
@@ -1534,6 +1536,43 @@ model Attendance {
   @@index([clockOut])
 }
 
+/// A published shift with no clock-in (found by the hourly job), for a manager to decide. UNPAID takes a day's pay
+/// in that month's payroll; LEAVE books it as approved leave (from the person's balance); WORKED means they were
+/// there and forgot to clock in (an attendance entry is added for the shift). Payroll won't approve a month with
+/// OPEN absences in it.
+model Absence {
+  id             String        @id @default(cuid())
+  /// the shift that was missed (kept even if the shift is later removed from the roster)
+  shiftId        String?       @unique
+  shift          RosterShift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User          @relation("AbsencePerson", fields: [userId], references: [id])
+  storeId        String
+  store          Store         @relation(fields: [storeId], references: [id])
+  /// Nepal calendar date YYYY-MM-DD, and the shift's times "HH:MM"
+  date           String
+  start          String
+  end            String
+  status         AbsenceStatus @default(OPEN)
+  leaveRequestId String?
+  leaveRequest   LeaveRequest? @relation(fields: [leaveRequestId], references: [id])
+  decidedById    String?
+  decidedAt      DateTime?
+  note           String?
+  createdAt      DateTime      @default(now())
+
+  @@index([status, date])
+  @@index([userId, date])
+  @@index([storeId, status])
+}
+
+enum AbsenceStatus {
+  OPEN
+  UNPAID
+  LEAVE
+  WORKED
+}
+
 enum LeaveStatus {
   PENDING
   APPROVED
@@ -1559,6 +1598,7 @@ model LeaveRequest {
   decidedAt    DateTime?
   decisionNote String?
   createdAt    DateTime    @default(now())
+  absences     Absence[]
 
   @@index([userId, fromDate])
   @@index([status, createdAt])
@@ -1638,6 +1678,8 @@ model Payslip {
   unpaidDays      Int
   /// extra unpaid days the owner added (absences not on the timesheet)
   extraUnpaidDays Int        @default(0)
+  /// no-shows a manager decided were unpaid (Absence UNPAID in the month); part of unpaidDays
+  absenceDays     Int        @default(0)
   inSsf           Boolean
   married         Boolean
   earnedBasic     Int
@@ -2444,6 +2486,7 @@ model RosterShift {
 
   swaps     ShiftSwap[] @relation("SwapShift")
   swapsBack ShiftSwap[] @relation("SwapBack")
+  absence   Absence?
 
   @@unique([userId, date])
   @@index([storeId, date])

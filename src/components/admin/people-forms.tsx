@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { askForLeave, clockInAt, clockOutNow, decideLeaveRequest, fixAttendance, withdrawLeave } from "@/actions/admin/people";
+import { askForLeave, clockInAt, clockOutNow, decideLeaveRequest, decideMissedShift, fixAttendance, reopenMissedShift, withdrawLeave } from "@/actions/admin/people";
 import { cn } from "@/lib/utils";
 import { Card } from "./ui";
 
@@ -87,4 +87,36 @@ export function FixEntryForm({ id, clockIn, clockOut }: { id: string; clockIn: s
       <button className="h-9 rounded-md bg-ink px-3 text-[13px] font-medium text-white disabled:opacity-40" disabled={pending || f.reason.trim().length < 3}>Save</button>
     </form>
   );
+}
+
+/** One missed shift: unpaid, booked as leave (a type with days left), or worked (with how you know). */
+export function AbsenceDecide({ id, name, leaveTypes }: { id: string; name: string; leaveTypes: { key: string; label: string; left: number | null }[] }) {
+  const [mode, setMode] = useState<"" | "LEAVE" | "WORKED">("");
+  const usable = leaveTypes.filter((t) => t.left == null || t.left >= 1);
+  const [type, setType] = useState(usable[0]?.key ?? "");
+  const [note, setNote] = useState("");
+  const { pending, run } = useRun();
+  const small = "h-8 rounded-md border border-line px-3 text-[13px] disabled:opacity-40";
+  if (!mode) return (
+    <div className="flex flex-wrap gap-2">
+      <button className={cn(small, "border-danger/40 text-danger")} disabled={pending} onClick={() => { if (confirm(`Record this as an unpaid day for ${name}? A day's pay comes off this month and they get an SMS.`)) run(() => decideMissedShift({ id, decision: "UNPAID" }), "Recorded as unpaid"); }}>Unpaid</button>
+      <button className={small} disabled={pending || !usable.length} title={usable.length ? undefined : "No leave left"} onClick={() => setMode("LEAVE")}>Take as leave</button>
+      <button className={small} disabled={pending} onClick={() => setMode("WORKED")}>They worked</button>
+    </div>
+  );
+  return (
+    <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); run(() => decideMissedShift({ id, decision: mode, leaveType: mode === "LEAVE" ? type : undefined, note }), mode === "LEAVE" ? "Booked as leave" : "Recorded as worked", () => setMode("")); }}>
+      {mode === "LEAVE" && (
+        <label className="text-[12px] text-muted">Leave<select aria-label="Kind of leave" className={cn(input, "h-9")} value={type} onChange={(e) => setType(e.target.value)}>{usable.map((t) => <option key={t.key} value={t.key}>{t.label}{t.left != null ? ` (${t.left} left)` : ""}</option>)}</select></label>
+      )}
+      <label className="min-w-48 flex-1 text-[12px] text-muted">{mode === "WORKED" ? "How do you know?" : "Note (optional)"}<input className={cn(input, "h-9")} value={note} onChange={(e) => setNote(e.target.value)} placeholder={mode === "WORKED" ? "e.g. on the till all day, checked the sales" : "e.g. phoned in sick"} /></label>
+      <button className="h-9 rounded-md bg-ink px-3 text-[13px] font-medium text-white disabled:opacity-40" disabled={pending || (mode === "WORKED" && note.trim().length < 3)}>Save</button>
+      <button type="button" className="h-9 px-2 text-[13px] underline underline-offset-4" onClick={() => setMode("")}>Back</button>
+    </form>
+  );
+}
+
+export function AbsenceReopen({ id }: { id: string }) {
+  const { pending, run } = useRun();
+  return <button className="text-[13px] underline underline-offset-4 disabled:opacity-40" disabled={pending} onClick={() => { const why = prompt("Why take this decision back? (kept in the record)"); if (why !== null) run(() => reopenMissedShift(id, why), "Back to decide"); }}>Take back</button>;
 }

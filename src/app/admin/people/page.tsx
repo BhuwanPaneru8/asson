@@ -25,18 +25,20 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const prev = (() => { const d = new Date(`${month}-15T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
   const next = (() => { const d = new Date(`${month}-15T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString().slice(0, 7); })();
   const inScope = scope.all ? {} : { storeId: { in: scope.storeIds } };
-  const [inNow, pendingAll, toFix, sheet] = await Promise.all([
+  const [inNow, pendingAll, toFix, sheet, missed] = await Promise.all([
     db.attendance.findMany({ where: { ...inScope, clockOut: null }, orderBy: { clockIn: "asc" }, include: { user: { select: { name: true, role: true } }, store: { select: { name: true } } } }),
     db.leaveRequest.findMany({ where: { status: "PENDING", userId: { not: me.id } }, orderBy: { fromDate: "asc" }, include: { user: { select: { name: true } } } }),
     db.attendance.findMany({ where: { ...inScope, autoClosed: true }, orderBy: { clockIn: "desc" }, take: 50, include: { user: { select: { name: true } }, store: { select: { code: true } } } }),
     timesheet(month, scope),
+    db.absence.count({ where: { ...inScope, status: "OPEN" } }),
   ]);
   const pending = [];
   for (const r of pendingAll) if (await managesPerson(db, me, scope, r.userId)) pending.push(r);
   const t = now();
   return (
     <>
-      <PageHeader title="People" description="Who's working now, leave waiting for you, entries to fix, and each person's month: the record payroll is built on." />
+      <PageHeader title="People" description="Who's working now, leave waiting for you, entries to fix, and each person's month: the record payroll is built on." actions={<Link href="/admin/people/absences" className="text-[13.5px] underline underline-offset-4">Missed shifts{missed ? ` (${missed} to decide)` : ""}</Link>} />
+      {missed > 0 && <Link href="/admin/people/absences" className="mb-4 block rounded-lg border border-danger/30 bg-danger/5 px-5 py-3 text-[13.5px]"><span className="font-medium">{missed} missed shift{missed === 1 ? "" : "s"} to decide:</span> unpaid, leave or worked. Payroll waits for these. →</Link>}
       <div className="grid gap-4 xl:grid-cols-2">
         <Card title={`Working now (${inNow.length})`}>
           {!inNow.length ? <p className="p-5 text-[13.5px] text-muted">Nobody is clocked in at your locations.</p> : (

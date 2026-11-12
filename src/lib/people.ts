@@ -5,6 +5,7 @@ import { audit, type AuditActor } from "./audit";
 import { store } from "./config";
 import { ktmDate } from "./pos";
 import { canActAt, requireStoreAccess, scopeFor, type Scope } from "./scope";
+import { settleByLeave } from "./absences";
 
 // Attendance (clock in/out at a location) and leave (request → manager approves), the record payroll is
 // built on. Times are stored UTC; days are Nepal calendar days (ktmDate). One open entry per person: clocking
@@ -138,7 +139,8 @@ export async function decideLeave(tx: Tx, manager: Actor, id: string, approve: b
   const upd = await tx.leaveRequest.updateMany({ where: { id, status: "PENDING" }, data: { status: approve ? "APPROVED" : "REJECTED", decidedById: manager.id, decidedAt: new Date(), decisionNote: note || null } });
   if (!upd.count) throw new PeopleError("Someone else just decided this request.");
   const t = leaveType(r.type);
-  await audit(tx, manager, { action: approve ? "leave.approve" : "leave.reject", entity: ["LeaveRequest", id], summary: `${leaveNo(r.number)} ${r.user.name}: ${t?.label ?? r.type}, ${r.fromDate} to ${r.toDate} (${r.days} day${r.days === 1 ? "" : "s"}) ${approve ? "approved" : "rejected"}${note ? `: ${note}` : ""}` });
+  const settled = approve ? await settleByLeave(tx, r, manager) : 0; // missed shifts on those days are now leave
+  await audit(tx, manager, { action: approve ? "leave.approve" : "leave.reject", entity: ["LeaveRequest", id], summary: `${leaveNo(r.number)} ${r.user.name}: ${t?.label ?? r.type}, ${r.fromDate} to ${r.toDate} (${r.days} day${r.days === 1 ? "" : "s"}) ${approve ? "approved" : "rejected"}${note ? `: ${note}` : ""}${settled ? `; ${settled} missed shift(s) settled as leave` : ""}` });
   if (r.user.phone && /^9[678]\d{8}$/.test(r.user.phone)) {
     await tx.notification.create({ data: { channel: "SMS", template: "leave_decided", to: r.user.phone, body: `${store.name}: your ${t?.label.toLowerCase() ?? "leave"} ${r.fromDate} to ${r.toDate} was ${approve ? "approved" : "not approved"}${note ? ` (${note.slice(0, 60)})` : ""}.` } });
   }

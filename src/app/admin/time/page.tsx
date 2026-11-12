@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ktmDate } from "@/lib/pos";
 import { balances, leaveNo, leaveType, minutesOf } from "@/lib/people";
 import { commissionsFor } from "@/lib/commissions";
+import { DECISION_LABEL, myAbsences } from "@/lib/absences";
 import { scopeFor, storeFilter } from "@/lib/scope";
 import Link from "next/link";
 import { formatDateTime, formatPrice, now } from "@/lib/utils";
@@ -18,7 +19,7 @@ export default async function MyTimePage() {
   const scope = await scopeFor(me);
   const today = ktmDate();
   const monthStart = new Date(`${today.slice(0, 7)}-01T00:00:00+05:45`);
-  const [locations, open, entries, bal, requests, slips, mySales] = await Promise.all([
+  const [locations, open, entries, bal, requests, slips, mySales, missed] = await Promise.all([
     db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } }),
     db.attendance.findFirst({ where: { userId: me.id, clockOut: null }, include: { store: { select: { name: true } } } }),
     db.attendance.findMany({ where: { userId: me.id, clockIn: { gte: monthStart } }, orderBy: { clockIn: "desc" }, include: { store: { select: { code: true } } } }),
@@ -26,6 +27,7 @@ export default async function MyTimePage() {
     db.leaveRequest.findMany({ where: { userId: me.id }, orderBy: { createdAt: "desc" }, take: 20 }),
     db.payslip.findMany({ where: { userId: me.id, run: { status: "PAID" } }, orderBy: { run: { month: "desc" } }, take: 12, select: { id: true, net: true, run: { select: { month: true } } } }),
     commissionsFor(today.slice(0, 7), { userIds: [me.id] }),
+    myAbsences(me.id, today),
   ]);
   const t = now();
   const month = entries.reduce((s, e) => s + (e.clockOut ? minutesOf(e) : 0), 0);
@@ -42,6 +44,14 @@ export default async function MyTimePage() {
               ))}</ul>
             )}
           </Card>
+          {missed.length > 0 && (
+            <Card title="Missed shifts">
+              <ul className="divide-y divide-line text-[13.5px]">{missed.map((a) => (
+                <li key={a.id} className="flex justify-between gap-3 px-5 py-2"><span>{a.day} {a.label} <span className="text-muted">· {a.store}</span></span><Pill tone={a.status === "UNPAID" ? "danger" : a.status === "OPEN" ? "warn" : "neutral"}>{a.status === "OPEN" ? "manager to decide" : DECISION_LABEL[a.status].toLowerCase()}</Pill></li>
+              ))}</ul>
+              <p className="border-t border-line px-5 py-2.5 text-[12px] text-muted">You were rostered but didn&apos;t clock in. If you were ill, ask for sick leave for that day; if you worked, tell your manager.</p>
+            </Card>
+          )}
           <Card title="Leave this year">
             <table className="w-full text-[13.5px]"><tbody className="divide-y divide-line">{bal.map((b) => (
               <tr key={b.key}><td className="px-5 py-2"><span className="font-medium">{b.label}</span>{!b.paid && <span className="text-muted"> · unpaid</span>}<span className="block text-[12px] text-muted">{b.note}</span></td>
