@@ -6,7 +6,6 @@ import { Heart, Menu, ShoppingBag, User, ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { useShop } from "./shop-provider";
 import { useT } from "./i18n-provider";
-import { LanguageSwitch } from "./language-switch";
 import type { NavCollection, NavItem } from "./mega-nav";
 
 export function HeaderActions() {
@@ -68,7 +67,6 @@ export function MobileNavButton({ nav, collections, hasSale = true, hasLooks = f
               <Link onClick={close} href="/account/wishlist" className="flex items-center gap-3"><Heart className="h-5 w-5" strokeWidth={1.6} /> {t("nav.wishlist")}</Link>
               <Link onClick={close} href="/track" className="block pl-8 text-muted">{t("nav.track")}</Link>
               <Link onClick={close} href="/help" className="block pl-8 text-muted">{t("nav.help")}</Link>
-              <LanguageSwitch className="pl-7 pt-2 text-[15px]" />
             </div>
           </div>
         ) : (

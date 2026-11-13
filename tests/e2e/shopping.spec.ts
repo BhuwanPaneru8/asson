@@ -50,13 +50,11 @@ test("ops staff confirm the new order", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Mark as packed" })).toBeVisible();
 });
 
-test("a shopper switches to Nepali and it sticks", async ({ page }) => {
+test("the shop is in English for everyone, with no language switch (Nepali shop switched off)", async ({ browser }) => {
+  const page = await (await browser.newContext({ locale: "ne-NP", extraHTTPHeaders: { "Accept-Language": "ne-NP,ne;q=0.9" } })).newPage();
+  await page.context().addCookies([{ name: "asson_lang", value: "ne", url: "http://localhost:3100" }]); // even someone who chose Nepali before
   await page.goto("/c/women");
-  await page.getByRole("button", { name: "नेपाली" }).first().click();
-  await expect(page.locator("html")).toHaveAttribute("lang", "ne");
-  await expect(page.getByRole("link", { name: "गृहपृष्ठ" })).toBeVisible();
-  await page.goto("/p/floral-midi-wrap-dress");
-  await expect(page.getByRole("button", { name: /झोलामा थप्नुहोस्|सकियो/ }).first()).toBeVisible();
-  await page.getByRole("button", { name: "English" }).first().click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("button", { name: "नेपाली" })).toHaveCount(0);
+  await expect(page.getByText("Free delivery over Rs. 2,500")).toHaveCount(0); // the top bar is gone
 });

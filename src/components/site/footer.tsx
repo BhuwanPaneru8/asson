@@ -4,7 +4,6 @@ import { store, whatsappUrl } from "@/lib/config";
 import { getProductRail } from "@/lib/catalog";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter";
-import { LanguageSwitch } from "./language-switch";
 import { BackToTop } from "./back-to-top";
 import { getT } from "@/lib/i18n/server";
 import type { MessageKey } from "@/lib/i18n";
@@ -28,7 +27,6 @@ export async function Footer() {
           <Logo />
           <p className="mt-4 max-w-xs text-[14.5px] leading-relaxed text-ink-soft">{store.tagline} {t("footer.districts")}</p>
           <div className="mt-6 max-w-sm"><NewsletterForm /></div>
-          <LanguageSwitch className="mt-5 text-[14px]" />
         </div>
 
         {/* phones: each column folds, so the footer is a short list instead of a long scroll */}

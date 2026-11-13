@@ -272,7 +272,6 @@ export const POLICIES: Policy[] = [
         { list: [
           "Sign-in (tl_session): keeps you signed in. Needed for your account and checkout.",
           "Bag (tl_cart): remembers what's in your bag.",
-          "Language (asson_lang): remembers नेपाली or English, for a year.",
           "District (asson_district): remembers your district so delivery fees and times are right.",
           "Referral (asson_ref): remembers a friend's referral code until you order.",
           "Recently viewed and recent searches (asson_recent, browser storage): shown back to you only, on this device.",
