@@ -6,6 +6,7 @@ import { can, type Role } from "./permissions";
 import { ktmDate } from "./pos";
 import type { Scope } from "./scope";
 import { addDays, rosterOverview, weekStartOf } from "./rosters";
+import { pulseToday } from "./pulse";
 import { swapsToApprove } from "./shift-swaps";
 import { trainingMatrix } from "./training";
 import { cashPosition } from "./cash";
@@ -86,6 +87,18 @@ export async function attention(user: { id: string; role: string }, scope: Scope
     add("noshow", "danger", absences, (n) => `${s(n, "missed shift")} to decide: unpaid, leave or worked`, "/admin/people/absences");
     add("rosters", "warn", rosters.filter((r) => r.shifts > 0 ? !r.published : true).length, (n) => `${s(n, "location")} without a published roster for next week`, `/admin/rosters?week=${nextWeek}`);
     add("training", "warn", training.rows.filter((r) => r.of > 0 && r.done < r.of).length, (n) => `${s(n, "person", "people")} with training still to sign`, "/admin/training");
+  })());
+
+  // the business's vital signs: a KPI far below (or, for cancellations, above) its usual level for that weekday
+  if (can(role, "insights")) jobs.push((async () => {
+    const { kpis } = await pulseToday();
+    for (const k of kpis) {
+      if (k.ownerOnly && !can(role, "finance")) continue;
+      const bad = k.verdict.strength === "unusual" && (k.verdict.level === "low") === (k.goodWhen === "high");
+      if (!bad || k.yesterday == null) continue;
+      const f = (v: number) => (k.format === "money" ? formatPrice(Math.round(v)) : k.format === "pct" ? `${(v * 100).toFixed(1)}%` : String(Math.round(v)));
+      add(`kpi-${k.key}`, "danger", 1, () => `${k.label} unusually ${k.verdict.level} yesterday: ${f(k.yesterday!)} vs a usual ${f(k.verdict.usual)}`, "/admin/insights?tab=pulse");
+    }
   })());
 
   if (can(role, "inventory.adjust")) jobs.push((async () => {

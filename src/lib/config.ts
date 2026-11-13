@@ -139,6 +139,7 @@ export const store = {
     leadTimeDays: 14, // typical days from placing a purchase order to counting it in
     coverDays: 45, // how long a reorder should last once it arrives (same as the old reorder rule)
     deadStockDays: 90, // in stock this long with no sale = dead stock
+    festivalUplift: 1.5, // festival weeks sell this many times an ordinary week, until a year of history says otherwise (owner to confirm)
   },
   /** Click-and-collect at shops marked as pickup points (Admin → Locations). Free; pay at the counter. */
   pickup: {
