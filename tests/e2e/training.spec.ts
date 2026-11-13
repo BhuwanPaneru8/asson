@@ -11,7 +11,7 @@ test("the owner loads the starter procedures; a cashier reads one from Today and
   }
   await expect(page.getByRole("link", { name: /Selling at the till/ })).toBeVisible();
 
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "cashier", "/admin/today");
   const card = page.getByRole("link", { name: /Selling at the till/ });
   await expect(card).toBeVisible();

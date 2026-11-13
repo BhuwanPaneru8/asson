@@ -8,6 +8,16 @@
 
 import { store } from "./config";
 import { formatPrice } from "./utils";
+import { parseIds } from "./marketing-shared";
+
+// Ad and analytics tools switched on for this shop (server environment; see lib/marketing.ts). The cookie and
+// privacy pages name exactly these, so they can't claim more or less than the site does.
+const ads = parseIds({ meta: process.env.META_PIXEL_ID, tiktok: process.env.TIKTOK_PIXEL_ID, ga4: process.env.GA4_MEASUREMENT_ID });
+const adTools = [
+  ads.meta && "Meta (Facebook and Instagram) pixel: _fbp, _fbc",
+  ads.tiktok && "TikTok pixel: _ttp, ttcsid",
+  ads.ga4 && "Google Analytics: _ga, _ga_*",
+].filter((x): x is string => !!x);
 
 export type Block = string | { list: string[] } | { note: string };
 export type Section = { id: string; title: string; blocks: Block[] };
@@ -132,6 +142,7 @@ export const POLICIES: Policy[] = [
           "SMS providers: your phone number and the message.",
           store.onlinePaymentsLive ? "Payment providers (eSewa, Khalti): the order amount and reference." : "Payment providers (eSewa, Khalti), once online payment is available: the order amount and reference.",
           "Our hosting and security providers, who store and protect the site and its backups under contract.",
+          ...(adTools.length ? ["Advertising and analytics partners (" + [ads.meta && "Meta", ads.tiktok && "TikTok", ads.ga4 && "Google"].filter(Boolean).join(", ") + "), only if you choose \"Accept all\" on our cookie banner: the pages you visit and what you add to your bag or buy on this site. For a purchase we may also send Meta your email and phone number in scrambled (hashed) form so it can match the order to an ad; they can't read them back from that."] : []),
           "Authorities, when the law requires it (for example, tax authorities or the police with a lawful request).",
         ] },
       ] },
@@ -268,7 +279,9 @@ export const POLICIES: Policy[] = [
     summary: "The small files this site stores in your browser, and why.",
     sections: [
       { id: "what", title: "What we use", blocks: [
-        "We only use cookies and browser storage that the shop needs to work, and to remember your choices. We don't use advertising or third-party tracking cookies.",
+        adTools.length
+          ? "We use cookies and browser storage that the shop needs to work, and to remember your choices. Advertising and analytics cookies are used only if you choose \"Accept all\" on our cookie banner."
+          : "We only use cookies and browser storage that the shop needs to work, and to remember your choices. We don't use advertising or third-party tracking cookies.",
         { list: [
           "Sign-in (tl_session): keeps you signed in. Needed for your account and checkout.",
           "Bag (tl_cart): remembers what's in your bag.",
@@ -276,11 +289,19 @@ export const POLICIES: Policy[] = [
           "Referral (asson_ref): remembers a friend's referral code until you order.",
           "Recently viewed and recent searches (asson_recent, browser storage): shown back to you only, on this device.",
           "Your phone number for stock alerts (browser storage), so you don't have to type it twice.",
+          ...(adTools.length ? ["Your cookie choice (asson_consent): remembers whether you accepted advertising cookies, for 6 months."] : []),
         ] },
       ] },
+      ...(adTools.length ? [{ id: "ads", title: "Advertising and analytics (only with your permission)", blocks: [
+        "If you choose \"Accept all\", these partners set their own cookies to measure which ads bring people to our shop and to show you more relevant ads on their platforms:",
+        { list: adTools },
+        "They see the pages you visit here and what you add to your bag or buy. Each partner handles that data under its own privacy policy. If you choose \"Only necessary\", none of them is loaded.",
+      ] }] : []),
       { id: "control", title: "Your choices", blocks: [
         "You can clear or block cookies in your browser settings. If you block the sign-in or bag cookies, you won't be able to sign in or check out.",
-        "If we ever add analytics or advertising cookies, we'll ask for your permission first and update this page.",
+        adTools.length
+          ? "You can change your mind at any time with \"Cookie settings\" at the bottom of every page. Choosing \"Only necessary\" stops the partners above from loading on your next page; to remove cookies they already set, clear them in your browser."
+          : "If we ever add analytics or advertising cookies, we'll ask for your permission first and update this page.",
       ] },
     ],
   },

@@ -12,6 +12,7 @@ import { buildRecommendations } from "./recommend";
 import { escalateOverdue } from "./issues";
 import { postRecurring } from "./shop-pl";
 import { runPriceEvents } from "./markdowns";
+import { sendMetaPurchase } from "./marketing";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -47,6 +48,7 @@ export const HANDLERS = {
   "stock.audit": { label: "Nightly stock audit", run: stockAudit, maxAttempts: 1, timeoutMs: 5 * MIN },
   "replenishment.drafts": { label: "Draft shop restock transfers (if switched on)", run: () => autoDraftReplenishment(), maxAttempts: 2, timeoutMs: 5 * MIN },
   "loyalty.birthdays": { label: "Birthday points and greetings", run: () => birthdayRun(), maxAttempts: 3 },
+  "ads.purchase": { label: "Report a purchase to Meta (shoppers who accepted ad cookies)", run: (p) => sendMetaPurchase(p as Parameters<typeof sendMetaPurchase>[0]), maxAttempts: 4 },
   "markdowns.run": { label: "Start and end scheduled sales (prices)", run: () => runPriceEvents(), maxAttempts: 3, timeoutMs: 5 * MIN },
   "jobs.prune": {
     label: "Tidy finished jobs",

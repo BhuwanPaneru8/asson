@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { addToCart } from "@/actions/cart";
 import { placeOrder } from "@/actions/checkout";
 import { session, RedirectError } from "../support/next-mocks";
 import { makeProduct, resetDb } from "../support/db";
+import { sendMetaPurchase } from "@/lib/marketing";
 
 const address = (district: string) => ({ fullName: "Sita Rai", phone: "9841234567", line1: "Ward 4, House 12", city: "Town", district, postalCode: "" });
 const order = (district: string, extra: Partial<Parameters<typeof placeOrder>[0]> = {}) =>
@@ -78,5 +79,58 @@ describe("online checkout (guest, COD)", () => {
     expect((await placed("Kathmandu", { couponCode: "ONCE" })).url).toBeTruthy();
     await newGuest(); await addToCart({ variantId: p.variants[0].id });
     expect((await placed("Kathmandu", { couponCode: "ONCE" })).error).toMatch(/usage limit/);
+  });
+});
+
+describe("Meta purchase report (Conversions API)", () => {
+  beforeEach(resetDb);
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+  const metaOn = () => { vi.stubEnv("META_PIXEL_ID", "1234567890123456"); vi.stubEnv("META_CAPI_TOKEN", "test-token"); };
+
+  async function buy(consent?: string) {
+    const p = await makeProduct({ price: 1599, stock: { M: 5 } });
+    await newGuest();
+    if (consent) session.cookies.set("asson_consent", consent);
+    session.cookies.set("_fbp", "fb.1.1700000000.42");
+    await addToCart({ variantId: p.variants[0].id });
+    expect((await placed("Kathmandu")).url).toBeTruthy();
+    return db.order.findFirstOrThrow({ orderBy: { createdAt: "desc" } });
+  }
+  const queued = () => db.job.findMany({ where: { type: "ads.purchase" } });
+
+  it("is queued with the order only for shoppers who chose Accept all, and only when Meta is set up", async () => {
+    metaOn();
+    const o = await buy("all");
+    const jobs = await queued();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({ key: `ads.purchase:${o.id}`, payload: expect.objectContaining({ orderId: o.id, fbp: "fb.1.1700000000.42" }) });
+
+    await buy("essential");
+    await buy(); // never answered the banner
+    expect(await queued()).toHaveLength(1);
+
+    vi.stubEnv("META_CAPI_TOKEN", ""); // pixel only, no server token
+    await buy("all");
+    expect(await queued()).toHaveLength(1);
+  });
+
+  it("posts the hashed purchase to Meta and fails loudly (to retry) when Meta refuses", async () => {
+    metaOn();
+    const o = await buy("all");
+    const fetchMock = vi.fn(async () => new Response("{\"events_received\":1}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await sendMetaPurchase({ orderId: o.id, ip: "27.34.1.2", userAgent: "UA", fbp: "fb.1.1.2" })).toEqual({ sent: o.id });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://graph.facebook.com/v21.0/1234567890123456/events?access_token=test-token");
+    const body = JSON.parse(String(init.body));
+    expect(body.data[0]).toMatchObject({ event_name: "Purchase", event_id: o.id, custom_data: { value: o.total / 100, currency: "NPR" } });
+    expect(body.data[0].user_data.ph).toHaveLength(1);
+    expect(String(init.body)).not.toContain("9841234567");
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("bad token", { status: 400 })));
+    await expect(sendMetaPurchase({ orderId: o.id })).rejects.toThrow(/Meta Conversions API 400/);
+
+    vi.stubEnv("META_CAPI_TOKEN", "");
+    expect(await sendMetaPurchase({ orderId: o.id })).toEqual({ skipped: "Meta Conversions API is not set up" });
   });
 });

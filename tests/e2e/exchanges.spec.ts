@@ -36,7 +36,7 @@ test("a guest swaps the size of a delivered shirt; the new size goes out free an
   await expect(page.getByText("This order is delivered. No further steps.").or(page.getByRole("button", { name: "Open return" }))).toBeVisible();
 
   // the guest, on their order link, swaps M for another size
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await page.goto(orderUrl);
   await page.getByRole("button", { name: "Exchange a size" }).click();
   const pick = page.getByLabel(/^New size: Oxford Button-Down Shirt M$/);

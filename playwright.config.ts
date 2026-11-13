@@ -21,6 +21,9 @@ export default defineConfig({
     channel: process.env.CI ? undefined : "chrome",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // ad trackers are switched on below (fake IDs) so the cookie banner is tested; every other test has
+    // already answered it with "Only necessary", so the banner never covers what they click
+    storageState: { cookies: [{ name: "asson_consent", value: "essential", domain: "localhost", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" }], origins: [] },
   },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], channel: process.env.CI ? undefined : "chrome" }, testIgnore: /mobile\.spec\.ts/ },
@@ -33,6 +36,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 240_000,
     reuseExistingServer: false, // always start from a freshly seeded database
-    env: { DATABASE_URL: E2E_DB, NEXT_DIST_DIR: ".next-e2e", AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-0001", NEXT_PUBLIC_SITE_URL: `http://localhost:${PORT}`, CRON_SECRET: "e2e-cron-secret", AUTH_CODES_TEST: "1" /* one-time codes shown on screen, as on staging */, MEDIA_DIR: ".next-e2e/media" },
+    env: { DATABASE_URL: E2E_DB, NEXT_DIST_DIR: ".next-e2e", AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-0001", NEXT_PUBLIC_SITE_URL: `http://localhost:${PORT}`, CRON_SECRET: "e2e-cron-secret", AUTH_CODES_TEST: "1" /* one-time codes shown on screen, as on staging */, MEDIA_DIR: ".next-e2e/media", META_PIXEL_ID: "1234567890123456", TIKTOK_PIXEL_ID: "CTEST0000000000000", GA4_MEASUREMENT_ID: "G-TEST000000" },
   },
 });

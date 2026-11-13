@@ -5,6 +5,9 @@ import { getProductRail } from "@/lib/catalog";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter";
 import { BackToTop } from "./back-to-top";
+import { CookieSettingsButton } from "./marketing";
+import { marketingIds } from "@/lib/marketing";
+import { anyTracker } from "@/lib/marketing-shared";
 import { getT } from "@/lib/i18n/server";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -69,6 +72,7 @@ export async function Footer() {
             <Link href="/policies/terms" className="hover:text-ink">{t("footer.terms")}</Link>
             <Link href="/policies/privacy" className="hover:text-ink">{t("footer.privacy")}</Link>
             <Link href="/policies" className="hover:text-ink">{t("footer.policies")}</Link>
+            {anyTracker(marketingIds()) && <CookieSettingsButton label={t("footer.cookieSettings")} />}
             <span>{t("footer.payWith")} {store.onlinePaymentsLive ? `eSewa · Khalti · ${t("pay.cod")}` : t("pay.cod")}</span>
             <BackToTop label={t("footer.backToTop")} />
           </div>

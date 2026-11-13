@@ -7,9 +7,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Suspense } from "react";
 import { NavProgress } from "@/components/site/nav-progress";
+import { Marketing } from "@/components/site/marketing";
+import { marketingIds, readConsent } from "@/lib/marketing";
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
-  const [cart, user] = await Promise.all([getCart(), getCurrentUser()]);
+  const [cart, user, consent] = await Promise.all([getCart(), getCurrentUser(), readConsent()]);
   const wishlist = user ? (await db.wishlistItem.findMany({ where: { userId: user.id }, select: { productId: true } })).map((w) => w.productId) : [];
   return (
     <ShopProvider cart={cart} user={user && { id: user.id, name: user.name, email: user.email, role: user.role }} wishlist={wishlist}>
@@ -19,6 +21,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <main id="main" className="flex-1">{children}</main>
       <Footer />
       <CartDrawer />
+      <Marketing ids={marketingIds()} initial={consent} />
     </ShopProvider>
   );
 }
