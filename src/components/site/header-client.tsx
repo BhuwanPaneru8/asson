@@ -2,20 +2,37 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
+import { AuthPanel } from "@/components/account/auth-panel";
 import { Heart, Menu, ShoppingBag, User, ChevronRight } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { useShop } from "./shop-provider";
 import { useT } from "./i18n-provider";
 import type { NavCollection, NavItem } from "./mega-nav";
 
-export function HeaderActions() {
+export function HeaderActions({ google = false, support }: { google?: boolean; support: { phone: string; whatsapp: string } }) {
   const { cart, user, openCart, wishlist } = useShop();
   const { t } = useT();
+  const pathname = usePathname();
+  const [signIn, setSignIn] = useState(false);
   return (
     <div className="flex items-center">
-      <Link href={user ? "/account" : "/login"} className="hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={user ? t("nav.account") : t("nav.signIn")}>
-        <User className="h-[21px] w-[21px]" strokeWidth={1.6} />
-      </Link>
+      {user ? (
+        <Link href="/account" className="hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={t("nav.account")}>
+          <User className="h-[21px] w-[21px]" strokeWidth={1.6} />
+        </Link>
+      ) : (
+        // signed out: sign in from a side panel, without leaving the page (a link to /login until the page is ready)
+        <a href={`/login?next=${encodeURIComponent(pathname)}`} onClick={(e) => { e.preventDefault(); setSignIn(true); }} role="button" className="hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={t("nav.signInOrCreate")}>
+          <User className="h-[21px] w-[21px]" strokeWidth={1.6} />
+        </a>
+      )}
+      <Sheet open={signIn} onClose={() => setSignIn(false)} side="right" title={t("nav.signIn")}>
+        <div className="p-6">
+          <p className="mb-6 text-[14.5px] text-muted">{t("auth.loginBody")}</p>
+          <AuthPanel next={pathname.startsWith("/login") || pathname.startsWith("/register") ? "/account" : pathname} google={google} support={support} />
+        </div>
+      </Sheet>
       <Link href="/account/wishlist" className="relative hidden p-2.5 hover:bg-cloud sm:inline-flex" aria-label={t("nav.wishlist")}>
         <Heart className="h-[21px] w-[21px]" strokeWidth={1.6} />
         {wishlist.size > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent" />}

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
 import { Logo } from "./logo";
+import { googleEnabled } from "@/lib/google";
+import { store, whatsappUrl } from "@/lib/config";
 import { HeaderActions, MobileNavButton } from "./header-client";
 import { Suspense } from "react";
 import { SearchBar, SearchBarWithQuery } from "./search-bar";
@@ -27,7 +29,7 @@ export async function Header() {
           <div className="ml-auto flex flex-1 items-center justify-end gap-1 lg:flex-none">
             {/* reads the results page's ?q= so the box shows (and reopens with) what was searched */}
             <Suspense fallback={<SearchBar />}><SearchBarWithQuery /></Suspense>
-            <HeaderActions />
+            <HeaderActions google={googleEnabled()} support={{ phone: store.supportPhone, whatsapp: whatsappUrl() }} />
           </div>
         </div>
       </HeaderShell>

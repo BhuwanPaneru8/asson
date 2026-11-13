@@ -33,6 +33,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 240_000,
     reuseExistingServer: false, // always start from a freshly seeded database
-    env: { DATABASE_URL: E2E_DB, NEXT_DIST_DIR: ".next-e2e", AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-0001", NEXT_PUBLIC_SITE_URL: `http://localhost:${PORT}`, CRON_SECRET: "e2e-cron-secret", MEDIA_DIR: ".next-e2e/media" },
+    env: { DATABASE_URL: E2E_DB, NEXT_DIST_DIR: ".next-e2e", AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-0001", NEXT_PUBLIC_SITE_URL: `http://localhost:${PORT}`, CRON_SECRET: "e2e-cron-secret", AUTH_CODES_TEST: "1" /* one-time codes shown on screen, as on staging */, MEDIA_DIR: ".next-e2e/media" },
   },
 });

@@ -36,7 +36,8 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   return { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, job: user.job, permissions: effectivePermissions(user.role, user.job, user.permAdd, user.permRemove) };
 });
 
-export async function createSession(user: { id: string; role: CurrentUser["role"]; tokenVersion: number }) {
+/** remember: false makes it a browser-session cookie (gone when the browser closes, for a shared computer). */
+export async function createSession(user: { id: string; role: CurrentUser["role"]; tokenVersion: number }, opts: { remember?: boolean } = {}) {
   const token = await signSession({ sub: user.id, role: user.role, v: user.tokenVersion });
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
@@ -44,7 +45,7 @@ export async function createSession(user: { id: string; role: CurrentUser["role"
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_MAX_AGE,
+    ...(opts.remember === false ? {} : { maxAge: SESSION_MAX_AGE }),
   });
 }
 

@@ -1,3 +1,4 @@
+import { ResetLinkButton } from "@/components/admin/team-forms";
 import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -47,7 +48,7 @@ export default async function Customers({ searchParams }: { searchParams: Promis
                     <Td className="text-right tabular-nums"><a className="hover:underline" href={`/admin/orders?q=${encodeURIComponent(u.email)}`}>{u._count.orders}</a></Td>
                     <Td className="text-right tabular-nums">{formatPrice(s?._sum.total ?? 0)}</Td>
                     <Td className="whitespace-nowrap text-muted">{s?._max.createdAt ? formatDate(s._max.createdAt) : "—"}</Td>
-                    <Td>{u.role === "CUSTOMER" ? <Pill>{ROLE_LABEL[u.role]}</Pill> : <a href="/admin/team" className="text-[13px] underline underline-offset-4">{ROLE_LABEL[u.role]} · Team &amp; access</a>}</Td>
+                    <Td>{u.role === "CUSTOMER" ? <span className="flex flex-wrap items-center gap-2"><Pill>{ROLE_LABEL[u.role]}</Pill><ResetLinkButton id={u.id} name={u.name} phone={u.phone} /></span> : <a href="/admin/team" className="text-[13px] underline underline-offset-4">{ROLE_LABEL[u.role]} · Team &amp; access</a>}</Td>
                     <Td>{u.role === "CUSTOMER" ? "" : u.role === "ADMIN" ? <span className="text-[13px] text-muted">Everywhere (owner)</span> : <StaffLocations userId={u.id} all={u.allLocations} assigned={u.locations.map((l) => l.storeId)} locations={locations.map((l) => ({ id: l.id, name: l.name }))} editable={can(me, "team.manage")} />}</Td>
                   </tr>
                 );

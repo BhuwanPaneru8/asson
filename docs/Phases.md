@@ -162,7 +162,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ✅ Back-in-stock alerts (SMS via the outbox when stock arrives from any source) + "Customers waiting" demand list on Purchasing
 - ✅ "Complete the look" (staff pair products in the editor) and recently viewed (product page and home)
 - ✅ Product catalogue feed for Google Merchant Center and Meta: `/feeds/products.xml`
-- ⬜ Phone number and OTP sign-in (needs the SMS gateway)
+- 🟡 Phone number and OTP sign-in: built (one-step sign-in, codes, reset by code), live when the SMS gateway is connected; test mode on staging. Also: customer care reset links, "Continue with Google" (needs the owner's Google OAuth client)
 - ⬜ Meta pixel and conversions API, TikTok pixel (need the ad accounts)
 - ✅ Birthday points and refer-a-friend codes (first-order discount for the friend, points for the referrer on delivery)
 - Nepali language (नेपाली) interface

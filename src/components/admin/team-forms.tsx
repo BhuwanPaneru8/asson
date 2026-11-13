@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, Copy, Link2, UserMinus } from "lucide-react";
-import { addMember, changeAccess, newSignInLink, removeMember } from "@/actions/admin/team";
+import { addMember, changeAccess, customerResetLink, newSignInLink, removeMember } from "@/actions/admin/team";
 import { effectivePermissions, jobOf, JOBS, OWNER_ONLY, PERMISSION_INFO, PERMISSIONS, type JobKey, type Permission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
@@ -12,19 +12,19 @@ const btn = "h-10 rounded-md bg-ink px-4 text-[14px] font-medium text-white disa
 const GROUPS = ["Selling", "Orders", "Stock", "Team", "Money", "Insights", "Settings"] as const;
 
 /** The one-time link, ready to copy or send on WhatsApp. */
-function InviteLink({ name, link, phone }: { name: string; link: string; phone?: string | null }) {
+function InviteLink({ name, link, phone, reset = false }: { name: string; link: string; phone?: string | null; reset?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const text = `Hi ${name.split(" ")[0]}, here's your link to set up your Asson staff login (it works once, for 7 days): ${link}`;
+  const text = reset ? `Hi ${name.split(" ")[0]}, here's your link to set a new password for your Asson account (it works once, for 24 hours): ${link}` : `Hi ${name.split(" ")[0]}, here's your link to set up your Asson staff login (it works once, for 7 days): ${link}`;
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { toast.error("Couldn't copy: select the link instead."); } };
   return (
     <div className="mt-3 rounded-md border border-success/30 bg-success/5 p-3 text-[13.5px]">
-      <p className="font-medium">Send this link to {name}. It works once, for 7 days.</p>
+      <p className="font-medium">Send this link to {name}. It works once, for {reset ? "24 hours" : "7 days"}.</p>
       <p className="mt-1.5 break-all rounded bg-white px-2 py-1.5 font-mono text-[12.5px]">{link}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" onClick={copy} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-3 text-[13px]">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy link"}</button>
         <a href={`https://wa.me/${phone ? `977${phone}` : ""}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-3 text-[13px]">Send on WhatsApp</a>
       </div>
-      <p className="mt-2 text-[12px] text-muted">They choose their own password; you never need to know it.</p>
+      <p className="mt-2 text-[12px] text-muted">{reset ? "Only send it after checking it's really them (their order number, address or the phone on the account)." : "They choose their own password; you never need to know it."}</p>
     </div>
   );
 }
@@ -148,4 +148,12 @@ export function MemberActions({ id, name, phone }: { id: string; name: string; p
       {link && <InviteLink name={name} link={link} phone={phone} />}
     </div>
   );
+}
+
+/** Customer care: a one-time link for a customer who can't sign in, after checking it's them. */
+export function ResetLinkButton({ id, name, phone }: { id: string; name: string; phone: string | null }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  if (link) return <InviteLink name={name} link={link} phone={phone} reset />;
+  return <button type="button" disabled={pending} onClick={() => start(async () => { const r = await customerResetLink(id); if (r.ok) setLink(r.link); else toast.error(r.error); })} className="text-[13px] underline underline-offset-4">Reset link</button>;
 }
