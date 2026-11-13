@@ -51,3 +51,11 @@
 /* Devanagari joins letters into clusters; letter-spacing (our tracked eyebrow labels) pulls them apart.
    Uppercase does nothing to Nepali, so the labels simply sit at normal spacing. */
 html:lang(ne) [class*="tracking-"] { letter-spacing: normal; }
+
+/* where the sticky header's bottom edge is: 0 while it's slid away (components/site/header-shell.tsx) */
+:root { --header-offset: 4rem; }
+
+/* page-change bar (components/site/nav-progress.tsx): runs most of the way, then waits for the page */
+@keyframes nav-progress { from { transform: scaleX(0) } to { transform: scaleX(0.85) } }
+.nav-progress-run { transform-origin: left; animation: nav-progress 2.5s cubic-bezier(0.1, 0.7, 0.2, 1) forwards; }
+@media (prefers-reduced-motion: reduce) { .nav-progress-run { animation: none; transform: scaleX(0.85); } }

@@ -38,7 +38,7 @@ export default async function LookPage({ params }: Props) {
       </nav>
       <div className="grid gap-8 lg:grid-cols-12 lg:gap-12">
         <div className="lg:col-span-7">
-          <div className="relative aspect-[4/5] overflow-hidden bg-cloud lg:sticky lg:top-24">
+          <div className="relative aspect-[4/5] overflow-hidden bg-cloud lg:sticky lg:top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300">
             {l.hero && <Image src={l.hero} alt={t("look.alt", { title: l.title })} fill loading="eager" fetchPriority="high" sizes="(min-width:1024px) 58vw, 100vw" className="object-cover" />}
           </div>
         </div>

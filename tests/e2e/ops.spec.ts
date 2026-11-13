@@ -21,7 +21,9 @@ test("HQ sends a message and an opening checklist; the shop reads and ticks it; 
   await expect(cashier.getByRole("listitem").filter({ hasText: `Dashain sale ${tag}` }).getByText(/· read/)).toBeVisible();
   await cashier.getByLabel(`Lights on ${tag}`).check();
   await cashier.getByLabel(`Till float counted ${tag}`).check();
-  // the ticks show at once (optimistic); reload so we only move on once the server has both
+  // the ticks show at once (optimistic): let both saves finish, then reload so we only move on once the server
+  // has both (reloading straight away could cut off the second save: a flaky failure on 13 Nov 2026)
+  await cashier.waitForLoadState("networkidle");
   await cashier.reload();
   await expect(cashier.getByText(new RegExp(`Opening ${tag} · 2/2`)).locator("xpath=..").getByText("Done ✓")).toBeVisible();
 

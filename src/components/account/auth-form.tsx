@@ -42,6 +42,7 @@ export function AuthForm({ mode, next }: { mode: "login" | "register"; next?: st
             </div>
           </Field>
           <Button type="submit" size="lg" className="w-full" loading={pending}>{mode === "login" ? t("nav.signIn") : t("footer.createAccount")}</Button>
+          {mode === "register" && <p className="text-center text-[12.5px] leading-relaxed text-muted">{rich(t("policies.agreeAccount"), { terms: <Link href="/policies/terms" className="underline underline-offset-2 hover:text-ink">{t("policies.terms")}</Link>, privacy: <Link href="/policies/privacy" className="underline underline-offset-2 hover:text-ink">{t("policies.privacy")}</Link> })}</p>}
         </form>
         <p className="mt-6 text-center text-[14px] text-muted">
           {mode === "login" ? rich(t("auth.new"), { link: <Link href={`/register${q}`} className="font-medium text-ink underline underline-offset-4">{t("auth.createLink")}</Link> }) : rich(t("auth.already"), { link: <Link href={`/login${q}`} className="font-medium text-ink underline underline-offset-4">{t("nav.signIn")}</Link> })}

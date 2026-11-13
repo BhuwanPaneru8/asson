@@ -4,12 +4,15 @@ import { store } from "@/lib/config";
 import { formatPrice } from "@/lib/utils";
 import { Logo } from "./logo";
 import { HeaderActions, MobileNavButton } from "./header-client";
-import { SearchBar } from "./search-bar";
+import { Suspense } from "react";
+import { SearchBar, SearchBarWithQuery } from "./search-bar";
 import { MegaNav } from "./mega-nav";
 import { getLookbook } from "@/lib/looks";
 import { getT } from "@/lib/i18n/server";
 import { pick } from "@/lib/i18n";
 import { LanguageSwitch } from "./language-switch";
+import { HeaderShell } from "./header-shell";
+import { AnnouncementBar } from "./announcement-bar";
 
 export async function Header() {
   const [tree, collections, onSale, { t, locale }] = await Promise.all([getCategoryTree(), getCollections(), getProductRail("sale", 1), getT()]);
@@ -21,26 +24,23 @@ export async function Header() {
   return (
     <>
       <div className="bg-ink text-white">
-        <div className="container-page relative flex h-9 items-center justify-center gap-6 text-[12.5px] tracking-wide">
-          <span>{t("bar.freeDelivery", { amount: formatPrice(store.shipping.freeThreshold) })}</span>
-          <span className="hidden sm:inline text-white/40">·</span>
-          <span className="hidden sm:inline">{t("bar.returns", { days: store.returnWindowDays })}</span>
-          <span className="hidden md:inline text-white/40">·</span>
-          <span className="hidden md:inline">{t("bar.cod")}</span>
+        <div className="container-page relative flex h-9 items-center justify-center text-[12.5px] tracking-wide">
+          <AnnouncementBar messages={[t("bar.freeDelivery", { amount: formatPrice(store.shipping.freeThreshold) }), t("bar.returns", { days: store.returnWindowDays }), t("bar.cod")]} />
           <LanguageSwitch className="absolute right-4 hidden text-white lg:flex [&_.text-muted]:text-white/60" />
         </div>
       </div>
-      <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/85">
+      <HeaderShell>
         <div className="container-page flex h-16 items-center gap-4">
           <MobileNavButton nav={nav} collections={featured} hasSale={hasSale} hasLooks={hasLooks} />
           <Logo className="shrink-0" />
           <MegaNav nav={nav} collections={featured} hasSale={hasSale} hasLooks={hasLooks} />
           <div className="ml-auto flex flex-1 items-center justify-end gap-1 lg:flex-none">
-            <SearchBar />
+            {/* reads the results page's ?q= so the box shows (and reopens with) what was searched */}
+            <Suspense fallback={<SearchBar />}><SearchBarWithQuery /></Suspense>
             <HeaderActions />
           </div>
         </div>
-      </header>
+      </HeaderShell>
     </>
   );
 }

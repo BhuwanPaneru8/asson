@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { Prisma, type Gender } from "@prisma/client";
 import { db } from "./db";
 import { sortSizes } from "./config";
+import { rankCompletions, understand, SYNONYMS, type Candidate, type Understood } from "./search-intent";
 
 export const PAGE_SIZE = 24;
 
@@ -63,12 +64,8 @@ export async function getCategoryBySlug(slug: string) {
 
 // ---------- Search ----------
 
-const GENDER_WORDS: Record<string, Gender> = {
-  men: "MEN", mens: "MEN", man: "MEN", male: "MEN", boys: "KIDS", boy: "KIDS",
-  women: "WOMEN", womens: "WOMEN", woman: "WOMEN", ladies: "WOMEN", female: "WOMEN",
-  kids: "KIDS", kid: "KIDS", girls: "KIDS", girl: "KIDS", children: "KIDS",
-};
-const SYNONYMS: Record<string, string> = { tee: "tshirt", tees: "tshirt", tshirts: "tshirt", pant: "trousers", pants: "trousers", sweater: "sweater", jumper: "sweater", denim: "jeans", hoody: "hoodie", hoodies: "hoodie", sari: "saree", kurti: "kurta" };
+/** Part of every search cache key: bump it when ranking, understanding or suggestions change. */
+export const SEARCH_VERSION = "2";
 
 const getColorNames = unstable_cache(
   async () => (await db.variant.findMany({ distinct: ["color"], select: { color: true } })).map((v) => v.color),
@@ -76,54 +73,95 @@ const getColorNames = unstable_cache(
   { tags: ["products"], revalidate: 3600 },
 );
 
+/** Every word a search may be corrected to: what we sell (names, brands, tags) and how it's grouped. */
+const getSearchVocab = unstable_cache(
+  async () => {
+    const [products, categories, colors, sizes] = await Promise.all([
+      db.product.findMany({ where: { status: "ACTIVE" }, select: { name: true, brand: true, tags: true } }),
+      db.category.findMany({ select: { name: true } }),
+      getColorNames(),
+      db.variant.findMany({ distinct: ["size"], select: { size: true } }),
+    ]);
+    const words = new Set<string>();
+    const add = (t: string) => t.toLowerCase().normalize("NFKD").replace(/-/g, "").split(/[^a-z0-9]+/).forEach((w) => { if (w.length > 1 && !/^\d+$/.test(w)) words.add(w); });
+    for (const p of products) { add(p.name); add(p.brand); p.tags.forEach(add); }
+    categories.forEach((c) => add(c.name));
+    Object.values(SYNONYMS).forEach((w) => words.add(w));
+    return { words: [...words], colors, sizes: sizes.map((v) => v.size) };
+  },
+  ["search-vocab"],
+  { tags: ["products"], revalidate: 3600 },
+);
+
+/** What a search means (see lib/search-intent.ts), for the results page and the suggestions box. */
+export async function understandSearch(q: string) {
+  const v = await getSearchVocab();
+  return understand(q, { words: new Set(v.words), colors: v.colors, sizes: v.sizes });
+}
+
 /**
- * Ranked product ids for a free-text query.
- * - colour words ("blue", "olive") become a variant-colour constraint
- * - gender words ("men", "women") become an audience constraint
- * - every remaining word must match by prefix full-text OR fuzzy trigram (typo tolerance)
+ * Ranked product ids for a free-text query, read by `understand` (colours, audience, sizes, prices, corrected
+ * words). Every word must match by prefix full-text or fuzzily against the name; when nothing matches every
+ * word, products matching any of them are returned instead (`relaxed`), so a search never ends empty-handed
+ * when part of it made sense.
  */
+export const searchProducts = unstable_cache(
+  async (q: string, limit = 500): Promise<{ ids: string[]; understood: Understood; relaxed: boolean }> => {
+    const understood = await understandSearch(q);
+    const { words, colors, sizes, gender, minPrice, maxPrice } = understood;
+    const latin = words.filter((w) => !/[\u0900-\u097F]/.test(w));
+    const deva = words.filter((w) => /[\u0900-\u097F]/.test(w) && w.length > 1);
+    if (!words.length && !colors.length && !sizes.length && !gender && minPrice == null && maxPrice == null) return { ids: [], understood, relaxed: false };
+
+    const doc = Prisma.sql`product_search_doc(p."name", p."brand", p."tags", p."description")`;
+    const filters: Prisma.Sql[] = [Prisma.sql`p.status = 'ACTIVE'`];
+    if (colors.length) filters.push(Prisma.sql`EXISTS (SELECT 1 FROM "Variant" v WHERE v."productId" = p.id AND v.color IN (${Prisma.join(colors)}))`);
+    if (sizes.length) filters.push(Prisma.sql`EXISTS (SELECT 1 FROM "Variant" v WHERE v."productId" = p.id AND v.size IN (${Prisma.join(sizes)}) AND v.stock > 0)`);
+    if (gender) filters.push(Prisma.sql`p.gender::text IN (${Prisma.join(gender === "KIDS" ? ["KIDS"] : [gender, "UNISEX"])})`);
+    if (minPrice != null) filters.push(Prisma.sql`p.price >= ${minPrice}`);
+    if (maxPrice != null) filters.push(Prisma.sql`p.price <= ${maxPrice}`);
+    // a word matches by prefix full-text, or fuzzily against the name (handles what spelling correction can't)
+    const wordConds = [
+      ...latin.map((w) => Prisma.sql`(${doc} @@ to_tsquery('simple', ${w + ":*"}) OR ${w} <% p."name")`),
+      ...deva.map((w) => Prisma.sql`(p."nameNe" ILIKE ${"%" + w + "%"} OR p."descriptionNe" ILIKE ${"%" + w + "%"})`),
+    ];
+    const tsq = latin.map((w) => `${w}:*`).join(" | ");
+    const phrase = latin.join(" ");
+    // relevance: how well the text matches (full-text rank, fuzzy name similarity), the whole phrase in the name,
+    // the name ending with the last word searched (English names the thing last: "linen shirt" wants a shirt, so
+    // Relaxed Linen Shirt beats Linen Shirt Dress)
+    // ("linen shirt" above a linen dress and a cotton shirt), a word naming its category ("shirt" → the Shirts
+    // category above a shirt dress), then what sells and is liked (log, so best sellers lead without burying
+    // a better match). In-stock products always come first (ORDER BY below).
+    const rankExpr = latin.length
+      ? Prisma.sql`ts_rank(${doc}, to_tsquery('simple', ${tsq})) * 2 + word_similarity(${phrase}, p."name")
+          + CASE WHEN lower(p."name") LIKE ${"%" + phrase + "%"} THEN 0.6 ELSE 0 END
+          + CASE WHEN lower(p."name") ~ ${"(^|[^a-z])" + latin[latin.length - 1].replace(/[^a-z0-9]/g, "") + "[a-z]*$"} THEN 0.7 ELSE 0 END
+          + CASE WHEN to_tsvector('simple', coalesce(c."name", '')) @@ to_tsquery('simple', ${tsq}) THEN 0.5 ELSE 0 END
+          + ln(1 + p."soldCount") * 0.12 + p."ratingAvg" * 0.04`
+      : Prisma.sql`ln(1 + p."soldCount") * 0.12 + p."ratingAvg" * 0.04`;
+    const run = (all: boolean) => db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('pg_trgm.word_similarity_threshold', '0.4', true)`;
+      const match = wordConds.length ? [Prisma.sql`(${Prisma.join(wordConds, all ? " AND " : " OR ")})`] : [];
+      return tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT p.id FROM "Product" p LEFT JOIN "Category" c ON c.id = p."categoryId"
+        WHERE ${Prisma.join([...filters, ...match], " AND ")}
+        ORDER BY EXISTS (SELECT 1 FROM "Variant" sv WHERE sv."productId" = p.id AND sv.stock > 0) DESC, ${rankExpr} DESC, p."soldCount" DESC
+        LIMIT ${limit}
+      `);
+    });
+    let rows = await run(true);
+    let relaxed = false;
+    if (!rows.length && wordConds.length > 1) { rows = await run(false); relaxed = rows.length > 0; }
+    return { ids: rows.map((r) => r.id), understood, relaxed };
+  },
+  // bump the version whenever ranking or understanding changes, so cached results from the old rules aren't served
+  ["search-products", SEARCH_VERSION],
+  { tags: ["products"], revalidate: 300 },
+);
+
 export async function searchProductIds(q: string, limit = 500): Promise<string[]> {
-  const raw = q.toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s]/g, (c) => (c === "-" ? "" : " ")).split(/\s+/).filter(Boolean).slice(0, 8);
-  // Nepali words (Devanagari) are matched against the owner's Nepali names and descriptions
-  const deva = (q.normalize("NFC").match(/[\u0900-\u097F]+/g) ?? []).filter((w) => w.length > 1).slice(0, 8);
-  if (raw.length === 0 && deva.length === 0) return [];
-  const colorNames = await getColorNames();
-  const colors = new Set<string>();
-  let gender: Gender | null = null;
-  const words: string[] = [];
-  for (const t of raw) {
-    const matched = colorNames.filter((c) => c.toLowerCase().split(" ").includes(t) || c.toLowerCase() === t);
-    if (matched.length) { matched.forEach((c) => colors.add(c)); continue; }
-    if (GENDER_WORDS[t] && raw.length > 1) { gender = GENDER_WORDS[t]; continue; }
-    words.push(SYNONYMS[t] ?? t);
-  }
-  if (words.length === 0 && colors.size === 0 && !gender && deva.length === 0) return [];
-
-  const doc = Prisma.sql`product_search_doc(p."name", p."brand", p."tags", p."description")`;
-  const conds: Prisma.Sql[] = [Prisma.sql`p.status = 'ACTIVE'`];
-  for (const w of words) {
-    // a word matches by prefix full-text, or fuzzily against the name (handles "hodie", "jens")
-    conds.push(Prisma.sql`(${doc} @@ to_tsquery('simple', ${w + ":*"}) OR ${w} <% p."name")`);
-  }
-  for (const w of deva) conds.push(Prisma.sql`(p."nameNe" ILIKE ${"%" + w + "%"} OR p."descriptionNe" ILIKE ${"%" + w + "%"})`);
-  if (colors.size) conds.push(Prisma.sql`EXISTS (SELECT 1 FROM "Variant" v WHERE v."productId" = p.id AND v.color IN (${Prisma.join([...colors])}))`);
-  if (gender) conds.push(Prisma.sql`p.gender::text IN (${Prisma.join(gender === "KIDS" ? ["KIDS"] : [gender, "UNISEX"])})`);
-
-  const tsq = words.length ? words.map((w) => `${w}:*`).join(" | ") : "";
-  const rankExpr = words.length
-    ? Prisma.sql`ts_rank(${doc}, to_tsquery('simple', ${tsq})) * 2 + word_similarity(${words.join(" ")}, p."name")`
-    : Prisma.sql`p."ratingAvg"`;
-
-  const rows = await db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('pg_trgm.word_similarity_threshold', '0.4', true)`;
-    return tx.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT p.id FROM "Product" p
-      WHERE ${Prisma.join(conds, " AND ")}
-      ORDER BY ${rankExpr} DESC, p."soldCount" DESC
-      LIMIT ${limit}
-    `);
-  });
-  return rows.map((r) => r.id);
+  return (await searchProducts(q, limit)).ids;
 }
 
 // ---------- Listing ----------
@@ -383,4 +421,33 @@ export async function getCardsByIds(ids: string[]) {
   const rows = await db.product.findMany({ where: { id: { in: ids }, status: "ACTIVE" }, select: cardSelect });
   const byId = new Map(rows.map((r) => [r.id, toCard(r)]));
   return ids.flatMap((id) => byId.get(id) ?? []);
+}
+
+/** Everything worth suggesting while someone types, with how much it's wanted: what people searched (and
+ * found) in the last 90 days, category names and "Men shirts"-style pairs, and product names. Cached an hour. */
+const getCompletionPool = unstable_cache(
+  async (): Promise<Candidate[]> => {
+    const since = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+    const [terms, tree, products] = await Promise.all([
+      db.searchStat.groupBy({ by: ["term"], where: { day: { gte: since }, lastResults: { gt: 0 } }, _sum: { searches: true }, having: { searches: { _sum: { gte: 2 } } }, orderBy: { _sum: { searches: "desc" } }, take: 500 }),
+      getCategoryTree(),
+      db.product.findMany({ where: { status: "ACTIVE" }, select: { name: true, soldCount: true }, orderBy: { soldCount: "desc" }, take: 2000 }),
+    ]);
+    const pool: Candidate[] = [];
+    // a misspelt term can be popular too: it's suggested as understood ("blu shrt" → "blue shirt")
+    for (const t of terms) { const u = await understandSearch(t.term); pool.push({ text: u.corrected && u.display ? u.display : t.term, weight: (t._sum.searches ?? 0) * 500 }); }
+    for (const r of tree) {
+      // categories outweigh single products: someone typing "s" more likely wants Shirts than one shirt
+      pool.push({ text: r.name, weight: 50_000 });
+      for (const ch of r.children) { pool.push({ text: ch.name, weight: 40_000 }); pool.push({ text: `${r.name} ${ch.name}`, weight: 10_000 }); }
+    }
+    for (const p of products) pool.push({ text: p.name, weight: 5 + p.soldCount });
+    return pool;
+  },
+  ["completion-pool", SEARCH_VERSION],
+  { tags: ["products"], revalidate: 3600 },
+);
+
+export async function searchCompletions(typed: string, limit = 6) {
+  return rankCompletions(typed, await getCompletionPool(), limit);
 }

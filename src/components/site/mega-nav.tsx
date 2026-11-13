@@ -23,12 +23,14 @@ export function MegaNav({ nav, collections, hasSale = true, hasLooks = false }: 
   const leave = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(null), 120); };
 
   const active = nav.find((n) => n.slug === open);
+  // the section you're in: its own page or any of its subcategories
+  const here = (n: NavItem) => pathname === `/c/${n.slug}` || n.children.some((c) => pathname === `/c/${c.slug}`);
 
   return (
     <nav className="ml-6 hidden h-full items-stretch lg:flex" onMouseLeave={leave} aria-label="Main">
       {nav.map((n) => (
         <div key={n.slug} className="flex items-stretch" onMouseEnter={() => enter(n.slug)}>
-          <Link href={`/c/${n.slug}`} className={cn("flex items-center border-b-2 px-3.5 text-[14px] font-medium transition-colors", open === n.slug ? "border-ink" : "border-transparent hover:text-accent")} aria-expanded={open === n.slug} onFocus={() => setOpen(n.slug)}>
+          <Link href={`/c/${n.slug}`} className={cn("flex items-center border-b-2 px-3.5 text-[14px] font-medium transition-colors", open === n.slug || here(n) ? "border-ink" : "border-transparent hover:text-accent")} aria-expanded={open === n.slug} aria-current={here(n) ? "page" : undefined} onFocus={() => setOpen(n.slug)}>
             {n.name}
           </Link>
         </div>
