@@ -42,6 +42,9 @@ export const store = {
   // Order SMS in Nepali for shoppers who ordered in Nepali. Devanagari SMS are Unicode: 70 characters per
   // segment instead of 160, so each message costs about 2–3× more. Off until the owner decides.
   smsInNepali: false,
+  /** The Nepali shop (switch in the header, menu and footer, and Nepali for Nepali-language browsers). Off (owner, 13 Nov 2026):
+   * everyone sees English. The translations stay in lib/i18n/ne.ts; set true and restore the switch to bring it back. */
+  nepaliShop: false,
   codMaxOrder: 3000000, // COD allowed up to Rs 30,000
   returnWindowDays: 7,
   loyalty: {

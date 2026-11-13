@@ -1,9 +1,11 @@
+import { store } from "../config";
 import "server-only";
 import { cookies, headers } from "next/headers";
 import { LOCALE_COOKIE, localise, makeT, type Locale } from "./index";
 
 /** The shopper's language: their choice (cookie), else Nepali if their browser asks for it first, else English. */
 export async function getLocale(): Promise<Locale> {
+  if (!store.nepaliShop) return "en"; // the Nepali shop is switched off: English for everyone (config.ts)
   const chosen = (await cookies()).get(LOCALE_COOKIE)?.value;
   if (chosen === "ne" || chosen === "en") return chosen;
   const accept = (await headers()).get("accept-language") ?? "";

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { addToCart } from "@/actions/cart";
 import { placeOrder, quoteCheckout } from "@/actions/checkout";
 import { trackOrder } from "@/actions/track";
@@ -18,6 +18,9 @@ const order = (district: string, extra: Partial<Parameters<typeof placeOrder>[0]
   placeOrder({ email: "sita@test.local", phone: "9841234567", address: { fullName: "Sita Rai", phone: "9841234567", line1: "Ward 4, House 12", city: "Town", district, postalCode: "" }, shippingMethod: "standard", paymentMethod: "COD", ...extra });
 
 describe("Nepali storefront", () => {
+  // the Nepali shop is switched off for shoppers (config.nepaliShop); its features stay tested so it can come back
+  beforeAll(() => { (store as { nepaliShop: boolean }).nepaliShop = true; });
+  afterAll(() => { (store as { nepaliShop: boolean }).nepaliShop = false; });
   beforeEach(async () => { await resetDb(); session.user = null; session.cookies.clear(); });
 
   it("remembers the shopper's choice; anything else is ignored", async () => {
@@ -50,6 +53,8 @@ describe("Nepali storefront", () => {
 });
 
 describe("Nepali catalogue names, search, SMS and account messages", () => {
+  beforeAll(() => { (store as { nepaliShop: boolean }).nepaliShop = true; });
+  afterAll(() => { (store as { nepaliShop: boolean }).nepaliShop = false; });
   beforeEach(async () => { await resetDb(); session.user = null; session.cookies.clear(); });
 
   it("finds products by their Nepali name; English search still works", async () => {
@@ -96,5 +101,13 @@ describe("Nepali catalogue names, search, SMS and account messages", () => {
     expect((await login(undefined, fd({ email: "nobody@test.local", password: "x" })))?.error).toBe("त्यो इमेल र पासवर्ड हाम्रो रेकर्डसँग मिलेन।");
     const r = await register(undefined, fd({ name: "S", email: "bad", password: "short" }));
     expect(r?.fieldErrors).toMatchObject({ name: "कृपया आफ्नो नाम लेख्नुहोस्", email: "सही इमेल लेख्नुहोस्", password: "कम्तीमा 8 अक्षर प्रयोग गर्नुहोस्" });
+  });
+});
+
+describe("Nepali shop switched off", () => {
+  it("everyone gets English, whatever they chose before or their browser says", async () => {
+    session.cookies.set(LOCALE_COOKIE, "ne");
+    expect(await getLocale()).toBe("en");
+    session.cookies.clear();
   });
 });
