@@ -14,7 +14,7 @@ export const metadata = { title: "Supplier statement" };
 
 export default async function SupplierStatementPage({ params }: { params: Promise<{ supplierId: string }> }) {
   const me = await requirePermission("purchasing");
-  const canVoid = can(me.role, "finance");
+  const canVoid = can(me, "finance");
   const supplier = await db.supplier.findUnique({ where: { id: (await params).supplierId }, select: { id: true, name: true, phone: true, paymentTermsDays: true } });
   if (!supplier) notFound();
   const rows = await supplierStatement(supplier.id);

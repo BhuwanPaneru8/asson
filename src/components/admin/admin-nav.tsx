@@ -3,72 +3,81 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen, CalendarDays, BadgePercent, PackageX, GraduationCap } from "lucide-react";
+import { UserCog, LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen, CalendarDays, BadgePercent, PackageX, GraduationCap } from "lucide-react";
 import { logout } from "@/actions/auth";
-import { can, type Permission, type Role } from "@/lib/permissions";
+import { can, type Permission, type Subject } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Permission; badgeKey?: "orders" | "stock" }[] = [
+type Group = "Sell" | "Orders" | "Stock" | "Shops & team" | "Money" | "Grow" | "Settings";
+const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Permission; badgeKey?: "orders" | "stock"; group?: Group }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard" },
-  { href: "/admin/network", label: "Network", icon: Network, perm: "insights" },
-  { href: "/admin/pos", label: "Point of sale", icon: ScanBarcode, perm: "pos.sell" },
-  { href: "/admin/orders", label: "Orders", icon: Package, perm: "orders", badgeKey: "orders" },
-  { href: "/admin/fulfilment", label: "Fulfilment", icon: PackageOpen, perm: "orders" },
-  { href: "/admin/picking", label: "Pick lists", icon: PackageCheck, perm: "orders" },
-  { href: "/admin/closing", label: "Daily closing", icon: Lock, perm: "closing" },
-  { href: "/admin/cash", label: "Cash", icon: Vault, perm: "closing" },
-  { href: "/admin/cod", label: "COD remittance", icon: Banknote, perm: "closing" },
-  { href: "/admin/care", label: "Customer care", icon: Headset, perm: "care" },
-  { href: "/admin/notifications", label: "Notifications", icon: MessageCircle, perm: "orders" },
-  { href: "/admin/products", label: "Products", icon: Shirt, perm: "catalog.view" },
-  { href: "/admin/lookbook", label: "Lookbook", icon: Sparkles, perm: "catalog.edit" },
-  { href: "/admin/nepali", label: "Nepali names", icon: Languages, perm: "catalog.edit" },
-  { href: "/admin/inventory", label: "Inventory", icon: Boxes, perm: "catalog.view", badgeKey: "stock" },
-  { href: "/admin/production", label: "Production", icon: Factory, perm: "production" },
-  { href: "/admin/scorecard", label: "Shop scorecard", icon: Gauge, perm: "ops.manage" },
-  { href: "/admin/ops", label: "Shop operations", icon: Megaphone, perm: "ops.manage" },
-  { href: "/admin/people", label: "People", icon: UsersRound, perm: "people" },
-  { href: "/admin/rosters", label: "Rosters", icon: CalendarDays, perm: "people" },
-  { href: "/admin/payroll", label: "Payroll", icon: HandCoins, perm: "payroll" },
   { href: "/admin/today", label: "Today", icon: ListChecks, perm: "self.time" },
-  { href: "/admin/visits", label: "Store visits", icon: ClipboardCheck, perm: "self.time" },
-  { href: "/admin/vm", label: "Visual merchandising", icon: Frame, perm: "self.time" },
-  { href: "/admin/issues", label: "Issues", icon: Wrench, perm: "self.time" },
-  { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time" },
-  { href: "/admin/training", label: "Training", icon: GraduationCap, perm: "self.time" },
-  { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers" },
-  { href: "/admin/replenishment", label: "Replenishment", icon: RefreshCw, perm: "transfers" },
-  { href: "/admin/bins", label: "Bins", icon: Grid3x3, perm: "stock.count" },
-  { href: "/admin/counts", label: "Stock counts", icon: ClipboardCheck, perm: "stock.count" },
-  { href: "/admin/damaged", label: "Damaged stock", icon: PackageX, perm: "inventory.adjust" },
-  { href: "/admin/locations", label: "Locations", icon: MapPin, perm: "locations" },
-  { href: "/admin/purchasing", label: "Purchasing", icon: ClipboardList, perm: "purchasing" },
-  { href: "/admin/payables", label: "Payables", icon: Receipt, perm: "purchasing" },
-  { href: "/admin/insights", label: "Insights", icon: Lightbulb, perm: "insights" },
-  { href: "/admin/finance", label: "Finance", icon: Wallet, perm: "finance" },
-  { href: "/admin/customers", label: "Customers & team", icon: Users, perm: "customers" },
-  { href: "/admin/coupons", label: "Coupons", icon: TicketPercent, perm: "coupons" },
-  { href: "/admin/markdowns", label: "Markdowns", icon: BadgePercent, perm: "catalog.edit" },
-  { href: "/admin/delivery", label: "Delivery rates", icon: Truck, perm: "delivery" },
-  { href: "/admin/reviews", label: "Reviews", icon: MessageSquare, perm: "reviews" },
-  { href: "/admin/activity", label: "Activity log", icon: History, perm: "audit" },
-  { href: "/admin/system", label: "System", icon: Activity, perm: "system" },
+  { href: "/admin/pos", label: "Point of sale", icon: ScanBarcode, perm: "pos.sell", group: "Sell" },
+  { href: "/admin/closing", label: "Daily closing", icon: Lock, perm: "closing", group: "Sell" },
+  { href: "/admin/cash", label: "Cash", icon: Vault, perm: "closing", group: "Sell" },
+  { href: "/admin/cod", label: "COD remittance", icon: Banknote, perm: "closing", group: "Sell" },
+  { href: "/admin/orders", label: "Orders", icon: Package, perm: "orders", badgeKey: "orders", group: "Orders" },
+  { href: "/admin/fulfilment", label: "Fulfilment", icon: PackageOpen, perm: "orders", group: "Orders" },
+  { href: "/admin/picking", label: "Pick lists", icon: PackageCheck, perm: "orders", group: "Orders" },
+  { href: "/admin/care", label: "Customer care", icon: Headset, perm: "care", group: "Orders" },
+  { href: "/admin/notifications", label: "Notifications", icon: MessageCircle, perm: "orders", group: "Orders" },
+  { href: "/admin/products", label: "Products", icon: Shirt, perm: "catalog.view", group: "Stock" },
+  { href: "/admin/inventory", label: "Inventory", icon: Boxes, perm: "catalog.view", badgeKey: "stock", group: "Stock" },
+  { href: "/admin/transfers", label: "Transfers", icon: ArrowLeftRight, perm: "transfers", group: "Stock" },
+  { href: "/admin/replenishment", label: "Replenishment", icon: RefreshCw, perm: "transfers", group: "Stock" },
+  { href: "/admin/bins", label: "Bins", icon: Grid3x3, perm: "stock.count", group: "Stock" },
+  { href: "/admin/counts", label: "Stock counts", icon: ClipboardCheck, perm: "stock.count", group: "Stock" },
+  { href: "/admin/damaged", label: "Damaged stock", icon: PackageX, perm: "inventory.adjust", group: "Stock" },
+  { href: "/admin/purchasing", label: "Purchasing", icon: ClipboardList, perm: "purchasing", group: "Stock" },
+  { href: "/admin/production", label: "Production", icon: Factory, perm: "production", group: "Stock" },
+  { href: "/admin/network", label: "Network", icon: Network, perm: "insights", group: "Shops & team" },
+  { href: "/admin/scorecard", label: "Shop scorecard", icon: Gauge, perm: "ops.manage", group: "Shops & team" },
+  { href: "/admin/ops", label: "Shop operations", icon: Megaphone, perm: "ops.manage", group: "Shops & team" },
+  { href: "/admin/people", label: "People", icon: UsersRound, perm: "people", group: "Shops & team" },
+  { href: "/admin/rosters", label: "Rosters", icon: CalendarDays, perm: "people", group: "Shops & team" },
+  { href: "/admin/visits", label: "Store visits", icon: ClipboardCheck, perm: "self.time", group: "Shops & team" },
+  { href: "/admin/vm", label: "Visual merchandising", icon: Frame, perm: "self.time", group: "Shops & team" },
+  { href: "/admin/issues", label: "Issues", icon: Wrench, perm: "self.time", group: "Shops & team" },
+  { href: "/admin/training", label: "Training", icon: GraduationCap, perm: "self.time", group: "Shops & team" },
+  { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time", group: "Shops & team" },
+  { href: "/admin/payables", label: "Payables", icon: Receipt, perm: "purchasing", group: "Money" },
+  { href: "/admin/finance", label: "Finance", icon: Wallet, perm: "finance", group: "Money" },
+  { href: "/admin/payroll", label: "Payroll", icon: HandCoins, perm: "payroll", group: "Money" },
+  { href: "/admin/insights", label: "Insights", icon: Lightbulb, perm: "insights", group: "Grow" },
+  { href: "/admin/customers", label: "Customers", icon: Users, perm: "customers", group: "Grow" },
+  { href: "/admin/coupons", label: "Coupons", icon: TicketPercent, perm: "coupons", group: "Grow" },
+  { href: "/admin/markdowns", label: "Markdowns", icon: BadgePercent, perm: "catalog.edit", group: "Grow" },
+  { href: "/admin/lookbook", label: "Lookbook", icon: Sparkles, perm: "catalog.edit", group: "Grow" },
+  { href: "/admin/nepali", label: "Nepali names", icon: Languages, perm: "catalog.edit", group: "Grow" },
+  { href: "/admin/reviews", label: "Reviews", icon: MessageSquare, perm: "reviews", group: "Grow" },
+  { href: "/admin/team", label: "Team & access", icon: UserCog, perm: "team.manage", group: "Settings" },
+  { href: "/admin/locations", label: "Locations", icon: MapPin, perm: "locations", group: "Settings" },
+  { href: "/admin/delivery", label: "Delivery rates", icon: Truck, perm: "delivery", group: "Settings" },
+  { href: "/admin/activity", label: "Activity log", icon: History, perm: "audit", group: "Settings" },
+  { href: "/admin/system", label: "System", icon: Activity, perm: "system", group: "Settings" },
 ];
 
-export function AdminNav({ badges, role }: { badges: { orders: number; stock: number }; role: Role }) {
+/** The staff menu: only what this person's job lets them use, in sections (a section with nothing in it is hidden). */
+export function AdminNav({ badges, who }: { badges: { orders: number; stock: number }; who: Subject }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const role = who;
+  const mine = NAV.filter((n) => can(who, n.perm));
   const links = (
-    <nav className="flex flex-col gap-0.5 p-3">
-      {NAV.filter((n) => can(role, n.perm)).map(({ href, label, icon: Icon, badgeKey }) => {
+    <nav className="flex flex-col gap-0.5 p-3" aria-label="Staff menu">
+      {mine.map(({ href, label, icon: Icon, badgeKey, group }, i) => {
         const active = href === "/admin" ? path === href : path.startsWith(href);
         const badge = badgeKey ? badges[badgeKey as keyof typeof badges] : 0;
+        const heading = group && group !== mine[i - 1]?.group ? group : null;
         return (
-          <Link key={href} href={href} onClick={() => setOpen(false)} className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-[14px]", active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}>
+          <div key={href} className="contents">
+          {heading && <p className="mb-1 mt-4 px-3 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-white/40">{heading}</p>}
+          <Link href={href} onClick={() => setOpen(false)} className={cn("flex items-center gap-3 rounded-md px-3 py-2 text-[14px]", active ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}>
             <Icon className="h-4 w-4" strokeWidth={1.8} />
             <span className="flex-1">{label}</span>
             {badge > 0 && <span className={cn("rounded-full px-1.5 text-[11px] font-semibold", badgeKey === "stock" ? "bg-warn text-white" : "bg-white text-ink")}>{badge}</span>}
           </Link>
+          </div>
         );
       })}
       {can(role, "approve.discount") && <Link href="/admin/me" onClick={() => setOpen(false)} className={cn("mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-[14px]", path === "/admin/me" ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><KeyRound className="h-4 w-4" /> My approval PIN</Link>}
@@ -80,7 +89,7 @@ export function AdminNav({ badges, role }: { badges: { orders: number; stock: nu
   );
   return (
     <>
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-ink lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col overflow-y-auto overscroll-contain bg-ink lg:flex">
         <div className="flex h-14 items-center px-6 font-display text-xl text-white">asson<span className="text-accent">.</span> <span className="ml-2 font-sans text-[11px] uppercase tracking-widest text-white/50">Admin</span></div>
         {links}
       </aside>

@@ -79,7 +79,7 @@ Error copy rules: say what happened, whether money moved, and what to do next. N
 ## 6. Security
 
 - **MUST** hash passwords with bcrypt (cost ≥ 12). Never log or return them.
-- **MUST** keep sessions in httpOnly, `secure` (in production), `sameSite=lax` cookies. Bump `tokenVersion` on password or role change.
+- **MUST** keep sessions in httpOnly, `secure` (in production), `sameSite=lax` cookies. Bump `tokenVersion` on a password change and whenever someone joins or leaves the team (`lib/team.ts` does): the cookie's role only keeps customers out of `/admin`. Job and permission changes need no bump: pages read the person's level, job and permissions from the database on every request (`getCurrentUser`), so they apply on the next click.
 - **MUST** gate staff and admin pages and actions with `requirePermission("<permission>")` **inside** the page or action. Change who can do what only in `lib/permissions.ts`.
 - **MUST** rate-limit auth, order placement, order tracking, search suggestions and payment start.
 - **MUST** sanitise redirects (`safeNext`: only same-site paths).

@@ -33,20 +33,28 @@ vi.mock("next/headers", () => ({
 // Auth: keep the real permission logic, but take the user from the test session instead of a JWT cookie.
 vi.mock("@/lib/auth", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/auth")>();
-  const { can, homeFor } = await import("@/lib/permissions");
-  const current = async () => session.user;
+  const { can, homeFor, effectivePermissions } = await import("@/lib/permissions");
+  const { db } = await import("@/lib/db");
+  // like the real getCurrentUser: the person's job and permissions are read fresh from the database
+  const current = async () => {
+    if (!session.user) return null;
+    const row = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true, job: true, permAdd: true, permRemove: true } });
+    const role = row?.role ?? session.user.role;
+    return { ...session.user, role, job: row?.job ?? null, permissions: effectivePermissions(role, row?.job, row?.permAdd ?? [], row?.permRemove ?? []) };
+  };
   const requireStaff = async () => {
-    if (!session.user) throw new RedirectError("/login");
-    if (session.user.role === "CUSTOMER") throw new RedirectError("/");
-    return session.user;
+    const u = await current();
+    if (!u) throw new RedirectError("/login");
+    if (u.role === "CUSTOMER") throw new RedirectError("/");
+    return u;
   };
   return {
     ...real,
     getCurrentUser: current,
-    requireUser: async () => { if (!session.user) throw new RedirectError("/login"); return session.user; },
+    requireUser: async () => { const u = await current(); if (!u) throw new RedirectError("/login"); return u; },
     requireStaff,
-    requireAdmin: async () => { const u = await requireStaff(); if (u.role !== "ADMIN") throw new RedirectError(homeFor(u.role as never)); return u; },
-    requirePermission: async (p: Parameters<typeof can>[1]) => { const u = await requireStaff(); if (!can(u.role, p)) throw new RedirectError(homeFor(u.role as never)); return u; },
+    requireAdmin: async () => { const u = await requireStaff(); if (u.role !== "ADMIN") throw new RedirectError(homeFor(u)); return u; },
+    requirePermission: async (p: Parameters<typeof can>[1]) => { const u = await requireStaff(); if (!can(u, p)) throw new RedirectError(homeFor(u)); return u; },
     createSession: vi.fn(),
     destroySession: vi.fn(),
   };

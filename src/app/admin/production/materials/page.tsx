@@ -13,7 +13,7 @@ const KIND = { FABRIC: "Fabric", TRIM: "Trim", PACKAGING: "Packaging" } as const
 
 export default async function MaterialsPage() {
   const me = await requirePermission("production");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const scope = await scopeFor(me);
   const [materials, suppliers, locations, moves] = await Promise.all([
     db.material.findMany({ where: { active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], include: { supplier: { select: { name: true } }, stock: { where: { quantity: { gt: 0 } }, include: { store: { select: { code: true } } } } } }),

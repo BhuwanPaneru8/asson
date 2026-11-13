@@ -115,7 +115,7 @@ export async function scheduleEvent(tx: Tx, user: Actor, eventId: string, d: { a
   const notLower = p.rows.filter((r) => r.notLower);
   if (notLower.length) throw new MarkdownError(`Not a markdown (sale price isn't lower): ${notLower.slice(0, 5).map((r) => r.name).join(", ")}.`);
   if (p.totals.belowMin) {
-    if (!can(user.role as Role, "finance")) throw new MarkdownError(`${p.totals.belowMin} product(s) would sell under cost + ${cfg().minMarginPct}%: only the owner can approve that.`);
+    if (!can(user, "finance")) throw new MarkdownError(`${p.totals.belowMin} product(s) would sell under cost + ${cfg().minMarginPct}%: only the owner can approve that.`);
     if (!d.allowBelowMargin) throw new MarkdownError(`${p.totals.belowMin} product(s) would sell under cost + ${cfg().minMarginPct}% (${p.totals.belowCost} under cost). Tick "below margin" to go ahead.`);
   }
   if (e.endsAt && e.endsAt <= now) throw new MarkdownError("This sale's end time has already passed.");

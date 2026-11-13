@@ -22,7 +22,7 @@ export default async function NewProductionPage({ searchParams }: { searchParams
     <>
       <PageHeader title="New production order" description="Plan pieces per size for one workshop. It starts as a draft: nothing leaves the shelf until you issue the materials." />
       {!workshops.length ? <p className="text-[14px]">Add the workshop as a supplier first (<Link href="/admin/suppliers" className="underline">Suppliers</Link>).</p>
-        : <NewProductionOrder products={list} workshops={workshops} locations={locations} showCost={can(me.role, "finance")} />}
+        : <NewProductionOrder products={list} workshops={workshops} locations={locations} showCost={can(me, "finance")} />}
     </>
   );
 }

@@ -12,7 +12,7 @@ export const metadata = { title: "Payslip" };
 export default async function PayslipPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission("self.time");
   const s = await db.payslip.findUnique({ where: { id: (await params).id }, include: { run: true, user: { select: { name: true, employment: { select: { pan: true } } } } } });
-  if (!s || !(can(me.role, "payroll") || (s.userId === me.id && s.run.status === "PAID"))) notFound();
+  if (!s || !(can(me, "payroll") || (s.userId === me.id && s.run.status === "PAID"))) notFound();
   const row = (k: string, v: number, minus = false) => <div className="flex justify-between py-1"><dt className="text-ink-soft">{k}</dt><dd className="tabular-nums">{minus && v ? "−" : ""}{formatPrice(v)}</dd></div>;
   return (
     <div className="mx-auto max-w-lg">

@@ -15,7 +15,7 @@ const th = "px-4 py-2 text-left text-[11.5px] font-medium uppercase tracking-wid
 
 export default async function ProductionOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission("production");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const o = await db.productionOrder.findUnique({
     where: { id: (await params).id },
     include: {

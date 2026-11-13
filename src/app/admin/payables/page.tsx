@@ -12,7 +12,7 @@ export const metadata = { title: "Payables" };
 
 export default async function PayablesPage() {
   const me = await requirePermission("purchasing");
-  const canPay = can(me.role, "finance");
+  const canPay = can(me, "finance");
   const today = ktmDate();
   const [s, suppliers, pos] = await Promise.all([
     payablesSummary(),

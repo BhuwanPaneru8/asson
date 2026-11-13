@@ -13,7 +13,7 @@ export const metadata = { title: "Damaged stock" };
 export default async function DamagedPage() {
   const me = await requirePermission("inventory.adjust");
   const [r, suppliers] = await Promise.all([damageRegister(await scopeFor(me)), db.supplier.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } })]);
-  const finance = can(me.role, "finance");
+  const finance = can(me, "finance");
   return (
     <>
       <PageHeader title="Damaged stock" description="Everything that came back damaged (store returns, exchanges, parcels back from couriers) or was taken off sale by staff. It's off sale and counted here until it's repaired, written off or sent back to the supplier." />

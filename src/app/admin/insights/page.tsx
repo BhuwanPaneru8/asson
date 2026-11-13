@@ -29,7 +29,7 @@ const num = "px-3 py-2 text-right tabular-nums";
 
 export default async function InsightsPage({ searchParams }: { searchParams: Promise<{ tab?: string; days?: string; category?: string }> }) {
   const me = await requirePermission("insights");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const sp = await searchParams;
   const tab: Tab = TABS.find((t) => t.id === sp.tab)?.id ?? "pulse";
   const href = (q: Record<string, string | undefined>) => {

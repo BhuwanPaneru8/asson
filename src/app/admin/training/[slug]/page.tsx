@@ -15,7 +15,7 @@ export default async function SopPage({ params, searchParams }: { params: Promis
   const me = await requirePermission("self.time");
   const s = await db.sop.findUnique({ where: { slug: (await params).slug }, include: { signoffs: { where: { userId: me.id } } } });
   if (!s) notFound();
-  const editor = can(me.role, "ops.manage");
+  const editor = can(me, "ops.manage");
   const editing = editor && (await searchParams).edit === "1";
   const sig = s.signoffs[0];
   const state = sig && sig.version >= s.version ? "signed" : sig ? "changed" : "todo";

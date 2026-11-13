@@ -14,7 +14,7 @@ const num = "px-3 py-2 text-right tabular-nums";
 
 export default async function NetworkPage({ searchParams }: { searchParams: Promise<{ days?: string; group?: string }> }) {
   const me = await requirePermission("insights");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const sp = await searchParams;
   const days = [7, 30, 90].includes(Number(sp.days)) ? Number(sp.days) : 30;
   const group: Grouping = sp.group === "district" || sp.group === "province" ? sp.group : "location";

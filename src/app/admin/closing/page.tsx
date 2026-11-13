@@ -14,7 +14,7 @@ export const metadata = { title: "Daily closing" };
 
 export default async function ClosingPage({ searchParams }: { searchParams: Promise<{ date?: string; store?: string }> }) {
   const me = await requirePermission("closing");
-  const showProfit = can(me.role, "finance");
+  const showProfit = can(me, "finance");
   const today = ktmDate();
   const sp = await searchParams;
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) && sp.date <= today ? sp.date : today;

@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { store as storeCfg } from "./config";
-import { can, type Role } from "./permissions";
+import { type Permission, type Role, type Subject, can } from "./permissions";
 import { ktmDate } from "./pos";
 import type { Scope } from "./scope";
 import { addDays, rosterOverview, weekStartOf } from "./rosters";
@@ -20,8 +20,9 @@ export type Attention = { key: string; tone: "danger" | "warn"; text: string; hr
 
 const H = 3_600_000, DAY = 24 * H;
 
-export async function attention(user: { id: string; role: string }, scope: Scope, now = new Date()): Promise<Attention[]> {
-  const role = user.role as Role;
+export async function attention(user: { id: string; role: string; permissions?: readonly Permission[] }, scope: Scope, now = new Date()): Promise<Attention[]> {
+  // the person's own access (their job), not just their role
+  const role: Subject = { role: user.role, permissions: user.permissions };
   const ids = scope.all ? null : scope.storeIds;
   const here = <T extends object>(w: T) => (ids ? { ...w, storeId: { in: ids } } : w);
   const atMine: Prisma.OrderWhereInput = ids ? { allocations: { some: { storeId: { in: ids } } } } : {};

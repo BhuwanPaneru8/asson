@@ -22,10 +22,10 @@ export type VisitItem = { section: string; text: string; critical: boolean; resu
 export const visitRef = (n: number) => `SV-${n}`;
 export const STATUS_LABEL: Record<VisitStatus, string> = { DRAFT: "In progress", SUBMITTED: "Waiting for the shop", ACKNOWLEDGED: "Acknowledged" };
 
-const managesShop = async (user: Actor, storeId: string, tx: Tx) => can(user.role as Role, "ops.manage") && canActAt(await scopeFor(user, tx), storeId);
+const managesShop = async (user: Actor, storeId: string, tx: Tx) => can(user, "ops.manage") && canActAt(await scopeFor(user, tx), storeId);
 
 export async function saveTemplate(tx: Tx, author: Actor, d: { id?: string; name: string; sections: TemplateSection[]; active: boolean }) {
-  if (!(await scopeFor(author, tx)).all || !can(author.role as Role, "ops.manage")) throw new VisitError("Visit checklists are set by HQ.");
+  if (!(await scopeFor(author, tx)).all || !can(author, "ops.manage")) throw new VisitError("Visit checklists are set by HQ.");
   const sections = d.sections
     .map((s) => ({ name: s.name.trim(), items: s.items.map((i) => ({ text: i.text.trim(), ...(i.critical ? { critical: true } : {}) })).filter((i) => i.text) }))
     .filter((s) => s.name && s.items.length);
@@ -168,7 +168,7 @@ export async function visitDetail(user: { id: string; role: string }, number: nu
   if (!v) return null;
   const scope = await scopeFor(user);
   if (!canActAt(scope, v.storeId) && v.auditorId !== user.id) return null;
-  return { visit: { ...v, items: v.items as VisitItem[] }, isAuditor: v.auditorId === user.id, manages: can(user.role as Role, "ops.manage") && canActAt(scope, v.storeId), atShop: canActAt(scope, v.storeId) };
+  return { visit: { ...v, items: v.items as VisitItem[] }, isAuditor: v.auditorId === user.id, manages: can(user, "ops.manage") && canActAt(scope, v.storeId), atShop: canActAt(scope, v.storeId) };
 }
 
 export const visitsAt = (storeId: string, take = 20) => db.storeVisit.findMany({ where: { storeId }, orderBy: { startedAt: "desc" }, take, select: { number: true, status: true, score: true, criticalFails: true, auditorName: true, startedAt: true, submittedAt: true } });

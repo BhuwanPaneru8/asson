@@ -42,8 +42,8 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
   }
 
   // review: system figures appear only now, and only to people who could adjust stock
-  const reviewer = can(me.role, "inventory.adjust");
-  const showCost = can(me.role, "finance");
+  const reviewer = can(me, "inventory.adjust");
+  const showCost = can(me, "finance");
   const counted = c.lines.filter((l) => l.counted != null);
   const diffs = counted.filter((l) => variance(l) !== 0).sort((a, b) => Math.abs(variance(b)) - Math.abs(variance(a)));
   const plus = diffs.reduce((s, l) => s + Math.max(0, variance(l)), 0);

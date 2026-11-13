@@ -39,7 +39,7 @@ async function load(tx: Tx, user: Actor, id: string) {
   const issue = await tx.issue.findUniqueOrThrow({ where: { id } });
   const scope = await scopeFor(user, tx);
   const here = canActAt(scope, issue.storeId);
-  const manages = here && can(user.role as Role, "ops.manage");
+  const manages = here && can(user, "ops.manage");
   const assigned = issue.assigneeId === user.id;
   if (!here && !assigned) throw new IssueError("This issue isn't at your location.");
   return { issue, here, manages, assigned };
@@ -173,7 +173,7 @@ export async function issueDetail(user: { id: string; role: string }, number: nu
   if (!here && issue.assigneeId !== user.id) return null;
   const since = new Date(issue.createdAt.getTime() - storeCfg.issues.repeatWindowDays * 86_400_000);
   const repeats = await db.issue.count({ where: { storeId: issue.storeId, category: issue.category, id: { not: issue.id }, createdAt: { gte: since, lte: issue.createdAt } } });
-  return { issue, repeats, here, manages: here && can(user.role as Role, "ops.manage"), assigned: issue.assigneeId === user.id };
+  return { issue, repeats, here, manages: here && can(user, "ops.manage"), assigned: issue.assigneeId === user.id };
 }
 
 /** Per-location numbers for HQ: open, overdue, resolved in the window, median hours to fix, repair spend. */

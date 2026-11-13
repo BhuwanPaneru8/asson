@@ -12,7 +12,7 @@ const MARK: Record<string, string> = { signed: "✓", changed: "!", todo: "·", 
 
 export default async function TrainingPage() {
   const me = await requirePermission("self.time");
-  const editor = can(me.role, "ops.manage"), manager = can(me.role, "people");
+  const editor = can(me, "ops.manage"), manager = can(me, "people");
   const [mine, matrix] = await Promise.all([mySops(me), manager ? trainingMatrix(await scopeFor(me)) : Promise.resolve(null)]);
   const todo = mine.filter((s) => s.required && s.state !== "signed");
   return (

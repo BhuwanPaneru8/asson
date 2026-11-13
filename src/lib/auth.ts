@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "./session-token";
-import { can, homeFor, type Permission, type Role, type StaffRole } from "./permissions";
+import { can, effectivePermissions, homeFor, type Permission, type Role } from "./permissions";
 
 export type CurrentUser = {
   id: string;
@@ -13,6 +13,10 @@ export type CurrentUser = {
   email: string;
   phone: string | null;
   role: Role;
+  /** staff: their job (lib/permissions.ts JOBS), or null for the classic set for their role */
+  job: string | null;
+  /** what they can do: job + owner's additions − removals (empty for customers) */
+  permissions: Permission[];
 };
 
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 12);
@@ -25,11 +29,11 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!payload) return null;
   const user = await db.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true },
+    select: { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true, job: true, permAdd: true, permRemove: true },
   });
   // tokenVersion lets us revoke every session (password change, staff off-boarding)
   if (!user || user.tokenVersion !== payload.v) return null;
-  return { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role };
+  return { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, job: user.job, permissions: effectivePermissions(user.role, user.job, user.permAdd, user.permRemove) };
 });
 
 export async function createSession(user: { id: string; role: CurrentUser["role"]; tokenVersion: number }) {
@@ -64,13 +68,13 @@ export async function requireStaff() {
 
 export async function requireAdmin() {
   const user = await requireStaff();
-  if (user.role !== "ADMIN") redirect(homeFor(user.role as StaffRole));
+  if (user.role !== "ADMIN") redirect(homeFor(user));
   return user;
 }
 
 /** Gate a page or server action on a single permission (see lib/permissions.ts). */
 export async function requirePermission(p: Permission) {
   const user = await requireStaff();
-  if (!can(user.role, p)) redirect(homeFor(user.role as StaffRole));
+  if (!can(user, p)) redirect(homeFor(user));
   return user;
 }

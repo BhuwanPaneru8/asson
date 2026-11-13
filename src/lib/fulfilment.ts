@@ -131,7 +131,7 @@ export async function packOrder(user: Actor, d: { orderId: string; storeId?: str
   const override = d.override?.trim() ?? "";
   if (!cmp.matched) {
     if (!override) throw new FulfilmentError(`Doesn't match the order: ${[...cmp.missing.map((m) => `${m.quantity} × ${m.sku} missing`), ...cmp.extra.map((m) => `${m.quantity} × ${m.sku} not in the order`)].join("; ")}.`);
-    if (!can(user.role as Role, "inventory.adjust")) throw new FulfilmentError("Only a manager can pack an order that doesn't match the scan.");
+    if (!can(user, "inventory.adjust")) throw new FulfilmentError("Only a manager can pack an order that doesn't match the scan.");
   }
   if (d.weightGrams != null && (!Number.isInteger(d.weightGrams) || d.weightGrams < 1 || d.weightGrams > 100_000)) throw new FulfilmentError("Weight is in grams, 1 to 100,000.");
   try {
