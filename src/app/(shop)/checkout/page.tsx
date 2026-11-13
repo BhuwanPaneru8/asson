@@ -11,6 +11,8 @@ import { getDeliveryRates } from "@/lib/delivery";
 import { store } from "@/lib/config";
 import { CheckoutForm } from "@/components/cart/checkout-form";
 import { stockByLocation } from "@/lib/stock";
+import { TrackOnView } from "@/components/site/marketing";
+import { rupees } from "@/lib/marketing-shared";
 
 export const metadata: Metadata = { title: "Checkout", robots: { index: false } };
 
@@ -25,7 +27,10 @@ export default async function CheckoutPage() {
   ]);
   const pickupPoints = shops.map((s) => ({ ...s, readyNow: cart.lines.every((l) => (here.get(l.variantId)?.get(s.id) ?? 0) >= l.quantity) }));
   const addresses = user ? await db.address.findMany({ where: { userId: user.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] }) : [];
+  const items = cart.lines.map((l) => ({ id: l.productId, name: l.name, price: rupees(l.unitPrice), quantity: l.quantity }));
   return (
+    <>
+    <TrackOnView event={{ name: "begin_checkout", items, value: rupees(cart.subtotal) }} />
     <CheckoutForm
       cart={cart}
       user={user && { name: user.name, email: user.email, phone: user.phone }}
@@ -35,5 +40,6 @@ export default async function CheckoutPage() {
       pickupPoints={pickupPoints}
       initialCode={(await cookies()).get("asson_ref")?.value}
     />
+    </>
   );
 }

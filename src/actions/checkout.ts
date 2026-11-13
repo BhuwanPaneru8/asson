@@ -2,7 +2,7 @@
 
 import { reportError, reportErrorSoon } from "@/lib/errors";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -23,6 +23,8 @@ import { clientIp } from "@/lib/client-ip";
 import { allocateOrder, StockError } from "@/lib/stock";
 import { resolveReferral } from "@/lib/referrals";
 import { getLocale, localiseResult } from "@/lib/i18n/server";
+import { enqueue } from "@/lib/jobs";
+import { metaCapiOn, readConsent } from "@/lib/marketing";
 
 const methodIds = ["standard", "express"] as [ShippingMethodId, ...ShippingMethodId[]];
 
@@ -98,6 +100,11 @@ async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<Place
 
   const cart = await getCart();
   if (!cart.id || cart.lines.length === 0) return { error: "Your bag is empty." };
+  // Meta Conversions API: only for shoppers who chose "Accept all" (the job sends from our server)
+  const jar = await cookies();
+  const adReport = metaCapiOn() && (await readConsent()) === "all"
+    ? { ip, userAgent: h.get("user-agent"), fbp: jar.get("_fbp")?.value ?? null, fbc: jar.get("_fbc")?.value ?? null, url: h.get("referer") }
+    : null;
   const unavailable = cart.lines.find((l) => !l.available);
   if (unavailable) return { error: `${unavailable.name} (${unavailable.size}) ${unavailable.stock > 0 ? `has only ${unavailable.stock} left` : "is sold out"}. Please update your bag.` };
   if (data.paymentMethod === "ONLINE" && !(store.onlinePaymentsLive && onlinePaymentsEnabled())) return { error: "Online payment isn't available right now. Please choose Cash on Delivery." };
@@ -207,6 +214,7 @@ async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<Place
       if (user && referral?.check.ok) await tx.user.updateMany({ where: { id: user.id, referredById: null }, data: { referredById: referral.referrerId } });
       if (points.used > 0) await tx.pointsEntry.create({ data: { userId: user!.id, delta: -points.used, reason: "REDEEM", orderId: order.id } });
       await queueOrderNotice(tx, order.id, "placed");
+      if (adReport) await enqueue(tx, "ads.purchase", { orderId: order.id, ...adReport }, { key: `ads.purchase:${order.id}` });
       return order.id;
     }, { timeout: 15_000 });
   } catch (e) {

@@ -163,7 +163,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ✅ "Complete the look" (staff pair products in the editor) and recently viewed (product page and home)
 - ✅ Product catalogue feed for Google Merchant Center and Meta: `/feeds/products.xml`
 - 🟡 Phone number and OTP sign-in: built (one-step sign-in, codes, reset by code), live when the SMS gateway is connected; test mode on staging. Also: customer care reset links, "Continue with Google" (needs the owner's Google OAuth client)
-- ⬜ Meta pixel and conversions API, TikTok pixel (need the ad accounts)
+- ✅ Meta pixel and Conversions API, TikTok pixel, Google Analytics 4, behind a cookie-consent banner; switched on by adding the IDs from the owner's ad accounts (see `.env.example`)
 - ✅ Birthday points and refer-a-friend codes (first-order discount for the friend, points for the referrer on delivery)
 - Nepali language (नेपाली) interface
 - ✅ Top search terms and zero-result searches; reorder by sales speed, dead stock, size/colour sell-through and margin (Admin → Insights)

@@ -24,7 +24,7 @@ test("a manager plans next week, a bad shift is caught, publishing shows the cas
   await expect(page.getByText(/^published /)).toBeVisible();
 
   // the cashier sees it among the next 7 days
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "cashier", "/admin/today");
   const mine = page.locator("li").filter({ hasText: week.slice(5) }).filter({ hasText: "Asson Flagship" });
   await expect(mine).toContainText("10–18");
@@ -47,7 +47,7 @@ test("a cashier gives tomorrow's shift to a colleague: they accept, the owner ap
   await page.getByRole("button", { name: "Publish to staff" }).click();
   await expect(page.getByText(/^Published: staff can see/)).toBeVisible();
 
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "cashier", "/admin/today");
   const row = page.locator("li").filter({ hasText: tomorrow.slice(5) }).filter({ hasText: "11–19" });
   await row.getByRole("button", { name: "Swap" }).click();
@@ -56,17 +56,17 @@ test("a cashier gives tomorrow's shift to a colleague: they accept, the owner ap
   await expect(page.getByText("Asked: they accept, then a manager approves")).toBeVisible();
   await expect(page.getByText("waiting for Sita Manager")).toBeVisible();
 
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "manager", "/admin/today");
   await page.getByRole("listitem").filter({ hasText: "Ram Cashier gives" }).getByRole("button", { name: "Accept" }).click();
   await expect(page.getByText("Accepted: a manager approves it next")).toBeVisible();
 
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "owner", "/admin/rosters");
   await page.getByRole("listitem").filter({ hasText: "Ram Cashier gives" }).getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved: the roster is updated")).toBeVisible();
 
-  await page.context().clearCookies();
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "manager", "/admin/today");
   await expect(page.locator("li").filter({ hasText: tomorrow.slice(5) }).filter({ hasText: "11–19" }).filter({ hasNotText: "gives" })).toContainText("Asson Flagship");
   await expect(page.getByText("approved", { exact: true })).toBeVisible();

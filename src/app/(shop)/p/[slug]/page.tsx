@@ -19,6 +19,8 @@ import { getDeliveryRates } from "@/lib/delivery";
 import { absoluteImageUrl } from "@/lib/media-url";
 import { getT } from "@/lib/i18n/server";
 import { pick } from "@/lib/i18n";
+import { TrackOnView } from "@/components/site/marketing";
+import { rupees } from "@/lib/marketing-shared";
 
 const siteBase = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -74,6 +76,7 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <>
+      <TrackOnView key={product.id} event={{ name: "view_item", item: { id: product.id, name: product.name, price: rupees(product.price), quantity: 1 } }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <div className="container-page pt-4 md:pt-6">
         <nav aria-label="Breadcrumb" className="mb-4 hidden flex-wrap items-center gap-1 text-[13px] text-muted md:flex">

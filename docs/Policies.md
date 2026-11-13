@@ -23,4 +23,4 @@ These are careful drafts for an online clothing shop in Nepal, following the Con
    - Sale items returnable like full-price items
    - How long records are kept (drafted: accounting records at least 6 years)
    - Loyalty, referral and birthday amounts
-3. If you later add analytics or advertising pixels (Meta, TikTok), the cookie policy promises to ask permission first: a consent banner is needed before they go live.
+3. Analytics and advertising pixels (Meta, TikTok, Google Analytics) are built behind a consent banner and stay off until their IDs are set. When one is on, the cookie and privacy pages automatically name it and explain the "Accept all" / "Only necessary" choice; have the lawyer read those pages with the trackers you actually use switched on (staging is a good place).

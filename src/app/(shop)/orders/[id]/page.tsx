@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/misc";
 import { buttonClass } from "@/components/ui/button";
 import { getT } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
+import { TrackOnView } from "@/components/site/marketing";
+import { rupees } from "@/lib/marketing-shared";
 
 export const metadata: Metadata = { title: "Order details", robots: { index: false } };
 
@@ -43,6 +45,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
   return (
     <div className="container-page max-w-5xl py-8 md:py-12">
+      {/* reported once per order, and only just after it was placed (an old ?placed=1 link doesn't count it again) */}
+      {placed && now() - order.createdAt.getTime() < 60 * 60_000 && (
+        <TrackOnView
+          once={`asson_purchase_${order.id}`}
+          event={{ name: "purchase", orderId: order.id, value: rupees(order.total), items: order.items.filter((i) => i.productId).map((i) => ({ id: i.productId!, name: i.name, price: rupees(i.unitPrice), quantity: i.quantity })) }}
+        />
+      )}
       {placed && (
         <div className="mb-10 flex flex-col items-center text-center">
           <CheckCircle2 className="h-14 w-14 text-success" strokeWidth={1.3} />

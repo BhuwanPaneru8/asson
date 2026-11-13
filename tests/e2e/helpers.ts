@@ -18,7 +18,7 @@ export async function signIn(page: Page, who: keyof typeof ACCOUNTS, next = "/ad
     await page.context().addCookies(saved);
     await page.goto(next);
     if (!/\/login/.test(page.url())) return; // still valid
-    await page.context().clearCookies();
+    await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   }
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
   await page.waitForLoadState("networkidle"); // the sign-in panel needs its JavaScript before typing
