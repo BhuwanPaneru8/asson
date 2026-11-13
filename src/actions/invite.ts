@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession } from "@/lib/auth";
-import { acceptInvite, TeamError } from "@/lib/team";
+import { acceptInvite, TeamError, redeemResetLink } from "@/lib/team";
 import { rateLimit } from "@/lib/rate-limit";
 import { headers } from "next/headers";
 import { clientIp } from "@/lib/client-ip";
@@ -29,4 +29,26 @@ export async function setPasswordFromInvite(input: z.input<typeof schema>): Prom
   }
   await createSession(user);
   redirect("/admin");
+}
+
+const resetSchema = z.object({
+  token: z.string().min(20).max(80),
+  password: z.string().min(8, "Use at least 8 characters").max(128).regex(/[A-Za-z]/, "Include a letter").regex(/\d/, "Include a number"),
+  confirm: z.string(),
+}).refine((d) => d.password === d.confirm, { message: "The two passwords don't match", path: ["confirm"] });
+
+/** A customer sets a new password from customer care's one-time link, then is signed in. */
+export async function setPasswordFromReset(input: z.input<typeof resetSchema>): Promise<{ ok: false; error: string }> {
+  if (!rateLimit(`reset:${clientIp(await headers())}`, 10, 15 * 60_000)) return { ok: false, error: "Too many tries. Wait a few minutes." };
+  const p = resetSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check your password." };
+  let user: Awaited<ReturnType<typeof redeemResetLink>>;
+  try {
+    user = await db.$transaction((tx) => redeemResetLink(tx, p.data.token, p.data.password));
+  } catch (e) {
+    if (e instanceof TeamError) return { ok: false, error: e.message };
+    throw e;
+  }
+  await createSession(user);
+  redirect("/account");
 }

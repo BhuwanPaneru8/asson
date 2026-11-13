@@ -22,8 +22,8 @@ const list = (ps: readonly string[]) => (ps.length ? ps.map((p) => PERMISSION_IN
 async function newInvite(tx: Tx, owner: Actor, userId: string, now = new Date()) {
   const token = randomBytes(24).toString("base64url");
   // a fresh link replaces any unused older one
-  await tx.staffInvite.updateMany({ where: { userId, usedAt: null }, data: { expiresAt: now } });
-  await tx.staffInvite.create({ data: { userId, tokenHash: sha(token), expiresAt: new Date(now.getTime() + INVITE_DAYS * 86_400_000), createdById: owner.id } });
+  await tx.staffInvite.updateMany({ where: { userId, usedAt: null, purpose: "INVITE" }, data: { expiresAt: now } });
+  await tx.staffInvite.create({ data: { userId, purpose: "INVITE", tokenHash: sha(token), expiresAt: new Date(now.getTime() + INVITE_DAYS * 86_400_000), createdById: owner.id } });
   return token;
 }
 
@@ -109,14 +109,14 @@ export async function reinvite(tx: Tx, owner: Actor, userId: string) {
 /** The invite link's page: who it's for, if it still works. */
 export async function inviteFor(token: string, now = new Date()) {
   const inv = await db.staffInvite.findUnique({ where: { tokenHash: sha(token) }, include: { user: { select: { name: true, email: true, role: true, job: true } } } });
-  if (!inv || inv.usedAt || inv.expiresAt <= now || inv.user.role === "CUSTOMER") return null;
+  if (!inv || inv.purpose !== "INVITE" || inv.usedAt || inv.expiresAt <= now || inv.user.role === "CUSTOMER") return null;
   return { name: inv.user.name, email: inv.user.email, job: jobOf(inv.user.job)?.label ?? null };
 }
 
 /** The new team member sets their password; the link stops working. Returns who to sign in. */
 export async function acceptInvite(tx: Tx, token: string, password: string, now = new Date()) {
   const inv = await tx.staffInvite.findUnique({ where: { tokenHash: sha(token) }, include: { user: { select: { id: true, name: true, role: true } } } });
-  if (!inv || inv.usedAt || inv.expiresAt <= now || inv.user.role === "CUSTOMER") throw new TeamError("This link has expired or was already used. Ask the owner for a new one.");
+  if (!inv || inv.purpose !== "INVITE" || inv.usedAt || inv.expiresAt <= now || inv.user.role === "CUSTOMER") throw new TeamError("This link has expired or was already used. Ask the owner for a new one.");
   const used = await tx.staffInvite.updateMany({ where: { id: inv.id, usedAt: null }, data: { usedAt: now } });
   if (!used.count) throw new TeamError("This link was just used.");
   const user = await tx.user.update({ where: { id: inv.userId }, data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } }, select: { id: true, role: true, tokenVersion: true } });
@@ -129,7 +129,7 @@ export async function teamList(now = new Date()) {
   const users = await db.user.findMany({
     where: { role: { not: "CUSTOMER" } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, email: true, phone: true, role: true, job: true, permAdd: true, permRemove: true, allLocations: true, approvalPinHash: true, locations: { select: { storeId: true } }, invites: { where: { usedAt: null, expiresAt: { gt: now } }, select: { id: true }, take: 1 } },
+    select: { id: true, name: true, email: true, phone: true, role: true, job: true, permAdd: true, permRemove: true, allLocations: true, approvalPinHash: true, locations: { select: { storeId: true } }, invites: { where: { usedAt: null, purpose: "INVITE", expiresAt: { gt: now } }, select: { id: true }, take: 1 } },
   });
   return users.map((u) => ({
     id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role,
@@ -137,4 +137,34 @@ export async function teamList(now = new Date()) {
     permissions: effectivePermissions(u.role, u.job, u.permAdd, u.permRemove),
     all: u.allLocations, storeIds: u.locations.map((l) => l.storeId), hasPin: !!u.approvalPinHash, invitePending: u.invites.length > 0,
   }));
+}
+
+// ---------- password reset links (customer care, for customers who can't get a code by SMS) ----------
+
+/** A one-time link to set a new password, for a customer care has checked is who they say (by phone or WhatsApp). */
+export async function resetLinkFor(tx: Tx, staff: Actor, userId: string, now = new Date()) {
+  const u = await tx.user.findUnique({ where: { id: userId }, select: { name: true, role: true } });
+  if (!u) throw new TeamError("Customer not found.");
+  if (u.role !== "CUSTOMER") throw new TeamError("Staff get a new sign-in link from Team & access.");
+  const token = randomBytes(24).toString("base64url");
+  await tx.staffInvite.updateMany({ where: { userId, usedAt: null, purpose: "RESET" }, data: { expiresAt: now } });
+  await tx.staffInvite.create({ data: { userId, purpose: "RESET", tokenHash: sha(token), expiresAt: new Date(now.getTime() + 24 * 3_600_000), createdById: staff.id } });
+  await audit(tx, staff, { action: "customer.reset_link", entity: ["User", userId], summary: `Password reset link for ${u.name} (valid 24 hours)` });
+  return token;
+}
+
+/** The reset link's page: whose it is, if it still works. */
+export async function resetFor(token: string, now = new Date()) {
+  const r = await db.staffInvite.findUnique({ where: { tokenHash: sha(token) }, include: { user: { select: { name: true, email: true } } } });
+  if (!r || r.purpose !== "RESET" || r.usedAt || r.expiresAt <= now) return null;
+  return { name: r.user.name, email: r.user.email };
+}
+
+/** Sets the new password from a reset link (once) and signs out every other device. */
+export async function redeemResetLink(tx: Tx, token: string, password: string, now = new Date()) {
+  const r = await tx.staffInvite.findUnique({ where: { tokenHash: sha(token) } });
+  if (!r || r.purpose !== "RESET" || r.usedAt || r.expiresAt <= now) throw new TeamError("This link has expired or was already used. Contact us for a new one.");
+  const used = await tx.staffInvite.updateMany({ where: { id: r.id, usedAt: null }, data: { usedAt: now } });
+  if (!used.count) throw new TeamError("This link was just used.");
+  return tx.user.update({ where: { id: r.userId }, data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } }, select: { id: true, role: true, tokenVersion: true, name: true } });
 }

@@ -21,9 +21,12 @@ export async function signIn(page: Page, who: keyof typeof ACCOUNTS, next = "/ad
     await page.context().clearCookies();
   }
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Email", { exact: true }).fill(ACCOUNTS[who].email);
+  await page.waitForLoadState("networkidle"); // the sign-in panel needs its JavaScript before typing
+  // one-step sign-in: who you are, then your password
+  await page.getByLabel("Mobile number or email").fill(ACCOUNTS[who].email);
+  await page.getByRole("button", { name: "Continue" }).click();
   await page.getByLabel("Password", { exact: true }).fill(ACCOUNTS[who].password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).not.toHaveURL(/\/login/);
   // only the session cookie: a bag or language cookie from one test must not leak into the next
   sessions.set(who, (await page.context().cookies()).filter((c) => c.name === "tl_session"));

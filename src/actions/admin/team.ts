@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { addTeamMember, reinvite, removeFromTeam, setAccess, TeamError } from "@/lib/team";
+import { addTeamMember, reinvite, removeFromTeam, resetLinkFor, setAccess, TeamError } from "@/lib/team";
 import type { JobKey } from "@/lib/permissions";
 
 type R = { ok: true } | { ok: false; error: string };
@@ -93,5 +93,14 @@ export async function newSignInLink(userId: string): Promise<{ ok: true; link: s
     const token = await db.$transaction((tx) => reinvite(tx, me, userId));
     refresh();
     return { ok: true, link: inviteUrl(token) };
+  } catch (e) { return failure(e); }
+}
+
+/** Customer care: a one-time link (24 hours) for a customer to set a new password, after checking it's them. */
+export async function customerResetLink(userId: string): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
+  const me = await requirePermission("customers");
+  try {
+    const token = await db.$transaction((tx) => resetLinkFor(tx, me, userId));
+    return { ok: true, link: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/reset/${token}` };
   } catch (e) { return failure(e); }
 }
