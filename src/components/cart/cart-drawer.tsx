@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/misc";
 import { useShop } from "@/components/site/shop-provider";
 import { formatPrice } from "@/lib/utils";
 import { CartLine, FreeShippingBar } from "./cart-line";
+import { BagSuggestions } from "./bag-suggestions";
 import { useT } from "@/components/site/i18n-provider";
 
 export function CartDrawer() {
@@ -43,6 +44,7 @@ export function CartDrawer() {
           <div className="divide-y divide-line px-5">
             {cart.lines.map((l) => <div key={l.id} className="py-5"><CartLine line={l} onNavigate={closeCart} compact /></div>)}
           </div>
+          <BagSuggestions compact onNavigate={closeCart} />
         </div>
       )}
     </Sheet>

@@ -198,6 +198,7 @@ Goal (owner, Nov 2026): at least one shop in every one of the 77 districts, ware
 14. ✅ **Stock quality.** ✅ 19a: damaged stock register (every damaged unit counted per location from returns, exchanges, couriers and staff; repaired, written off or back to the supplier with the credit tracked). ✅ 19b: supplier credit notes in Payables (settle bills or stay as credit, give back input VAT, damaged-goods credits off the cost of goods).
 15. ✅ **Selling across the network.** ✅ 20a: a shop orders a size it doesn't have from another location for the customer, to collect there later or delivered, paid now or later. ✅ 20b: changing an order before packing (size swap, fewer items, new address) with stock and money following exactly. ✅ 20c: customers make those changes themselves on their order page, and buy a past order again.
 16. ✅ **Running the network.** ✅ 23a: "Needs attention" on the dashboard: every exception across orders, cash, care, people, stock and finance, with links, for the viewer's permissions and locations.
+17. 🚧 **Intelligence.** ✅ 24a: recommendations (bought together from real orders, similar products, recommended for you, complete-your-order in the bag with the free-delivery gap). Next: 24b demand forecasting per product and size with festival seasonality, stock-out dates, reorder quantities and a demand radar (rising/falling, unmet searches, back-in-stock waits); 24c smart KPI pulse (anomalies against the usual level, month-end forecast).
 
 ---
 
