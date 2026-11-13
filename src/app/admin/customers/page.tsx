@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { AdminPager, Card, PageHeader, Pill, Td, Th } from "@/components/admin/ui";
-import { RoleSelect } from "@/components/admin/role-select";
 import { StaffLocations } from "@/components/admin/staff-locations";
 import { getLocations } from "@/lib/stock";
 import { can, ROLE_LABEL } from "@/lib/permissions";
@@ -48,8 +47,8 @@ export default async function Customers({ searchParams }: { searchParams: Promis
                     <Td className="text-right tabular-nums"><a className="hover:underline" href={`/admin/orders?q=${encodeURIComponent(u.email)}`}>{u._count.orders}</a></Td>
                     <Td className="text-right tabular-nums">{formatPrice(s?._sum.total ?? 0)}</Td>
                     <Td className="whitespace-nowrap text-muted">{s?._max.createdAt ? formatDate(s._max.createdAt) : "—"}</Td>
-                    <Td>{can(me?.role, "team.manage") && me?.id !== u.id ? <RoleSelect userId={u.id} role={u.role} /> : <Pill>{ROLE_LABEL[u.role]}</Pill>}</Td>
-                    <Td>{u.role === "CUSTOMER" ? "" : u.role === "ADMIN" ? <span className="text-[13px] text-muted">Everywhere (owner)</span> : <StaffLocations userId={u.id} all={u.allLocations} assigned={u.locations.map((l) => l.storeId)} locations={locations.map((l) => ({ id: l.id, name: l.name }))} editable={can(me?.role, "team.manage")} />}</Td>
+                    <Td>{u.role === "CUSTOMER" ? <Pill>{ROLE_LABEL[u.role]}</Pill> : <a href="/admin/team" className="text-[13px] underline underline-offset-4">{ROLE_LABEL[u.role]} · Team &amp; access</a>}</Td>
+                    <Td>{u.role === "CUSTOMER" ? "" : u.role === "ADMIN" ? <span className="text-[13px] text-muted">Everywhere (owner)</span> : <StaffLocations userId={u.id} all={u.allLocations} assigned={u.locations.map((l) => l.storeId)} locations={locations.map((l) => ({ id: l.id, name: l.name }))} editable={can(me, "team.manage")} />}</Td>
                   </tr>
                 );
               })}

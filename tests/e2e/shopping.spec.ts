@@ -5,6 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 test("search understands typos and colours", async ({ page }) => {
   await page.goto("/");
+  await page.waitForLoadState("networkidle"); // a tap before the page's JavaScript is ready goes to /shop instead
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("combobox", { name: "Search products" }).fill("olive hodie");
   await expect(page.getByRole("link", { name: /Classic Pullover Hoodie/ }).first()).toBeVisible();

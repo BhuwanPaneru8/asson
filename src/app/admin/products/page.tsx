@@ -13,7 +13,7 @@ const TAKE = 30;
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; category?: string; page?: string }> }) {
   const user = await requirePermission("catalog.view");
-  const canEdit = can(user.role, "catalog.edit");
+  const canEdit = can(user, "catalog.edit");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const where: Prisma.ProductWhereInput = {};

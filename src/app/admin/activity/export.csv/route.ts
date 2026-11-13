@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** The filtered activity log as CSV (for an accountant or an investigation). Owner only, max 50,000 rows. */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!can(user?.role, "audit")) return new Response("Forbidden", { status: 403 });
+  if (!can(user, "audit")) return new Response("Forbidden", { status: 403 });
   const sp = req.nextUrl.searchParams;
   const get = (k: string) => sp.get(k) ?? undefined;
   const rows = await db.auditLog.findMany({
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     take: 50_000,
   });
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  const canSeeCost = can(user?.role, "finance");
+  const canSeeCost = can(user, "finance");
   const csv = toCsv([
     ["time (Nepal)", "person", "role", "action", "summary", "record type", "record id", "ip", "details"],
     ...rows.map((r) => [fmt.format(r.at).replace(",", ""), r.actorName, r.actorRole, r.action, r.summary, r.entityType, r.entityId, r.ip, r.changes ? JSON.stringify(redactChanges(r.changes, canSeeCost)) : ""]),

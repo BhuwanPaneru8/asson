@@ -12,7 +12,7 @@ export const metadata = { title: "Locations" };
 
 export default async function LocationsPage() {
   const me = await requirePermission("locations");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const [locations, sums, skus, picks, arriving] = await Promise.all([
     getLocations({ includeInactive: true }),
     db.storeStock.groupBy({ by: ["storeId"], _sum: { quantity: true } }),

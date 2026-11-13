@@ -96,7 +96,7 @@ export async function review(tx: Tx, reviewer: Actor, d: { submissionId: string;
   const [row] = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "VmSubmission" WHERE "id" = ${d.submissionId} FOR UPDATE`;
   if (!row) throw new VmError("Submission not found.");
   const s = await tx.vmSubmission.findUniqueOrThrow({ where: { id: d.submissionId }, include: { brief: true } });
-  if (!can(reviewer.role as Role, "ops.manage") || !canActAt(await scopeFor(reviewer, tx), s.storeId)) throw new VmError("Only HQ or the shop's manager reviews displays.");
+  if (!can(reviewer, "ops.manage") || !canActAt(await scopeFor(reviewer, tx), s.storeId)) throw new VmError("Only HQ or the shop's manager reviews displays.");
   if (s.submittedById === reviewer.id) throw new VmError("Someone else must review photos you sent.");
   if (s.status !== "SUBMITTED") throw new VmError("Nothing waiting for review.");
   if (s.round !== d.round) throw new VmError("The shop sent new photos since you opened this. Look at them first.");
@@ -148,7 +148,7 @@ export async function briefDetail(user: { id: string; role: string }, number: nu
   const shops = (await shopsFor(scope)).filter((s) => targets(b, s.id));
   if (!shops.length && !scope.all) return null;
   const subs = new Map(b.submissions.map((s) => [s.storeId, s]));
-  const reviewer = can(user.role as Role, "ops.manage");
+  const reviewer = can(user, "ops.manage");
   return {
     brief: { ...b, areas: b.areas as VmArea[], criteria: b.criteria as VmCriterion[], submissions: undefined },
     reviewer, hq: scope.all,

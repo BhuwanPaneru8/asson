@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return json({ ok: false, error: "Sign in again" }, 401);
   const forIssue = ["issue", "vm", "visit", "cash"].includes(req.nextUrl.searchParams.get("purpose") ?? ""); // staff photos: issue reports, display photos
-  if (forIssue ? !can(user.role, "self.time") : !can(user.role, "catalog.edit")) return json({ ok: false, error: "Only the owner can add photos" }, 403);
+  if (forIssue ? !can(user, "self.time") : !can(user, "catalog.edit")) return json({ ok: false, error: "Only the owner can add photos" }, 403);
   if (!rateLimit(`media:${forIssue ? "issue:" : ""}${user.id}`, forIssue ? 40 : 300, 60 * 60_000)) return json({ ok: false, error: "Too many uploads — try again in an hour" }, 429);
 
   const length = Number(req.headers.get("content-length") ?? 0);

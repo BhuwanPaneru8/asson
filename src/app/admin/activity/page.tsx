@@ -28,7 +28,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
     for (const [k, v] of Object.entries({ ...filter, ...extra })) if (v) p.set(k, v);
     return p.toString();
   };
-  const canSeeCost = can(me.role, "finance");
+  const canSeeCost = can(me, "finance");
 
   return (
     <>

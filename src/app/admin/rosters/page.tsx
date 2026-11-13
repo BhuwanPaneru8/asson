@@ -72,7 +72,7 @@ export default async function RostersPage({ searchParams }: { searchParams: Prom
             </div>
           )}
         </Card>
-        <Card title="Public holidays"><Holidays list={holidays} canEdit={can(me.role, "team.manage")} /></Card>
+        <Card title="Public holidays"><Holidays list={holidays} canEdit={can(me, "team.manage")} /></Card>
       </div>
       {overview.length > 0 && (
         <Card title={`All your locations · week of ${week}`} className="mt-4">

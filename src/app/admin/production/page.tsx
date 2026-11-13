@@ -15,7 +15,7 @@ const navClass = "rounded-md border border-line bg-white px-3 py-2 text-[13.5px]
 
 export default async function ProductionPage() {
   const me = await requirePermission("production");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const [orders, low] = await Promise.all([
     db.productionOrder.findMany({ orderBy: [{ createdAt: "desc" }], take: 60, include: { product: { select: { name: true } }, workshop: { select: { name: true } }, store: { select: { name: true } }, lines: { select: { planned: true, received: true, rejected: true } }, receipts: { select: { unitCost: true }, orderBy: { createdAt: "desc" }, take: 1 } } }),
     db.$queryRaw<{ name: string; code: string; unit: string; have: bigint; min: number }[]>`

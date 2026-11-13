@@ -268,17 +268,3 @@ export async function setReviewStatus(id: string, status: "PUBLISHED" | "HIDDEN"
   refresh();
   return { ok: true };
 }
-
-export async function setUserRole(userId: string, role: "CUSTOMER" | "CASHIER" | "STAFF" | "MANAGER" | "ADMIN"): Promise<R> {
-  const me = await requirePermission("team.manage");
-  if (!["CUSTOMER", "CASHIER", "STAFF", "MANAGER", "ADMIN"].includes(role)) return { ok: false, error: "Invalid role." };
-  if (me.id === userId) return { ok: false, error: "You can't change your own role." };
-  // bump tokenVersion so the new permissions take effect immediately
-  await db.$transaction(async (tx) => {
-    const before = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { name: true, email: true, role: true } });
-    await tx.user.update({ where: { id: userId }, data: { role, tokenVersion: { increment: 1 } } });
-    if (before.role !== role) await audit(tx, me, { action: "user.role", entity: ["User", userId], summary: `${before.name} (${before.email}): role ${before.role.toLowerCase()} → ${role.toLowerCase()}`, changes: { role: [before.role, role] } });
-  });
-  refresh();
-  return { ok: true };
-}

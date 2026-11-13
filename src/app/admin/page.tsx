@@ -42,7 +42,7 @@ export default async function Dashboard() {
     db.user.count({ where: { role: "CUSTOMER", createdAt: { gte: since30 } } }),
   ]);
   // owner-only: something broke recently, or background work gave up
-  const [freshErrors, deadJobs] = can(me.role, "system")
+  const [freshErrors, deadJobs] = can(me, "system")
     ? await Promise.all([db.errorEvent.count({ where: { resolvedAt: null, lastSeen: { gte: new Date(now - DAY) } } }), db.job.count({ where: { status: "DEAD" } })])
     : [0, 0];
   const systemAlert = [freshErrors && `${freshErrors} error${freshErrors > 1 ? "s" : ""} in the last 24 h.`, deadJobs && `${deadJobs} background job${deadJobs > 1 ? "s" : ""} failed.`].filter(Boolean).join(" ");
@@ -53,7 +53,7 @@ export default async function Dashboard() {
   const prevAov = prev._count._all ? Math.round(prevRev / prev._count._all) : 0;
   const delta = (a: number, b: number) => (b ? Math.round(((a - b) / b) * 100) : null);
   const q = Object.fromEntries(queue.map((x) => [x.status, x._count._all]));
-  const showFinance = can(me.role, "finance");
+  const showFinance = can(me, "finance");
   const [pl, stock] = showFinance
     ? await Promise.all([profitAndLoss(since30, new Date(now + 60_000), ktmDate(since30), "9999-12-31"), stockValuation()])
     : [null, null];

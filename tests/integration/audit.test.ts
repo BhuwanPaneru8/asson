@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { adjustStock, saveProduct, setUserRole } from "@/actions/admin/catalog";
+import { adjustStock, saveProduct } from "@/actions/admin/catalog";
+import { changeAccess } from "@/actions/admin/team";
 import { updateOrderStatus } from "@/actions/admin/orders";
 import { login } from "@/actions/auth";
 import { addToCart } from "@/actions/cart";
@@ -72,8 +73,8 @@ describe("audit trail", () => {
     const owner = await makeUser("ADMIN");
     const cashier = await makeUser("CASHIER", { name: "Ram" });
     actAs(owner);
-    await setUserRole(cashier.id, "MANAGER");
-    expect((await db.auditLog.findFirstOrThrow({ where: { action: "user.role" } })).summary).toMatch(/Ram .*role cashier → manager/);
+    expect(await changeAccess({ userId: cashier.id, job: "shop-manager", add: [], remove: [] })).toEqual({ ok: true });
+    expect((await db.auditLog.findFirstOrThrow({ where: { action: "team.access" } })).summary).toMatch(/^Ram: Shop manager \(now can: .*Approve discounts/);
 
     // customer places and cancels their own order: on the order timeline, not the staff audit trail
     const customer = await makeUser("CUSTOMER");

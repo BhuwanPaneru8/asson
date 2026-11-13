@@ -13,7 +13,7 @@ export const metadata = { title: "Bill of materials" };
 
 export default async function BomPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission("production");
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   const [p, materials] = await Promise.all([
     db.product.findUnique({ where: { id: (await params).id }, select: { id: true, name: true, price: true, labourCost: true, bomLines: { include: { material: { select: { name: true, unit: true, costPerUnit: true } } } } } }),
     db.material.findMany({ where: { active: true }, orderBy: [{ kind: "asc" }, { name: "asc" }], select: { id: true, code: true, name: true, unit: true, supplierId: true } }),

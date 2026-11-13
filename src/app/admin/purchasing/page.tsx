@@ -22,7 +22,7 @@ export default async function PurchasingPage() {
   ]);
   const waitingVariants = await db.variant.findMany({ where: { id: { in: waiting.map((w) => w.variantId) } }, select: { id: true, sku: true, color: true, size: true, stock: true, product: { select: { name: true } } } });
   const demand = waiting.map((w) => ({ count: w._count._all, v: waitingVariants.find((v) => v.id === w.variantId)! })).filter((d) => d.v);
-  const showCost = can(me.role, "finance");
+  const showCost = can(me, "finance");
   return (
     <>
       <PageHeader title="Purchasing" description="Order from suppliers, count what arrives, and keep costs accurate." actions={<Link href="/admin/suppliers" className="flex h-10 items-center rounded-md border border-line bg-white px-4 text-[14px] hover:border-ink">Suppliers</Link>} />

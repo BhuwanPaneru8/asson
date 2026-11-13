@@ -1,3 +1,4 @@
+import { effectivePermissions } from "@/lib/permissions";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import type { Role } from "@/lib/permissions";
@@ -24,7 +25,7 @@ export async function makeUser(role: Role, opts: { pin?: string; name?: string; 
       ...(opts.locations ? { locations: { create: opts.locations.map((storeId) => ({ storeId })) } } : {}),
     },
   });
-  return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role };
+  return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role, job: null as string | null, permissions: effectivePermissions(u.role) };
 }
 
 export function actAs(user: Awaited<ReturnType<typeof makeUser>> | null) {

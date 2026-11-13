@@ -174,20 +174,26 @@ enum ReviewStatus {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
+  id              String        @id @default(cuid())
+  email           String        @unique
   name            String
   phone           String?
   passwordHash    String
-  role            Role     @default(CUSTOMER)
+  role            Role          @default(CUSTOMER)
   // bump to invalidate every active session for this user
-  tokenVersion    Int      @default(0)
+  tokenVersion    Int           @default(0)
+  /// staff: what they do (lib/permissions.ts JOBS); decides which parts of the system they see. null = the classic set for their role
+  job             String?
+  /// staff: permissions the owner added to or removed from their job, for this person only
+  permAdd         String[]      @default([])
+  permRemove      String[]      @default([])
+  invites         StaffInvite[]
   /// bcrypt hash of a 4–6 digit PIN managers/owners use to approve discounts at the till
   approvalPinHash String?
   /// loyalty points balance (sum of PointsEntry.delta; kept here for atomic redemption)
-  points          Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  points          Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   addresses          Address[]
   orders             Order[]
@@ -2799,4 +2805,19 @@ model ProductLink {
 enum LinkKind {
   BOUGHT_WITH
   SIMILAR
+}
+
+/// A one-time link for a new team member to set their own password (the owner never knows it). Only a hash of
+/// the token is stored; the link works once and expires.
+model StaffInvite {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
 }

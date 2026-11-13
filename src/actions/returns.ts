@@ -114,9 +114,9 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
   if (dup) return { ok: true, returnId: dup.id, refund: dup.refundAmount, voucherCode: dup.voucherCode };
 
   // Returns are always approved by a manager or owner — cashiers ask for a PIN
-  let approverId: string | null = can(me.role, "approve.return") ? me.id : null;
+  let approverId: string | null = can(me, "approve.return") ? me.id : null;
   if (!approverId) {
-    const found = await findApproverByPin(me.id, d.approverPin);
+    const found = await findApproverByPin(me.id, d.approverPin, "approve.return");
     if (!found.ok) return { ok: false, error: `A manager must approve returns. ${found.error}` };
     approverId = found.approver.id;
   }

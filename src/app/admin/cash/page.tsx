@@ -16,7 +16,7 @@ const money = (v: number) => (v < 0 ? `−${formatPrice(-v)}` : formatPrice(v));
 export default async function CashPage({ searchParams }: { searchParams: Promise<{ store?: string }> }) {
   const me = await requirePermission("closing");
   const scope = await scopeFor(me);
-  const finance = can(me.role as Role, "finance");
+  const finance = can(me, "finance");
   const rows = await cashPosition(scope);
   const want = (await searchParams).store;
   const here = rows.find((r) => r.storeId === want) ?? (rows.length === 1 ? rows[0] : rows.find((r) => r.kind === "SHOP"));

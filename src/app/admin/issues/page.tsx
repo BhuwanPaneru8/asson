@@ -20,7 +20,7 @@ export default async function IssuesPage({ searchParams }: { searchParams: Promi
   const me = await requirePermission("self.time");
   const sp = await searchParams;
   const scope = await scopeFor(me);
-  const manager = can(me.role as Role, "ops.manage");
+  const manager = can(me, "ops.manage");
   const f: IssueFilter = { status: sp.status === "resolved" || sp.status === "all" ? sp.status : "open", storeId: sp.store || undefined, mine: sp.mine === "1", overdue: sp.overdue === "1" };
   const [issues, locations, stats] = await Promise.all([
     listIssues(me, f),

@@ -23,8 +23,8 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
   return (
     <>
     <ProductEditor
-      readOnly={!can(user.role, "catalog.edit")}
-      showCost={can(user.role, "finance")}
+      readOnly={!can(user, "catalog.edit")}
+      showCost={can(user, "finance")}
       categories={categories.map((c) => ({ id: c.id, label: `${c.parent?.name} / ${c.name}` }))}
       collections={collections.map((c) => ({ id: c.id, name: c.name }))}
       initial={{
@@ -33,10 +33,10 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
         material: p.material ?? "", fit: p.fit ?? "", care: p.care ?? "", tags: p.tags, featured: p.featured,
         collectionIds: p.collections.map((c) => c.id),
         images: p.images.map((i) => ({ url: i.url, alt: i.alt, color: i.color })),
-        variants: p.variants.map((v) => ({ id: v.id, sku: v.sku, color: v.color, colorHex: v.colorHex, size: v.size, stock: v.stock, ...(can(user.role, "finance") ? { costPrice: v.costPrice } : {}) })),
+        variants: p.variants.map((v) => ({ id: v.id, sku: v.sku, color: v.color, colorHex: v.colorHex, size: v.size, stock: v.stock, ...(can(user, "finance") ? { costPrice: v.costPrice } : {}) })),
       }}
     />
-    <div className="mt-4"><LookPicker productId={p.id} initial={look} readOnly={!can(user.role, "catalog.edit")} /></div>
+    <div className="mt-4"><LookPicker productId={p.id} initial={look} readOnly={!can(user, "catalog.edit")} /></div>
     <div className="mt-4 pb-24"><EntityHistory type="Product" id={p.id} /></div>
     </>
   );

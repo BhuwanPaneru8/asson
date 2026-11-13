@@ -30,7 +30,7 @@ export default async function FulfilmentPage({ searchParams }: { searchParams: P
         ))}
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="Packing station"><PackingStation storeId={here.id} manager={can(me.role as Role, "inventory.adjust")} /></Card>
+        <Card title="Packing station"><PackingStation storeId={here.id} manager={can(me, "inventory.adjust")} /></Card>
         <div className="space-y-4">
           <Card title="Start a wave"><CreateWave storeId={here.id} waiting={o.waiting} /></Card>
           <Card title="Waves">

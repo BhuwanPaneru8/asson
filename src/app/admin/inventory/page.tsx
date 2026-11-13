@@ -15,7 +15,7 @@ const LOW = 5;
 
 export default async function Inventory({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string; page?: string; at?: string }> }) {
   const me = await requirePermission("catalog.view");
-  const canAdjust = can(me.role, "inventory.adjust");
+  const canAdjust = can(me, "inventory.adjust");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const [locations, main, scope] = await Promise.all([getLocations(), defaultReceivingLocation(), scopeFor(me)]);

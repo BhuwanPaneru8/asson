@@ -152,15 +152,19 @@ export function SearchBar({ current = "" }: { current?: string }) {
 
   return (
     <div ref={boxRef} className="lg:relative">
-      <button
-        onClick={openSearch}
+      {/* a link until the page's JavaScript is ready: a tap on a slow connection goes to the shop page (search and
+          filters) instead of doing nothing; once ready, it opens the search panel */}
+      <a
+        href={current ? `/shop?q=${encodeURIComponent(current)}` : "/shop"}
+        role="button"
+        onClick={(e) => { e.preventDefault(); openSearch(); }}
         className="flex h-10 items-center gap-2 px-2.5 text-muted hover:bg-cloud lg:w-64 lg:border lg:border-line lg:bg-white lg:px-3 lg:hover:border-ink-soft lg:hover:bg-white"
         aria-label={current ? `${t("search.open")}: ${current}` : t("search.open")}
       >
         <Search className="h-[19px] w-[19px] text-ink lg:h-4 lg:w-4 lg:text-muted" strokeWidth={1.8} />
         {current ? <span className="hidden min-w-0 truncate text-[14px] text-ink lg:inline">{current}</span> : <span className="hidden text-[14px] lg:inline">{t("search.placeholderShort")}</span>}
         <kbd className="ml-auto hidden border border-line px-1.5 text-[11px] lg:inline">/</kbd>
-      </button>
+      </a>
 
       {/* rendered into <body>: the sticky header (blur, slide) would otherwise become the box `fixed` is measured
           from and squeeze the panel into its 64px strip (Memory gotcha 30r) */}

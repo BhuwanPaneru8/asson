@@ -13,7 +13,7 @@ const day = /^\d{4}-\d{2}-\d{2}$/;
 /** One accounting register as CSV for a date range. Owner only (contains customer names and costs). */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ register: string }> }) {
   const user = await getCurrentUser();
-  if (!can(user?.role, "finance")) return new Response("Forbidden", { status: 403 });
+  if (!can(user, "finance")) return new Response("Forbidden", { status: 403 });
   const key = (await params).register as RegisterKey;
   const reg = REGISTERS[key];
   const from = req.nextUrl.searchParams.get("from") ?? "", to = req.nextUrl.searchParams.get("to") ?? "";

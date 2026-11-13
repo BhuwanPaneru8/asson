@@ -137,7 +137,7 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     const percent = (discount / subtotal) * 100;
     if (percent > discountLimitPercent(me.role as Role)) {
       if (!d.approverPin) return { ok: false, error: `A ${percent.toFixed(1)}% discount needs a ${percent > 15 ? "owner" : "manager"}'s PIN.` };
-      const found = await findApproverByPin(me.id, d.approverPin);
+      const found = await findApproverByPin(me.id, d.approverPin, "approve.discount");
       if (!found.ok) return { ok: false, error: found.error };
       if (percent > discountLimitPercent(found.approver.role)) return { ok: false, error: "Discounts above 15% need the owner's PIN." };
       approverId = found.approver.id;
@@ -341,7 +341,7 @@ export async function lockDay(date: string, note?: string, storeId?: string): Pr
 
 export async function setApprovalPin(password: string, pin: string): Promise<R> {
   const me = await getCurrentUser();
-  if (!me || !can(me.role, "approve.discount")) return { ok: false, error: "Only managers and owners can set an approval PIN." };
+  if (!me || !can(me, "approve.discount")) return { ok: false, error: "Only managers and owners can set an approval PIN." };
   if (!/^\d{4,6}$/.test(pin)) return { ok: false, error: "PIN must be 4–6 digits." };
   if (/^(\d)\1+$/.test(pin) || "0123456789".includes(pin) || "9876543210".includes(pin)) return { ok: false, error: "Choose a less guessable PIN (no repeats or sequences)." };
   const user = await db.user.findUniqueOrThrow({ where: { id: me.id } });

@@ -1,3 +1,4 @@
+import type { Permission } from "./permissions";
 import "server-only";
 import { headers } from "next/headers";
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -13,7 +14,8 @@ import { formatPrice } from "./utils";
  */
 
 type Db = PrismaClient | Prisma.TransactionClient;
-export type AuditActor = { id: string; name: string; role: string } | null;
+/** permissions: the person's worked-out access (lib/permissions.ts), when the caller has it (signed-in staff do) */
+export type AuditActor = { id: string; name: string; role: string; permissions?: readonly Permission[] } | null;
 export type Changes = Record<string, [unknown, unknown]>;
 
 export type AuditEntry = {

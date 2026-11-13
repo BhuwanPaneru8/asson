@@ -15,7 +15,7 @@ const th = "px-3 py-2.5 text-left text-[11.5px] font-medium uppercase tracking-w
 export default async function VisitsPage() {
   const me = await requirePermission("self.time");
   const scope = await scopeFor(me);
-  const manager = can(me.role as Role, "ops.manage");
+  const manager = can(me, "ops.manage");
   const [rows, templates, recent] = await Promise.all([
     visitOverview(scope),
     db.visitTemplate.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] }),

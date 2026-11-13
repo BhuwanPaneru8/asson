@@ -6,5 +6,5 @@ import { can } from "./permissions";
 export function canViewOrder(order: { userId: string | null }, user: CurrentUser | null) {
   if (!order.userId) return true;
   if (!user) return false;
-  return user.id === order.userId || can(user.role, "orders");
+  return user.id === order.userId || can(user, "orders");
 }
