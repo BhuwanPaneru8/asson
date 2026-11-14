@@ -1,10 +1,11 @@
 import { requirePermission } from "@/lib/auth";
 import { teamList } from "@/lib/team";
 import { getLocations } from "@/lib/stock";
-import { defaultJob, effectivePermissions, jobOf, JOBS, type StaffRole } from "@/lib/permissions";
+import { defaultJob, effectivePermissions, jobOf, JOBS, TWO_FACTOR_ROLES, type StaffRole } from "@/lib/permissions";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { AccessEditor, AddMember, MemberActions } from "@/components/admin/team-forms";
 import { StaffLocations } from "@/components/admin/staff-locations";
+import { TwoFactorControls } from "@/components/admin/team-two-factor";
 
 export const metadata = { title: "Team & access" };
 
@@ -36,6 +37,7 @@ export default async function TeamPage() {
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {m.invitePending && <Pill tone="warn">Invite not used yet</Pill>}
                     {m.hasPin && <Pill tone="neutral">Approval PIN set</Pill>}
+                    {m.twoFactorOn ? <Pill tone="success">Two-step on</Pill> : (TWO_FACTOR_ROLES.includes(m.role as StaffRole) || m.twoFactorRequired) ? <Pill tone="warn">Two-step required, not set up</Pill> : null}
                     {!m.job && m.role !== "ADMIN" && <Pill tone="neutral">Classic {jobOf(job)?.label.toLowerCase()}</Pill>}
                   </div>
                 </div>
@@ -43,13 +45,14 @@ export default async function TeamPage() {
                 <div className="space-y-2 lg:col-span-4">
                   {m.role === "ADMIN" ? <p className="text-[13px] text-muted">Every location (owner)</p> : <StaffLocations userId={m.id} all={m.all} assigned={m.storeIds} locations={locs} editable />}
                   {m.id !== me.id && <MemberActions id={m.id} name={m.name} phone={m.phone} />}
+                  <TwoFactorControls id={m.id} name={m.name} on={m.twoFactorOn} required={m.twoFactorRequired} byLevel={TWO_FACTOR_ROLES.includes(m.role as StaffRole)} isMe={m.id === me.id} />
                 </div>
               </li>
             );
           })}
         </ul>
       </Card>
-      <p className="mt-4 text-[12.5px] text-muted">A person&apos;s job decides what they see in the menu and which pages and actions they can use; fine-tuning adds or removes single areas for one person. Discount limits and approvals follow their level (owner, manager, cashier). Every change is in the Activity log.</p>
+      <p className="mt-4 text-[12.5px] text-muted">A person&apos;s job decides what they see in the menu and which pages and actions they can use; fine-tuning adds or removes single areas for one person. Discount limits and approvals follow their level (owner, manager, cashier). Managers and owners always use two-step sign-in (a code from their phone after the password); you can require it for anyone else. Every change is in the Activity log.</p>
     </>
   );
 }

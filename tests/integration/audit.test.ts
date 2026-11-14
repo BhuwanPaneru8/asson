@@ -102,10 +102,14 @@ describe("audit trail", () => {
     await db.user.create({ data: { email: "shopper@test.local", name: "Shopper", passwordHash: await hashPassword("Right-pass-1") } });
     await login(undefined, loginForm("boss@test.local", "wrong"));
     await login(undefined, loginForm("shopper@test.local", "wrong"));
-    await expect(login(undefined, loginForm("boss@test.local", "Right-pass-1"))).rejects.toBeInstanceOf(RedirectError);
+    // the owner's password is right, but two-step sign-in comes first: recorded once it's done (tests/integration/two-factor.test.ts)
+    await expect(login(undefined, loginForm("boss@test.local", "Right-pass-1"))).rejects.toMatchObject({ url: "/login/two-factor" });
     await expect(login(undefined, loginForm("shopper@test.local", "Right-pass-1"))).rejects.toBeInstanceOf(RedirectError);
+    await db.user.create({ data: { email: "till@test.local", name: "Till", role: "CASHIER", passwordHash: await hashPassword("Right-pass-1") } });
+    await expect(login(undefined, loginForm("till@test.local", "Right-pass-1"))).rejects.toBeInstanceOf(RedirectError);
     const rows = await db.auditLog.findMany({ orderBy: { at: "asc" } });
     expect(rows.map((r) => r.action)).toEqual(["auth.login_failed", "auth.login"]);
+    expect(rows[1].summary).toMatch(/Till signed in/);
     expect(rows[0].summary).toMatch(/boss@test\.local/);
     expect(rows[0].actorId).toBeNull(); // whoever typed it is unknown
   });

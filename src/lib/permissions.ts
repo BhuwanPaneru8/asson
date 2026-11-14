@@ -149,3 +149,13 @@ export function homeFor(who: Subject) {
   if (can(who, "pos.sell") && !can(who, "dashboard")) return "/admin/pos";
   return can(who, "dashboard") ? "/admin" : "/admin/today";
 }
+
+/** Levels that must use two-step sign-in (lib/two-factor.ts). The owner can require it for anyone else too. */
+export const TWO_FACTOR_ROLES: readonly StaffRole[] = ["ADMIN", "MANAGER"];
+
+/** Does this person need a second step after their password? Customers never do. */
+export function twoFactorStep(u: { role: Role; twoFactorRequired: boolean; totpEnabledAt: Date | null }): "none" | "verify" | "setup" {
+  if (!isStaffRole(u.role)) return "none";
+  if (u.totpEnabledAt) return "verify";
+  return TWO_FACTOR_ROLES.includes(u.role) || u.twoFactorRequired ? "setup" : "none";
+}

@@ -110,6 +110,8 @@ EOF
   fi
   # settings added after the first install (kept idempotent for existing servers)
   grep -q '^MEDIA_DIR=' "$f" || echo "MEDIA_DIR=/srv/asson/$e/media" >> "$f"
+  # encrypts staff authenticator-app secrets (two-step sign-in); never change it once set
+  grep -q '^TWO_FACTOR_KEY=' "$f" || echo "TWO_FACTOR_KEY=$(openssl rand -hex 32)" >> "$f"
   # deep health URL for the uptime monitor: https://<host>/api/health/deep?key=<HEALTH_KEY>
   grep -q '^HEALTH_KEY=' "$f" || echo "HEALTH_KEY=$(openssl rand -hex 24)" >> "$f"
   # owner's mobile number(s) for critical alerts, comma-separated (texted only once an SMS gateway is set up)

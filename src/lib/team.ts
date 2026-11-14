@@ -90,8 +90,9 @@ export async function removeFromTeam(tx: Tx, owner: Actor, userId: string, reaso
   if (u.role === "ADMIN" && (await tx.user.count({ where: { role: "ADMIN" } })) <= 1) throw new TeamError("Keep at least one owner.");
   const open = await tx.attendance.count({ where: { userId, clockOut: null } });
   if (open) throw new TeamError(`${u.name} is clocked in. Clock them out first (People page).`);
-  await tx.user.update({ where: { id: userId }, data: { role: "CUSTOMER", job: null, permAdd: [], permRemove: [], allLocations: false, approvalPinHash: null, tokenVersion: { increment: 1 } } });
+  await tx.user.update({ where: { id: userId }, data: { role: "CUSTOMER", job: null, permAdd: [], permRemove: [], allLocations: false, approvalPinHash: null, tokenVersion: { increment: 1 }, totpSecret: null, totpEnabledAt: null, totpLastStep: null, totpPendingSecret: null, twoFactorRequired: false } });
   await tx.staffLocation.deleteMany({ where: { userId } });
+  await tx.twoFactorBackupCode.deleteMany({ where: { userId } });
   await tx.staffInvite.updateMany({ where: { userId, usedAt: null }, data: { expiresAt: new Date() } });
   await audit(tx, owner, { action: "team.remove", entity: ["User", userId], summary: `${u.name} removed from the team (was ${jobOf(u.job)?.label ?? u.role}): ${why}` });
 }
@@ -119,7 +120,7 @@ export async function acceptInvite(tx: Tx, token: string, password: string, now 
   if (!inv || inv.purpose !== "INVITE" || inv.usedAt || inv.expiresAt <= now || inv.user.role === "CUSTOMER") throw new TeamError("This link has expired or was already used. Ask the owner for a new one.");
   const used = await tx.staffInvite.updateMany({ where: { id: inv.id, usedAt: null }, data: { usedAt: now } });
   if (!used.count) throw new TeamError("This link was just used.");
-  const user = await tx.user.update({ where: { id: inv.userId }, data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } }, select: { id: true, role: true, tokenVersion: true } });
+  const user = await tx.user.update({ where: { id: inv.userId }, data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 } }, select: { id: true, name: true, email: true, role: true, tokenVersion: true, twoFactorRequired: true, totpEnabledAt: true } });
   await audit(tx, { id: inv.userId, name: inv.user.name, role: inv.user.role }, { action: "team.password", entity: ["User", inv.userId], summary: `${inv.user.name} set their password from an invite link` });
   return user;
 }
@@ -129,13 +130,14 @@ export async function teamList(now = new Date()) {
   const users = await db.user.findMany({
     where: { role: { not: "CUSTOMER" } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, email: true, phone: true, role: true, job: true, permAdd: true, permRemove: true, allLocations: true, approvalPinHash: true, locations: { select: { storeId: true } }, invites: { where: { usedAt: null, purpose: "INVITE", expiresAt: { gt: now } }, select: { id: true }, take: 1 } },
+    select: { id: true, name: true, email: true, phone: true, role: true, job: true, permAdd: true, permRemove: true, allLocations: true, approvalPinHash: true, totpEnabledAt: true, twoFactorRequired: true, locations: { select: { storeId: true } }, invites: { where: { usedAt: null, purpose: "INVITE", expiresAt: { gt: now } }, select: { id: true }, take: 1 } },
   });
   return users.map((u) => ({
     id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role,
     job: (jobOf(u.job)?.key ?? null) as JobKey | null, add: u.permAdd, remove: u.permRemove,
     permissions: effectivePermissions(u.role, u.job, u.permAdd, u.permRemove),
     all: u.allLocations, storeIds: u.locations.map((l) => l.storeId), hasPin: !!u.approvalPinHash, invitePending: u.invites.length > 0,
+    twoFactorOn: !!u.totpEnabledAt, twoFactorRequired: u.twoFactorRequired,
   }));
 }
 

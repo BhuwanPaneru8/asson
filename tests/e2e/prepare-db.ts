@@ -6,3 +6,4 @@ const url = process.env.DATABASE_URL ?? "";
 if (!/asson_e2e/.test(url)) throw new Error(`Refusing to prepare a non-E2E database: ${url}`);
 execSync("npx prisma migrate deploy", { stdio: "inherit" });
 execSync("npx tsx prisma/seed.ts", { stdio: "inherit" });
+execSync("npx tsx tests/e2e/seed-two-factor.ts", { stdio: "inherit" }); // known authenticator secrets, this database only

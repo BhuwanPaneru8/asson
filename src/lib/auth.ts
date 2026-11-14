@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from "./session-token";
-import { can, effectivePermissions, homeFor, type Permission, type Role } from "./permissions";
+import { can, effectivePermissions, homeFor, twoFactorStep, type Permission, type Role } from "./permissions";
 
 export type CurrentUser = {
   id: string;
@@ -29,16 +29,23 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!payload) return null;
   const user = await db.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true, job: true, permAdd: true, permRemove: true },
+    select: { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true, job: true, permAdd: true, permRemove: true, twoFactorRequired: true, totpEnabledAt: true },
   });
   // tokenVersion lets us revoke every session (password change, staff off-boarding)
   if (!user || user.tokenVersion !== payload.v) return null;
+  // staff who use (or must use) two-step sign-in need a session that passed it: one from before it was
+  // switched on, or required by the owner, no longer counts and they sign in again
+  if (twoFactorStep(user) !== "none" && payload.m !== 1) return null;
   return { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, job: user.job, permissions: effectivePermissions(user.role, user.job, user.permAdd, user.permRemove) };
 });
 
-/** remember: false makes it a browser-session cookie (gone when the browser closes, for a shared computer). */
-export async function createSession(user: { id: string; role: CurrentUser["role"]; tokenVersion: number }, opts: { remember?: boolean } = {}) {
-  const token = await signSession({ sub: user.id, role: user.role, v: user.tokenVersion });
+/**
+ * remember: false makes it a browser-session cookie (gone when the browser closes, for a shared computer).
+ * twoFactor: this sign-in passed two-step verification (only lib/two-factor.ts sets it).
+ * Staff sign-ins go through beginSignIn (lib/two-factor.ts), which decides whether a second step comes first.
+ */
+export async function createSession(user: { id: string; role: CurrentUser["role"]; tokenVersion: number }, opts: { remember?: boolean; twoFactor?: boolean } = {}) {
+  const token = await signSession({ sub: user.id, role: user.role, v: user.tokenVersion, ...(opts.twoFactor ? { m: 1 as const } : {}) });
   const jar = await cookies();
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,

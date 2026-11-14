@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession } from "@/lib/auth";
+import { beginSignIn } from "@/lib/two-factor";
+import { homeFor } from "@/lib/permissions";
 import { acceptInvite, TeamError, redeemResetLink } from "@/lib/team";
 import { rateLimit } from "@/lib/rate-limit";
 import { headers } from "next/headers";
@@ -20,15 +22,16 @@ export async function setPasswordFromInvite(input: z.input<typeof schema>): Prom
   if (!rateLimit(`invite:${clientIp(await headers())}`, 10, 15 * 60_000)) return { ok: false, error: "Too many tries. Wait a few minutes." };
   const p = schema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0]?.message ?? "Check your password." };
-  let user: { id: string; role: Parameters<typeof createSession>[0]["role"]; tokenVersion: number };
+  let user: Awaited<ReturnType<typeof acceptInvite>>;
   try {
     user = await db.$transaction((tx) => acceptInvite(tx, p.data.token, p.data.password));
   } catch (e) {
     if (e instanceof TeamError) return { ok: false, error: e.message };
     throw e;
   }
-  await createSession(user);
-  redirect("/admin");
+  // managers and owners set up two-step sign-in now, before any staff page
+  const r = await beginSignIn(user, { remember: true, dest: homeFor(user.role) });
+  redirect(r.to);
 }
 
 const resetSchema = z.object({
