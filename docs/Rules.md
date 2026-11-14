@@ -166,3 +166,4 @@ AI assistants working on this repo **MUST**:
 - [ ] Typecheck, lint and build clean; migration SQL reviewed
 - [ ] Verified in the browser (and the database where money or stock is involved)
 - [ ] Docs updated: Memory always; PRD, Architecture or Phases if scope or design changed
+- [ ] **Handbook updated** (`src/handbook/content/`): the guide for the screen you changed, any procedure or job page it affects, and the World-class roadmap if an item shipped. Raise a page's `version` when staff must re-read it
