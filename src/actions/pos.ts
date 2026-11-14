@@ -18,6 +18,8 @@ import { scopeFor } from "@/lib/scope";
 import { transitionOrder, TransitionError } from "@/lib/orders";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
 import { createShopOrder, ShopOrderError, stockElsewhere } from "@/lib/shop-orders";
+import { issueInvoice } from "@/lib/invoices";
+import { syncSoon } from "@/lib/cbms";
 import { dispatchNotifications } from "@/lib/notifications";
 import { after } from "next/server";
 
@@ -96,7 +98,12 @@ const saleSchema = z.object({
     tendered: z.number().int().positive().optional(),
     reference: z.string().trim().max(60).optional(),
   })).min(1).max(6),
-  customer: z.object({ name: z.string().trim().max(80).optional(), phone: z.string().trim().regex(/^9[678]\d{8}$/).optional().or(z.literal("")) }).optional(),
+  customer: z.object({
+    name: z.string().trim().max(80).optional(),
+    phone: z.string().trim().regex(/^9[678]\d{8}$/).optional().or(z.literal("")),
+    /** a business buyer's PAN: printed on a full tax invoice (they can claim the VAT) */
+    pan: z.string().trim().regex(/^\d{9}$/).optional().or(z.literal("")),
+  }).optional(),
 });
 
 export type PosSaleInput = z.input<typeof saleSchema>;
@@ -214,6 +221,8 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
       await allocateOrder(tx, { orderId: o.id, only: store.id, picked: true, actorId: me.id, note: `Store sale · ${store.name}`, lines: o.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: i.variantId! })) });
       for (const v of variants) await tx.product.update({ where: { id: v.product.id }, data: { soldCount: { increment: qty.get(v.id)! } } });
       if (customer) await earnForOrder(tx, o.id); // a store sale is delivered on the spot
+      // the tax invoice is numbered with the sale: if anything here fails, the number isn't used
+      await issueInvoice(tx, o.id, { actorId: me.id, buyerPan: d.customer?.pan || null, buyerName: d.customer?.name || null });
       if (discount) {
         const approver = approverId ? await tx.user.findUnique({ where: { id: approverId }, select: { name: true } }) : null;
         await audit(tx, me, { action: "pos.discount", entity: ["Order", o.id], summary: `${formatOrderNumber(o.number)}: ${formatPrice(discount)} discount (${((discount / subtotal) * 100).toFixed(1)}%) on ${formatPrice(subtotal)} — ${d.discount!.reason}${approver ? ` · approved by ${approver.name}` : ""}`, changes: { subtotal, discount, approverId } });
@@ -221,6 +230,7 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
       return o;
     });
     revalidateTag("products", { expire: 60 });
+    syncSoon();
     refresh(); // shift totals on the till
     return { ok: true, orderId: order.id, number: formatOrderNumber(order.number), change };
   } catch (e) {

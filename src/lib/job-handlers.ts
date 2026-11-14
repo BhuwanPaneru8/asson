@@ -13,6 +13,7 @@ import { escalateOverdue } from "./issues";
 import { postRecurring } from "./shop-pl";
 import { runPriceEvents } from "./markdowns";
 import { sendMetaPurchase } from "./marketing";
+import { syncCbms } from "./cbms";
 
 // What each background job does. Handlers must be safe to run twice (a worker can die after the
 // work but before marking it done), so each one is idempotent or guarded by conditional updates.
@@ -37,6 +38,8 @@ export async function stockAudit() {
 
 export const HANDLERS = {
   "notifications.dispatch": { label: "Send queued SMS", run: () => dispatchNotifications(200), maxAttempts: 3 },
+  // off (a no-op) until CBMS_MODE and the taxpayer credentials are set
+  "cbms.sync": { label: "Post invoices and credit notes to the IRD (CBMS)", run: () => syncCbms(200), maxAttempts: 3 },
   "system.watchdog": { label: "Health checks and owner alerts", run: () => watchdog(), maxAttempts: 1 },
   "costs.recurring": { label: "Post this month's recurring costs (rent, internet…) to Expenses", run: () => postRecurring(), maxAttempts: 3 },
   "issues.escalate": { label: "Flag shop issues past their due time to HQ", run: () => escalateOverdue(), maxAttempts: 2 },
@@ -63,6 +66,7 @@ export type JobType = keyof typeof HANDLERS;
 /** Recurring work. Slots are aligned to the epoch, so "daily" runs just after 05:45 Nepal time. */
 export const RECURRING: { type: JobType; everyMs: number }[] = [
   { type: "notifications.dispatch", everyMs: 1 * MIN },
+  { type: "cbms.sync", everyMs: 1 * MIN },
   { type: "system.watchdog", everyMs: 5 * MIN },
   { type: "people.autoclose", everyMs: 60 * MIN },
   { type: "people.absences", everyMs: 60 * MIN },

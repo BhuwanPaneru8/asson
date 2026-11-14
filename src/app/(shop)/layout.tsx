@@ -17,9 +17,9 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <ShopProvider cart={cart} user={user && { id: user.id, name: user.name, email: user.email, role: user.role }} wishlist={wishlist}>
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[60] focus:bg-ink focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
       <Suspense fallback={null}><NavProgress /></Suspense>
-      <Header />
+      <div className="contents print:hidden"><Header /></div>
       <main id="main" className="flex-1">{children}</main>
-      <Footer />
+      <div className="contents print:hidden"><Footer /></div>
       <CartDrawer />
       <Marketing ids={marketingIds()} initial={consent} />
     </ShopProvider>

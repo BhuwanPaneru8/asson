@@ -31,6 +31,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   if (!order || !canViewOrder(order, user)) notFound();
 
   const a = order.shippingAddress as Addr;
+  const invoiced = !!(await db.taxInvoice.findUnique({ where: { orderId: order.id }, select: { id: true } }));
   const pickup = !!order.pickupStoreId;
   const deliveredAt = order.events.find((e) => e.status === "DELIVERED")?.createdAt;
   const ex = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
@@ -106,6 +107,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           {changeable && <div className="mt-6"><OrderChange orderId={order.id} paid={order.paymentStatus === "PAID"} addr={pickup ? null : { fullName: a.fullName, phone: a.phone, line1: a.line1, city: a.city, district: a.district ?? "" }}
             items={order.items.map((i) => ({ id: i.id, name: i.name, color: i.color, size: i.size, quantity: i.quantity, sizes: swapTo.filter((v) => v.productId === i.productId && v.id !== i.variantId).map((v) => ({ variantId: v.id, label: `${v.color} ${v.size}` })) }))} /></div>}
           {mine && ["DELIVERED", "CANCELLED", "RETURNED"].includes(order.status) && order.channel === "ONLINE" && <div className="mt-6"><BuyAgain orderId={order.id} /></div>}
+          {invoiced && <p className="mt-6"><Link href={`/orders/${order.id}/invoice`} className="text-[14px] underline underline-offset-4">{t("ord.invoice")}</Link></p>}
           <div className="mt-6"><OrderActions orderId={order.id} canCancel={CUSTOMER_CANCELLABLE.includes(order.status)} canReturn={canReturn} exchange={ex && !ex.blocked ? ex.items : []} /></div>
         </div>
         <div className="space-y-6 md:col-span-5">

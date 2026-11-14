@@ -164,6 +164,8 @@ async function main() {
   console.log("Resetting data…");
   // the cash book and damaged register are append-only (triggers block DELETE); TRUNCATE empties them for a fresh seed
   await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit", "DamageEntry"`);
+  // issued invoices and credit notes can't be deleted (triggers): TRUNCATE them and their prints/CBMS outbox, and restart numbering
+  await db.$executeRawUnsafe(`TRUNCATE "CbmsSync", "InvoicePrint", "CreditNote", "TaxInvoice", "InvoiceSeries"`);
   // closed months and filed VAT returns lock expenses, bills and payments (triggers): clear them before wiping
   await db.monthClose.deleteMany();
   await db.vatReturn.deleteMany();

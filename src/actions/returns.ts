@@ -16,6 +16,7 @@ import { scopeFor } from "@/lib/scope";
 import { reverseReferral } from "@/lib/referrals";
 import { store } from "@/lib/config";
 import { refundPerUnit } from "@/lib/costing";
+import { issueCreditNote } from "@/lib/invoices";
 import { audit } from "@/lib/audit";
 import { dispatchNotifications, queueOrderNotice } from "@/lib/notifications";
 import { after } from "next/server";
@@ -176,6 +177,8 @@ export async function processReturn(input: ProcessReturnInput): Promise<R<{ retu
       const fully = order.items.every((i) => i.returnItems.reduce((s, x) => s + x.quantity, 0) + rows.filter((r) => r.item.id === i.id).reduce((s, r) => s + r.quantity, 0) >= i.quantity);
       await tx.order.update({ where: { id: order.id }, data: fully ? { status: "RETURNED", paymentStatus: "REFUNDED" } : {} });
       await reverseForReturn(tx, order.id, refund);
+      // the credit note against the sale's invoice (sales from before invoicing started have none)
+      await issueCreditNote(tx, { orderId: order.id, returnId: created.id, storeId: shop.id, actorId: me.id, reason: d.reason, lines: rows.map((r) => ({ name: `${r.item.name} (${r.item.color}/${r.item.size})`, sku: r.item.sku, quantity: r.quantity, amount: r.amount })) });
       if (fully) await reverseReferral(tx, order.id); // the friend's first order came back
       await queueBackInStock(tx, rows.filter((r) => r.condition === "RESELLABLE" && r.item.variantId).map((r) => r.item.variantId!));
       if (order.channel === "ONLINE") await queueOrderNotice(tx, order.id, "refund", { amount: refund });

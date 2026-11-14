@@ -5,6 +5,8 @@ import { store } from "@/lib/config";
 import { REFUND_LABEL } from "@/lib/pos";
 import { formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { PrintButton } from "@/components/admin/print-button";
+import { creditNoteView } from "@/lib/invoices";
+import { PrintDocument } from "@/components/invoices/print-document";
 
 export const metadata = { title: "Return slip" };
 
@@ -14,6 +16,20 @@ export default async function ReturnSlip({ params }: { params: Promise<{ id: str
   if (!ret) notFound();
   const people = await db.user.findMany({ where: { id: { in: [ret.processedById, ret.approvedById ?? ""] } }, select: { id: true, name: true } });
   const nameOf = (id: string | null) => people.find((p) => p.id === id)?.name ?? "—";
+  // a return against an invoiced sale is a credit note (older sales: the return slip below)
+  const note = await creditNoteView({ returnId: ret.id });
+  if (note) return (
+    <div className="bg-white py-2">
+      <PrintDocument doc={note} size="thermal" note={
+        <div className="mt-2 border-t border-dashed border-black pt-2 font-mono text-[12px]">
+          <p>Return R{String(ret.number).padStart(5, "0")} · approved by {nameOf(ret.approvedById)}</p>
+          <p className="flex justify-between font-bold"><span>REFUND</span><span>{formatPrice(ret.refundAmount)}</span></p>
+          <p>Via: {REFUND_LABEL[ret.refundMethod]}{ret.reference ? ` (${ret.reference})` : ""}</p>
+          {ret.voucherCode && <p className="mt-2 border border-black p-2 text-center text-[14px] font-bold">CREDIT CODE<br />{ret.voucherCode}<br /><span className="text-[11px] font-normal">Valid 1 year · in store & online</span></p>}
+        </div>
+      } />
+    </div>
+  );
   return (
     <div className="mx-auto w-[302px] bg-white p-3 font-mono text-[12px] leading-snug text-black print:p-0">
       <div className="text-center"><p className="font-display text-[22px]">{store.name.toLowerCase()}.</p><p>{store.storeAddress}</p><p className="mt-1 font-bold">RETURN / CREDIT NOTE</p></div>

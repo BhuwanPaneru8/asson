@@ -9,7 +9,8 @@ import { formatPrice } from "./utils";
 
 // VAT returns. Each covers the Nepali month the accountant files for, given as AD dates (we don't convert
 // calendars: tax dates must be exact, so the accountant sets them). Output VAT = VAT in sales less VAT in returns
-// (credit notes) in the period, on the same documents as the Sales and Returns registers. Input VAT counts only
+// (credit notes) in the period, on the same documents as the Sales and Returns registers: tax invoices and credit
+// notes by their numbers (lib/invoices.ts), and sales from before invoicing started by order number. Input VAT counts only
 // for bills from suppliers with a PAN (no PAN, no claim); the rest is shown as unclaimable with the bills listed.
 // Credit carries forward from the previous filed return. Returns are filed in order; a filed return locks its
 // period's purchase bills in the database (bill_vat_lock) until it's reopened with a reason.
@@ -20,6 +21,13 @@ export class VatError extends Error {}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const nextDay = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/** First and last document number per series, e.g. "FLAGSHIP-8384-000001 – 000120; WEB-8384-000007 – 000031". */
+function span(numbers: string[]) {
+  const bySeries = new Map<string, string[]>();
+  for (const n of numbers) { const k = n.replace(/\d+$/, ""); bySeries.set(k, [...(bySeries.get(k) ?? []), n]); }
+  return [...bySeries.values()].map((ns) => { const sorted = ns.sort(); return sorted.length > 1 ? `${sorted[0]} – ${sorted.at(-1)!.replace(/^.*-/, "")}` : sorted[0]; }).join("; ");
+}
 
 /** The figures for a period (not saved). `broughtForward` is the credit left by the previous filed return. */
 export async function computeVat(from: string, to: string, broughtForward = 0) {
@@ -33,8 +41,9 @@ export async function computeVat(from: string, to: string, broughtForward = 0) {
   const inputVat = sum(claimable, (r) => r.vat) - creditVat, unclaimableVat = sum(noPan, (r) => r.vat);
   const net = outputVat - inputVat - broughtForward;
   return {
-    sales: { count: sales.length, taxable: sum(sales, (r) => r.taxable), vat: sum(sales, (r) => r.vat) },
-    returns: { count: returns.length, taxable: sum(returns, (r) => r.taxable), vat: sum(returns, (r) => r.vat) },
+    // the tax documents behind the figures: invoice and credit-note numbers (older sales: order numbers)
+    sales: { count: sales.length, taxable: sum(sales, (r) => r.taxable), vat: sum(sales, (r) => r.vat), documents: span(sales.map((r) => r.invoice)) },
+    returns: { count: returns.length, taxable: sum(returns, (r) => r.taxable), vat: sum(returns, (r) => r.vat), documents: span(returns.map((r) => r.note)) },
     purchases: { count: purchases.length, taxable: sum(claimable, (r) => r.taxable), vat: inputVat + creditVat },
     supplierCredits: { count: credits.length, vat: creditVat },
     noPan: noPan.map((p) => ({ bill: p.bill, supplier: p.supplier, invoice: p.invoice, date: p.date, vat: p.vat })),

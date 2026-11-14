@@ -518,6 +518,7 @@ model Order {
   rto              ReturnToOrigin?
   exchanges        Exchange[]        @relation("ExchangeFrom")
   exchangeFor      Exchange?         @relation("ExchangeReplacement")
+  invoice          TaxInvoice?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -790,6 +791,7 @@ model Return {
   createdAt     DateTime     @default(now())
   items         ReturnItem[]
   exchange      Exchange?
+  creditNote    CreditNote?
 
   @@index([orderId])
   @@index([shiftId])
@@ -2841,4 +2843,140 @@ model LoginCode {
   createdAt DateTime  @default(now())
 
   @@index([target, purpose, createdAt])
+}
+
+// ---------- Tax invoices (VAT Rules 2053 r.17–18, Electronic Billing Procedure 2074; docs/Tax-Invoices.md) ----------
+
+/// Gap-free counters, one per fiscal year (Shrawan–Asar, "2083/84"), series (a location's code, or WEB for
+/// online orders) and document (INV invoices, CN credit notes). Taken with UPDATE … RETURNING inside the sale's
+/// transaction: the row lock serialises issuers, and a rolled-back sale rolls its number back too.
+model InvoiceSeries {
+  fiscalYear String
+  series     String
+  doc        String
+  last       Int    @default(0)
+
+  @@id([fiscalYear, series, doc])
+}
+
+/// An issued tax invoice (or abbreviated tax invoice). A snapshot: seller, buyer, lines and VAT as printed.
+/// Never updated or deleted (database trigger); returns are credit notes against it.
+model TaxInvoice {
+  id            String         @id @default(cuid())
+  /// e.g. FLAGSHIP-8384-000123 (series, fiscal year, number in the year)
+  number        String         @unique
+  fiscalYear    String
+  series        String
+  seq           Int
+  abbreviated   Boolean        @default(false)
+  orderId       String         @unique
+  order         Order          @relation(fields: [orderId], references: [id])
+  /// the shop whose till issued it (null = online order)
+  storeId       String?
+  issuedAt      DateTime       @default(now())
+  /// Nepal calendar date of issue, YYYY-MM-DD in BS and AD
+  dateBs        String
+  dateAd        String
+  sellerName    String
+  sellerAddress String
+  sellerPan     String
+  buyerName     String
+  buyerPan      String?
+  buyerAddress  String?
+  paymentMethod String
+  /// [{ name, sku, quantity, rate, amount }] in paisa before VAT
+  lines         Json
+  gross         Int
+  discount      Int
+  taxable       Int
+  vat           Int
+  total         Int
+  issuedById    String?
+  creditNotes   CreditNote[]
+  prints        InvoicePrint[]
+  cbms          CbmsSync?
+
+  @@unique([fiscalYear, series, seq])
+  @@index([issuedAt])
+  @@index([storeId, issuedAt])
+}
+
+/// A credit note (sales return) against one invoice. Same rules: numbered per year and series, never changed.
+model CreditNote {
+  id         String         @id @default(cuid())
+  /// e.g. CN-FLAGSHIP-8384-000004
+  number     String         @unique
+  fiscalYear String
+  series     String
+  seq        Int
+  invoiceId  String
+  invoice    TaxInvoice     @relation(fields: [invoiceId], references: [id])
+  /// the till return it records (null when an online order came back whole through the admin)
+  returnId   String?        @unique
+  return     Return?        @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  storeId    String?
+  issuedAt   DateTime       @default(now())
+  dateBs     String
+  dateAd     String
+  reason     String
+  buyerName  String
+  buyerPan   String?
+  lines      Json
+  gross      Int
+  discount   Int
+  taxable    Int
+  vat        Int
+  total      Int
+  issuedById String?
+  prints     InvoicePrint[]
+  cbms       CbmsSync?
+
+  @@unique([fiscalYear, series, seq])
+  @@index([issuedAt])
+  @@index([invoiceId])
+}
+
+/// Every print of an invoice or credit note: copy 0 is the original, 1, 2 … are "Copy of original (n)".
+/// Append-only (trigger), and each print is in the audit trail.
+model InvoicePrint {
+  id           String      @id @default(cuid())
+  invoiceId    String?
+  invoice      TaxInvoice? @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  creditNoteId String?
+  creditNote   CreditNote? @relation(fields: [creditNoteId], references: [id], onDelete: Restrict)
+  copy         Int
+  printedById  String?
+  printedAt    DateTime    @default(now())
+
+  @@unique([invoiceId, copy])
+  @@unique([creditNoteId, copy])
+}
+
+enum CbmsStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+}
+
+/// Outbox for the IRD's Central Billing Monitoring System: one row per invoice or credit note, written with
+/// it. Posted by the cbms.sync job once CBMS_MODE and the credentials are set (off by default, rows wait).
+model CbmsSync {
+  id           String      @id @default(cuid())
+  invoiceId    String?     @unique
+  invoice      TaxInvoice? @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  creditNoteId String?     @unique
+  creditNote   CreditNote? @relation(fields: [creditNoteId], references: [id], onDelete: Restrict)
+  status       CbmsStatus  @default(QUEUED)
+  attempts     Int         @default(0)
+  claimedAt    DateTime?
+  sentAt       DateTime?
+  /// posted within the real-time window after issue (CBMS isrealtime)
+  realtime     Boolean?
+  /// last CBMS response code (200 ok, 101 already there, 100 credentials …) and error text
+  code         String?
+  error        String?
+  createdAt    DateTime    @default(now())
+
+  @@index([status, createdAt])
 }
