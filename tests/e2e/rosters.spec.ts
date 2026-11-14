@@ -1,18 +1,29 @@
 import { expect, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
-test("a manager plans next week, a bad shift is caught, publishing shows the cashier their shift on Today", async ({ page }) => {
+const ktm = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu" }).format(d);
+/** A day `n` days ahead in Nepal, and the Sunday its roster week starts on. */
+function dayAhead(n: number) {
+  const day = ktm(new Date(Date.now() + n * 86_400_000));
+  const t = new Date(`${day}T00:00:00Z`);
+  return { day, week: new Date(t.getTime() - t.getUTCDay() * 86_400_000).toISOString().slice(0, 10) };
+}
+
+test("a manager plans a shift, a bad shift is caught, publishing shows the cashier their shift on Today", async ({ page }) => {
+  // the day after tomorrow: always inside the cashier's "next 7 days" (next week's Sunday isn't, when today is a
+  // Sunday), and never the swap test's "tomorrow"
+  const { day, week } = dayAhead(2);
   await signIn(page, "owner", "/admin/rosters");
   await page.getByRole("link", { name: "Asson Flagship", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "Rosters · Asson Flagship" })).toBeVisible();
-  const week = (await page.getByText(/^Week of \d{4}-\d{2}-\d{2}$/).innerText()).slice(8); // next week by default
-  const sunday = page.getByLabel(`Ram Cashier ${week}`);
-  await expect(sunday).toBeVisible();
+  await page.goto(`${page.url().replace(/&week=.*$/, "")}&week=${week}`);
+  const cell = page.getByLabel(`Ram Cashier ${day}`);
+  await expect(cell).toBeVisible();
 
   // an impossible shift time can't be saved
-  await sunday.fill("25-30");
+  await cell.fill("25-30");
   await expect(page.getByRole("button", { name: /^Save 1 change$/ })).toBeDisabled();
-  await sunday.fill("10-18");
+  await cell.fill("10-18");
   const save = page.getByRole("button", { name: /^Save 1 change$/ });
   if (await save.isVisible()) { // already 10-18 when a retry runs against the same database
     await save.click();
@@ -26,16 +37,13 @@ test("a manager plans next week, a bad shift is caught, publishing shows the cas
   // the cashier sees it among the next 7 days
   await page.context().clearCookies({ name: /^(?!asson_consent$)/ }); // keep the cookie-banner answer
   await signIn(page, "cashier", "/admin/today");
-  const mine = page.locator("li").filter({ hasText: week.slice(5) }).filter({ hasText: "Asson Flagship" });
+  const mine = page.locator("li").filter({ hasText: day.slice(5) }).filter({ hasText: "Asson Flagship" });
   await expect(mine).toContainText("10–18");
 });
 
 test("a cashier gives tomorrow's shift to a colleague: they accept, the owner approves, and it moves to them", async ({ page }) => {
   // tomorrow in Nepal, and the week it falls in
-  const ktm = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu" }).format(d);
-  const tomorrow = ktm(new Date(Date.now() + 86_400_000));
-  const t = new Date(`${tomorrow}T00:00:00Z`);
-  const week = new Date(t.getTime() - t.getUTCDay() * 86_400_000).toISOString().slice(0, 10);
+  const { day: tomorrow, week } = dayAhead(1);
 
   await signIn(page, "owner", "/admin/rosters");
   await page.getByRole("link", { name: "Asson Flagship", exact: true }).first().click();
