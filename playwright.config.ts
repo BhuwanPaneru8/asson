@@ -23,6 +23,8 @@ export default defineConfig({
     screenshot: "only-on-failure",
     // ad trackers are switched on below (fake IDs) so the cookie banner is tested; every other test has
     // already answered it with "Only necessary", so the banner never covers what they click
+    // the service worker would sit between page.route() and the page; only the app test turns it on
+    serviceWorkers: "block",
     storageState: { cookies: [{ name: "asson_consent", value: "essential", domain: "localhost", path: "/", expires: -1, httpOnly: false, secure: false, sameSite: "Lax" }], origins: [] },
   },
   projects: [

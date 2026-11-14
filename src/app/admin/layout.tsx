@@ -3,8 +3,17 @@ import { requireStaff } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { AdminNav } from "@/components/admin/admin-nav";
 import { ROLE_LABEL } from "@/lib/permissions";
+import { ADMIN_MANIFEST } from "@/lib/app-manifest";
+import { store } from "@/lib/config";
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin" }, robots: { index: false } };
+export const metadata: Metadata = {
+  title: { default: "Admin", template: "%s · Admin" },
+  robots: { index: false },
+  // staff install this as its own app ("Asson Admin", terracotta icon), separate from the shop's
+  manifest: ADMIN_MANIFEST,
+  icons: { apple: "/icons/admin-apple-180.png" },
+  appleWebApp: { capable: true, title: `${store.name} Admin`, statusBarStyle: "default" },
+};
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireStaff();
