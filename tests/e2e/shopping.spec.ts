@@ -58,3 +58,37 @@ test("the shop is in English for everyone, with no language switch (Nepali shop 
   await expect(page.getByRole("button", { name: "नेपाली" })).toHaveCount(0);
   await expect(page.getByText("Free delivery over Rs. 2,500")).toHaveCount(0); // the top bar is gone
 });
+
+test("a guest with no email checks out with just their mobile, then tracks the order by that number", async ({ page }) => {
+  const mobile = `98${String(Date.now()).slice(-8)}`;
+  await page.goto("/p/oxford-button-down-shirt");
+  await page.getByRole("button", { name: /^Size L/ }).click();
+  await page.getByRole("button", { name: /Add to bag/ }).first().click();
+  await expect(page.getByRole("dialog", { name: /Your bag/ })).toBeVisible();
+
+  await page.goto("/checkout");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Mobile number").fill(mobile);
+  // the delivery phone follows the mobile number: no typing it twice
+  await expect(page.getByLabel("Phone", { exact: true })).toHaveValue(mobile);
+  await expect(page.getByText("Optional: for your receipt and order updates")).toBeVisible();
+  await page.getByLabel("Full name").fill("Mobile Only");
+  await page.getByLabel("District").selectOption("Kathmandu");
+  await page.getByLabel("City / municipality").fill("Kathmandu");
+  await page.getByLabel("Tole / street, house no.").fill("Baneshwor-10");
+  await page.getByRole("button", { name: "Place order" }).click();
+  await expect(page.getByRole("heading", { name: /Thank you/ })).toBeVisible();
+  const number = (await page.locator("b", { hasText: /^AS\d{6}$/ }).first().textContent())!;
+
+  // a fresh visitor finds it with the order number and the mobile number
+  await page.context().clearCookies({ name: /^(?!asson_consent$)/ });
+  await page.goto("/track");
+  await page.getByLabel("Order number").fill(number);
+  await page.getByLabel("Mobile number or email").fill("9800000000");
+  await page.getByRole("button", { name: "Track order" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "couldn't find an order" })).toBeVisible();
+  await page.getByLabel("Mobile number or email").fill(mobile);
+  await page.getByRole("button", { name: "Track order" }).click();
+  await expect(page).toHaveURL(/\/orders\//);
+  await expect(page.getByText(number).first()).toBeVisible();
+});

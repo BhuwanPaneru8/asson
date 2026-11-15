@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Truck, RotateCcw, ShieldCheck, Banknote } from "lucide-react";
-import { getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
+import { getCategoryCovers, getCategoryTree, getCollections, getProductRail } from "@/lib/catalog";
 import { ProductRail } from "@/components/product/product-rail";
 import { RecentlyViewed } from "@/components/product/recently-viewed";
 import { ForYou } from "@/components/product/for-you";
@@ -19,8 +19,9 @@ import { pick } from "@/lib/i18n";
 const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
 export default async function HomePage() {
-  const [tree, collections, best, fresh, sale, featuredCoupon, looks, { t, locale }] = await Promise.all([
+  const [tree, covers, collections, best, fresh, sale, featuredCoupon, looks, { t, locale }] = await Promise.all([
     getCategoryTree(),
+    getCategoryCovers(),
     getCollections(),
     getProductRail("best", 8),
     getProductRail("new", 8),
@@ -110,10 +111,17 @@ export default async function HomePage() {
         <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 md:mx-0 md:grid md:grid-cols-6 md:px-0">
           {shopCats.slice(0, 12).map((c) => (
             <Link key={c.slug} href={`/c/${c.slug}`} className="group w-32 shrink-0 md:w-auto">
-              <div className="flex aspect-square items-center justify-center bg-cloud px-3 text-center transition-colors group-hover:bg-accent-soft">
-                <span className="font-display text-[19px] leading-tight">{c.name}</span>
-              </div>
-              <p className="mt-2 text-center text-[12.5px] uppercase tracking-wider text-muted">{c.parent}</p>
+              {covers[c.id] ? (
+                <div className="relative aspect-[4/5] overflow-hidden bg-cloud">
+                  <Image src={covers[c.id]} alt="" fill sizes="(min-width:768px) 16vw, 128px" className="object-cover transition-transform duration-700 group-hover:scale-[1.04]" />
+                </div>
+              ) : (
+                <div className="flex aspect-[4/5] items-center justify-center bg-cloud px-3 text-center transition-colors group-hover:bg-accent-soft">
+                  <span className="font-display text-[19px] leading-tight" aria-hidden>{c.name}</span>
+                </div>
+              )}
+              <p className="mt-2.5 text-center text-[14px] font-medium leading-tight">{c.name}</p>
+              <p className="mt-0.5 text-center text-[11.5px] uppercase tracking-wider text-muted">{c.parent}</p>
             </Link>
           ))}
         </div>

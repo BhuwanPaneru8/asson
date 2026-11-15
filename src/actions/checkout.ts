@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
+import { realEmail } from "@/lib/password-reset";
 import { db } from "@/lib/db";
 import { getCart } from "@/lib/cart";
 import { getCurrentUser } from "@/lib/auth";
@@ -68,7 +69,8 @@ async function quoteCheckoutImpl(input: { couponCode?: string; shippingMethod: s
 }
 
 const orderSchema = z.object({
-  email: z.string().trim().toLowerCase().email("Enter a valid email"),
+  // optional: many shoppers here have no email; the mobile number is what the rider and order texts use
+  email: z.string().trim().toLowerCase().max(254).default("").refine((v) => v === "" || z.string().email().safeParse(v).success, "Enter a valid email"),
   phone: phoneSchema,
   addressId: z.string().optional(),
   address: addressSchema.optional(),
@@ -90,8 +92,9 @@ class CheckoutError extends Error {}
 async function placeOrderImpl(input: z.input<typeof orderSchema>): Promise<PlaceOrderState> {
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) return { error: "Please check the highlighted fields.", fieldErrors: fieldErrors(parsed.error) };
-  const data = parsed.data;
   const user = await getCurrentUser();
+  // no email typed: a signed-in shopper's own (real) address, otherwise none
+  const data = { ...parsed.data, email: parsed.data.email || (user && realEmail(user.email) ? user.email.toLowerCase() : "") };
   const locale = await getLocale(); // order SMS can follow the shopper's language
 
   const h = await headers();
