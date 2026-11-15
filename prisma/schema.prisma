@@ -3006,6 +3006,8 @@ model CbmsSync {
   createdAt    DateTime    @default(now())
 
   @@index([status, createdAt])
+}
+
 /// One-time backup codes for two-step sign-in (10 at a time, shown once). Only a keyed hash is stored.
 model TwoFactorBackupCode {
   id        String    @id @default(cuid())
