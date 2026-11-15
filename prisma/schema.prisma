@@ -2790,6 +2790,22 @@ model SopSignoff {
   @@index([userId])
 }
 
+/// Handbook (Admin → Handbook, content in src/handbook): what each person has read, for which version of the
+/// page, and their best score on its "check yourself" questions. Onboarding progress is built from this and
+/// SopSignoff. Like SopSignoff, no relation to User: rows stay as history.
+model HandbookRead {
+  userId    String
+  slug      String
+  version   Int
+  readAt    DateTime @default(now())
+  /// best percentage on the page's questions (null: page has none, or not tried)
+  quizScore Int?
+  quizAt    DateTime?
+
+  @@id([userId, slug])
+  @@index([userId])
+}
+
 /// Recommendation links, rebuilt nightly by the `recommend.build` job (lib/recommend.ts): each product's best
 /// partners from real orders (BOUGHT_WITH: association rules) and most similar products (SIMILAR). Pages read
 /// these instead of computing them, so a product page stays fast at any catalogue size.

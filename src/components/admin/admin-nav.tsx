@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { UserCog, LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen, CalendarDays, BadgePercent, PackageX, GraduationCap } from "lucide-react";
+import { UserCog, LayoutDashboard, Package, Shirt, Boxes, Users, TicketPercent, MessageSquare, Store, Menu, X, Truck, ScanBarcode, Lock, KeyRound, LogOut, ClipboardList, Wallet, Banknote, MessageCircle, History, PackageCheck, ArrowLeftRight, MapPin, Activity, Lightbulb, ClipboardCheck, Receipt, Sparkles, RefreshCw, Network, Languages, Factory, Clock, UsersRound, HandCoins, ListChecks, Megaphone, Wrench, Headset, Frame, Gauge, Vault, Grid3x3, PackageOpen, CalendarDays, BadgePercent, PackageX, GraduationCap, BookOpen } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { can, type Permission, type Subject } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-type Group = "Sell" | "Orders" | "Stock" | "Shops & team" | "Money" | "Grow" | "Settings";
+type Group = "Learn" | "Sell" | "Orders" | "Stock" | "Shops & team" | "Money" | "Grow" | "Settings";
 const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Permission; badgeKey?: "orders" | "stock"; group?: Group }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard" },
   { href: "/admin/today", label: "Today", icon: ListChecks, perm: "self.time" },
+  { href: "/admin/handbook", label: "Handbook", icon: BookOpen, perm: "self.time", group: "Learn" },
+  { href: "/admin/training", label: "Training", icon: GraduationCap, perm: "self.time", group: "Learn" },
   { href: "/admin/pos", label: "Point of sale", icon: ScanBarcode, perm: "pos.sell", group: "Sell" },
   { href: "/admin/closing", label: "Daily closing", icon: Lock, perm: "closing", group: "Sell" },
   { href: "/admin/cash", label: "Cash", icon: Vault, perm: "closing", group: "Sell" },
@@ -38,7 +40,6 @@ const NAV: { href: string; label: string; icon: typeof LayoutDashboard; perm: Pe
   { href: "/admin/visits", label: "Store visits", icon: ClipboardCheck, perm: "self.time", group: "Shops & team" },
   { href: "/admin/vm", label: "Visual merchandising", icon: Frame, perm: "self.time", group: "Shops & team" },
   { href: "/admin/issues", label: "Issues", icon: Wrench, perm: "self.time", group: "Shops & team" },
-  { href: "/admin/training", label: "Training", icon: GraduationCap, perm: "self.time", group: "Shops & team" },
   { href: "/admin/time", label: "My time", icon: Clock, perm: "self.time", group: "Shops & team" },
   { href: "/admin/payables", label: "Payables", icon: Receipt, perm: "purchasing", group: "Money" },
   { href: "/admin/finance", label: "Finance", icon: Wallet, perm: "finance", group: "Money" },
