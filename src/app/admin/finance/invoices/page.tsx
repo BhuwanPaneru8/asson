@@ -34,6 +34,7 @@ export default async function TaxInvoicesPage({ searchParams }: { searchParams: 
   return (
     <>
       <PageHeader title="Tax invoices" description="Every invoice and credit note, numbered without gaps per fiscal year and series (each shop's till, and WEB for online orders). Issued documents can't be changed: a return is a credit note against its invoice." actions={<Link href={`/admin/finance/export?from=${from}&to=${to}`} className="text-[13.5px] underline underline-offset-4">Sales register (CSV)</Link>} />
+      {store.vatNumber === "999999999" && <p className="mb-4 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn">Invoices are printing <b>sample business details</b> (PAN 999999999, the IRD&apos;s test number). Replace them with the real PAN and registered name in the store settings (lib/config.ts): invoices already issued keep the sample details.</p>}
       {!store.vatNumber && <p className="mb-4 rounded-md bg-[#fbf1df] px-4 py-3 text-[14px] text-warn">The business PAN isn&apos;t set, so invoices print &quot;PAN/VAT No.: not set&quot;. Add it as <code>vatNumber</code> in the store settings (lib/config.ts).</p>}
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <Card title="This period">

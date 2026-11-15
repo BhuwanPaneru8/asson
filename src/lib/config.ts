@@ -11,9 +11,11 @@ export const store = {
   /** Flagship shop address — printed on POS receipts. */
   storeAddress: "Kathmandu, Nepal",
   /** The business's 9-digit PAN/VAT number from the IRD, printed on every tax invoice (empty = invoices say "PAN not set"). */
-  vatNumber: "",
+  // DUMMY (owner's choice, 15 Nov 2026): 999999999 is the IRD's own test PAN. Replace both with the real PAN and
+  // registered name before relying on the invoices: invoices issued meanwhile keep these details for ever.
+  vatNumber: "999999999",
   /** Registered business name for tax invoices (as on the PAN certificate); empty = `name`. */
-  legalName: "",
+  legalName: "Asson Pvt. Ltd. (sample details)",
   /** Tax invoices (docs/Tax-Invoices.md). Rules to be confirmed by the accountant before switching anything on. */
   invoices: {
     /** Abbreviated tax invoices at the till need the tax officer's permission (VAT Rules r.18): off until granted. */
