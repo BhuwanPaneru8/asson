@@ -486,17 +486,27 @@ Return the item as **store credit**, then sell the new size and pay with that cr
     title: "Procedure: accounts, passwords and customer data",
     summary: "Keeping logins, PINs and customers' personal information safe.",
     audience: "all",
-    minutes: 4,
-    version: 1,
+    minutes: 5,
+    version: 2,
     related: ["how-we-run", "conduct", "owner-access-security"],
+    open: [{ label: "My account & security", href: "/admin/me" }],
     body: `## Your login and PIN
 - Use a strong password you don't use anywhere else (12+ characters). Never write it on the till.
 - Never share your password or approval PIN. Never use someone else's login.
 - Lock or sign out of a shared device when you step away.
 - If you think someone knows your password or PIN, change it and tell your manager straight away.
 
+## Two-step sign-in
+Managers and the owner (and anyone the owner chooses) sign in with their password **and** a 6-digit code from an authenticator app on their phone. Anyone else can turn it on at [My account & security](/admin/me).
+1. The first time, you're asked to set it up right after your password: install Google Authenticator or Microsoft Authenticator (free), scan the QR code, type the code it shows.
+2. You get **10 backup codes**, shown once. Print them or write them down and keep them away from your phone. Each one signs you in once if you lose your phone.
+3. After that, every sign-in asks for the code in the app. If the SMS gateway is on, "Text me a code instead" works too.
+- Tick **Trust this device for 30 days** only on your own phone or computer, never on a shared till.
+- Lost your phone? Sign in with a backup code, or ask the owner to reset your two-step sign-in (they check it's really you first).
+- Every wrong code and every reset is recorded in the activity log.
+
 ## Scams
-- Asson will **never** ask for your password, PIN or a one-time code by phone, SMS, WhatsApp or email. Anyone who does is a scammer.
+- Asson will **never** ask for your password, PIN, authenticator code, backup code or a one-time code by phone, SMS, WhatsApp or email. Anyone who does is a scammer.
 - Don't click links in unexpected messages "from Asson" or "from the bank". Go to the site yourself.
 
 ## Customer data
@@ -508,6 +518,7 @@ Return the item as **store credit**, then sell the new size and pay with that cr
 > **Rule:** misuse of customer data is serious misconduct. It breaks the law and our promise to customers.`,
     quiz: [
       { q: "Someone calls saying they're from HQ IT and need your one-time code. What do you do?", options: ["Give it, they're from HQ", "Refuse and tell your manager: Asson never asks for codes", "Give an old code"], answer: 1, why: "Nobody genuine ever asks for your password, PIN or code." },
+      { q: "You're signing in on the shop's shared till. Should you tick \"Trust this device for 30 days\"?", options: ["Yes, it saves time", "No: only on your own phone or computer", "Only on busy days"], answer: 1, why: "A trusted device skips the code. On a shared till, anyone who learns your password could then sign in as you." },
       { q: "Can you save a customer's number to your phone to message them about a new arrival?", options: ["Yes, if they're a regular", "No: customer data stays in the system", "Only on WhatsApp Business"], answer: 1, why: "Customer data never leaves the system. Marketing goes through the company's channels." },
     ],
   },

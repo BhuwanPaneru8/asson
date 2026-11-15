@@ -175,12 +175,12 @@ The Handbook explains how things work. Training is the short, signed version of 
     title: "Team & access (owner)",
     summary: "Adding people, giving them the right job and locations, and removing access when they leave.",
     audience: ["owner"],
-    minutes: 5,
-    version: 1,
+    minutes: 6,
+    version: 2,
     restricted: "team.manage",
     open: [{ label: "Team & access", href: "/admin/team" }],
     related: ["roles-and-access", "hiring-new-joiner-setup", "hiring-leaving"],
-    body: `Team & access lists everyone who can sign in to the staff side: their level, job, locations, whether they've set an approval PIN, and whether their invite is still unused.
+    body: `Team & access lists everyone who can sign in to the staff side: their level, job, locations, whether they've set an approval PIN, whether two-step sign-in is on, and whether their invite is still unused.
 
 ## Adding someone
 **Add a team member**: name, email or mobile, level, job, and the locations they work at. They get a **one-time link** to set their own password. Nobody, including the owner, ever knows another person's password.
@@ -191,8 +191,13 @@ The Handbook explains how things work. Training is the short, signed version of 
 - **Works at**: the locations they can act at. Tills, stock moves, closing and counts only work at their own locations.
 - Owner-only permissions (Team & access, System) can't be given to anyone else.
 
+## Two-step sign-in
+- **Managers and owners always need it.** A new manager sets it up straight after choosing their password from the invite link, before they see any staff page. Their row shows **Two-step required, not set up** until they do, then **Two-step on**.
+- **Require two-step sign-in** (tick box on someone's row): for cashiers or staff you want to protect too, for example anyone who handles cash, refunds or customer data. It applies at their next click: they sign in again and set it up.
+- **Reset two-step sign-in**: when someone lost their phone and their backup codes. Check it's really them first and write why. They're signed out on every device and set up a new app next time. You can't reset your own; another owner can, or use your backup codes.
+
 ## When someone leaves
-Remove their access **the same day**: their sessions end immediately on every device. Their history stays in the activity log.
+Remove their access **the same day**: their sessions end immediately on every device, trusted devices stop working and their two-step sign-in is cleared. Their history stays in the activity log.
 
 > **Rule:** one person, one login. Never create a shared "shop" login. Accountability depends on knowing who did what.`,
   },
