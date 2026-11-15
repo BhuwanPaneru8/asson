@@ -91,7 +91,8 @@ export async function syncCbms(limit = 50) {
   let sent = 0, failed = 0;
   for (const s of due) {
     if (s.status === "FAILED" && s.claimedAt && now - s.claimedAt.getTime() < 60_000 * 2 ** Math.min(s.attempts - 1, 6)) continue; // backoff
-    if (s.creditNote && s.creditNote.invoice.cbms && s.creditNote.invoice.cbms.status !== "SENT") continue; // its invoice first
+    // its invoice first (read now: it may have been sent earlier in this pass)
+    if (s.creditNote?.invoice.cbms && (await db.cbmsSync.findUnique({ where: { invoiceId: s.creditNote.invoiceId }, select: { status: true } }))?.status !== "SENT") continue;
     const claimed = await db.cbmsSync.updateMany({ where: { id: s.id, status: s.status, attempts: s.attempts }, data: { status: "SENDING", claimedAt: new Date(), attempts: { increment: 1 } } });
     if (!claimed.count) continue;
     const issuedAt = (s.invoice ?? s.creditNote)!.issuedAt;

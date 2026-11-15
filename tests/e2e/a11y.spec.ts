@@ -30,7 +30,7 @@ async function audit(page: Page) {
 
 const SHOP = ["/", "/c/women", "/p/oxford-button-down-shirt", "/shop?q=shirt", "/p/no-such-product", "/cart", "/checkout", "/login", "/register", "/help", "/size-guide", "/lookbook", "/stores", "/about", "/shop?q=zzqqxx", "/policies", "/policies/terms", "/policies/privacy", "/policies/returns"];
 const STAFF = ["/admin", "/admin/activity", "/admin/bins", "/admin/care", "/admin/cash", "/admin/closing", "/admin/cod", "/admin/counts", "/admin/coupons", "/admin/customers", "/admin/damaged", "/admin/delivery",
-  "/admin/finance", "/admin/finance/bank", "/admin/finance/budgets", "/admin/finance/close", "/admin/finance/shops", "/admin/finance/vat", "/admin/finance/year", "/admin/fulfilment", "/admin/fulfilment/deliveries", "/admin/fulfilment/exchanges",
+  "/admin/finance", "/admin/finance/bank", "/admin/finance/budgets", "/admin/finance/close", "/admin/finance/invoices", "/admin/finance/shops", "/admin/finance/vat", "/admin/finance/year", "/admin/fulfilment", "/admin/fulfilment/deliveries", "/admin/fulfilment/exchanges",
   "/admin/insights", "/admin/insights?tab=demand", "/admin/inventory", "/admin/issues", "/admin/locations", "/admin/markdowns", "/admin/network", "/admin/notifications", "/admin/ops", "/admin/orders", "/admin/payables", "/admin/payroll", "/admin/people", "/admin/people/absences",
   "/admin/picking", "/admin/production", "/admin/products", "/admin/products/new", "/admin/purchasing", "/admin/replenishment", "/admin/reviews", "/admin/rosters", "/admin/scorecard", "/admin/suppliers", "/admin/team", "/admin/today", "/admin/training", "/admin/training/new", "/admin/transfers", "/admin/visits", "/admin/vm"];
 
