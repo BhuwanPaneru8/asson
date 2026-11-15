@@ -17,7 +17,8 @@ import { homeFor, isStaffRole, twoFactorStep } from "@/lib/permissions";
 import { beginSignIn } from "@/lib/two-factor";
 import { clientIp } from "@/lib/client-ip";
 import { audit } from "@/lib/audit";
-import { localiseResult } from "@/lib/i18n/server";
+import { getLocale, localiseResult } from "@/lib/i18n/server";
+import { askCareForReset, emailMode, emailResetLink, maskEmail, realEmail, ResetError } from "@/lib/password-reset";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -116,7 +117,7 @@ type Result = { ok: true } | { ok: false; error: string };
 const remembered = (v: unknown) => v !== false;
 
 /** Step 1: who is this? Says whether there's an account and what they can sign in with. */
-async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean } | { ok: false; error: string }> {
+async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean; resetEmail: string | null } | { ok: false; error: string }> {
   if (!rateLimit(await clientKey("identify", "x"), 40, 10 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
   const id = parseIdentifier(raw);
   if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
@@ -124,7 +125,9 @@ async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "e
   if (ambiguous) return { ok: false, error: "More than one account uses this number. Please sign in with your email." };
   const staff = !!user && isStaffRole(user.role);
   // staff always use their password (every sign-in is recorded); codes go to phones
-  return { ok: true, kind: id.kind, exists: !!user, firstName: user ? user.name.split(" ")[0] : null, codes: id.kind === "phone" && !staff && codeMode() !== "off", staff };
+  // a forgotten password can be reset by email when the account has a real address and email is connected
+  const resetEmail = user && !staff && realEmail(user.email) && emailMode() !== "off" ? maskEmail(user.email) : null;
+  return { ok: true, kind: id.kind, exists: !!user, firstName: user ? user.name.split(" ")[0] : null, codes: id.kind === "phone" && !staff && codeMode() !== "off", staff, resetEmail };
 }
 
 /** Password (or code) checked: sign in, or (staff with two-step sign-in) on to the second step first. */
@@ -233,6 +236,30 @@ async function resetWithCodeImpl(input: { identifier: string; code: string; pass
   return { ok: true };
 }
 
+/** Forgotten password: a one-time link to the account's email (lib/password-reset.ts). */
+async function emailResetImpl(input: { identifier: string }): Promise<{ ok: true; sentTo: string; testLink?: string } | { ok: false; error: string }> {
+  const id = parseIdentifier(input.identifier ?? "");
+  if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
+  if (!rateLimit(await clientKey("reset-email", id.value), 6, 15 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
+  const { user } = await findAccount(id);
+  if (!user) return { ok: false, error: "There's no account with that number or email." };
+  if (isStaffRole(user.role)) return { ok: false, error: "Staff sign in with their password. Ask the owner for a new sign-in link if you've forgotten it." };
+  try { return { ok: true, ...(await emailResetLink(user)) }; } catch (e) { if (e instanceof ResetError) return { ok: false, error: e.message }; throw e; }
+}
+
+/** Forgotten password, and no SMS or email to send a reset to: customer care checks it's them and sends a link. */
+async function askResetHelpImpl(input: { identifier: string }): Promise<{ ok: true; caseNumber: number; already: boolean } | { ok: false; error: string }> {
+  const id = parseIdentifier(input.identifier ?? "");
+  if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
+  if (!rateLimit(await clientKey("reset-help", id.value), 3, 60 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
+  const { user } = await findAccount(id);
+  if (!user) return { ok: false, error: "There's no account with that number or email." };
+  if (isStaffRole(user.role)) return { ok: false, error: "Staff sign in with their password. Ask the owner for a new sign-in link if you've forgotten it." };
+  const r = await askCareForReset(user, await getLocale());
+  after(() => dispatchNotifications(10).catch(() => {}));
+  return { ok: true, caseNumber: r.number, already: r.already };
+}
+
 // Shoppers see these messages in their language (see lib/i18n localise).
 export async function login(...args: Parameters<typeof loginImpl>) { return localiseResult(await loginImpl(...args)); }
 export async function register(...args: Parameters<typeof registerImpl>) { return localiseResult(await registerImpl(...args)); }
@@ -243,3 +270,5 @@ export async function sendCode(...args: Parameters<typeof sendCodeImpl>) { retur
 export async function signInWithCode(...args: Parameters<typeof signInWithCodeImpl>) { return localiseResult(await signInWithCodeImpl(...args)); }
 export async function createAccount(...args: Parameters<typeof createAccountImpl>) { return localiseResult(await createAccountImpl(...args)); }
 export async function resetWithCode(...args: Parameters<typeof resetWithCodeImpl>) { return localiseResult(await resetWithCodeImpl(...args)); }
+export async function emailReset(...args: Parameters<typeof emailResetImpl>) { return localiseResult(await emailResetImpl(...args)); }
+export async function askResetHelp(...args: Parameters<typeof askResetHelpImpl>) { return localiseResult(await askResetHelpImpl(...args)); }

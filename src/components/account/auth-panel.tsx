@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Check } from "lucide-react";
-import { createAccount, identify, resetWithCode, sendCode, signInWithCode, signInWithPassword } from "@/actions/auth";
+import { askResetHelp, createAccount, emailReset, identify, resetWithCode, sendCode, signInWithCode, signInWithPassword } from "@/actions/auth";
 import { parseIdentifier } from "@/lib/sign-in-shared";
 import { PasswordField } from "./password-field";
 import { useT } from "@/components/site/i18n-provider";
 import { rich } from "@/lib/i18n/rich";
 import { cn } from "@/lib/utils";
 
-type Step = "identify" | "password" | "create" | "code" | "forgot" | "reset";
-type Who = { identifier: string; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean };
+type Step = "identify" | "password" | "create" | "code" | "forgot" | "reset" | "emailed" | "asked";
+type Who = { identifier: string; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean; resetEmail: string | null };
 
 const input = "h-12 w-full border border-line bg-white px-3.5 text-[15px] outline-none transition-colors focus:border-ink";
 const primary = "flex h-12 w-full items-center justify-center bg-ink text-[15px] font-medium text-white transition-opacity disabled:opacity-40";
@@ -31,6 +31,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
   const [remember, setRemember] = useState(true);
   const [code, setCode] = useState("");
   const [testCode, setTestCode] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ to?: string; testLink?: string; caseNumber?: number; already?: boolean }>({});
   const [f, setF] = useState({ name: "", email: "", phone: "" });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -49,15 +50,16 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
   const go = (s: Step) => { setError(null); setFieldErrors({}); setStep(s); };
   const fail = (r: { ok: false; error?: string; fieldErrors?: Record<string, string> }) => { setError(r.error ?? null); setFieldErrors(r.fieldErrors ?? {}); };
 
-  const onIdentify = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onIdentify = (e: React.FormEvent | null, forgot = false) => {
+    e?.preventDefault();
     setError(null);
     if (!parseIdentifier(raw)) { setError(t("auth.badIdentifier")); return; }
     start(async () => {
       const r = await identify(raw);
       if (!r.ok) { setError(r.error); return; }
-      setWho({ identifier: raw, kind: r.kind, exists: r.exists, firstName: r.firstName, codes: r.codes, staff: r.staff });
-      go(r.exists ? "password" : "create");
+      if (forgot && !r.exists) { setError(t("auth.forgotNoAccount")); return; }
+      setWho({ identifier: raw, kind: r.kind, exists: r.exists, firstName: r.firstName, codes: r.codes, staff: r.staff, resetEmail: r.resetEmail });
+      go(forgot ? "forgot" : r.exists ? "password" : "create");
     });
   };
 
@@ -68,6 +70,20 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
     setCode("");
     setWait(30);
     go(then);
+  });
+
+  const askEmail = () => start(async () => {
+    const r = await emailReset({ identifier: who!.identifier });
+    if (!r.ok) { setError(r.error); return; }
+    setSent({ to: r.sentTo, testLink: r.testLink });
+    setWait(30);
+    go("emailed");
+  });
+  const askCare = () => start(async () => {
+    const r = await askResetHelp({ identifier: who!.identifier });
+    if (!r.ok) { setError(r.error); return; }
+    setSent({ caseNumber: r.caseNumber, already: r.already });
+    go("asked");
   });
 
   const shown = who ? (who.kind === "phone" ? parseIdentifier(who.identifier)?.value ?? who.identifier : who.identifier) : "";
@@ -95,6 +111,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
           </div>
           {err()}
           <button className={primary} disabled={pending || raw.trim().length < 5}>{pending ? t("auth.wait") : t("auth.continue")}</button>
+          <button type="button" className={cn(linkBtn, "block text-muted")} disabled={pending} onClick={() => (raw.trim().length < 5 ? setError(t("auth.forgotFirst")) : onIdentify(null, true))}>{t("auth.forgot")}</button>
           {google && (
             <>
               <div className="flex items-center gap-3 text-[12.5px] uppercase tracking-wider text-muted"><span className="h-px flex-1 bg-line" />{t("auth.or")}<span className="h-px flex-1 bg-line" /></div>
@@ -175,24 +192,61 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
         <div className="space-y-4">
           {back()}
           <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.forgotTitle")}</h2>
-          {who.codes ? (
-            <>
-              <p className="text-[14.5px] text-ink-soft">{t("auth.forgotByCode", { phone: shown })}</p>
-              {err()}
-              <button type="button" className={primary} disabled={pending} onClick={() => askCode("RESET", "reset")}>{pending ? t("auth.wait") : t("auth.sendCode")}</button>
-            </>
+          {who.staff ? (
+            <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.forgotStaff")}</p>
           ) : (
             <>
-              <p className="text-[14.5px] leading-relaxed text-ink-soft">{who.staff ? t("auth.forgotStaff") : t("auth.forgotCare")}</p>
-              {!who.staff && (
+              {who.codes && (
+                <>
+                  <p className="text-[14.5px] text-ink-soft">{t("auth.forgotByCode", { phone: shown })}</p>
+                  <button type="button" className={primary} disabled={pending} onClick={() => askCode("RESET", "reset")}>{pending ? t("auth.wait") : t("auth.sendCode")}</button>
+                </>
+              )}
+              {who.resetEmail && (
+                <>
+                  <p className="text-[14.5px] text-ink-soft">{t("auth.forgotByEmail", { email: who.resetEmail })}</p>
+                  <button type="button" className={who.codes ? cn(primary, "bg-white text-ink border border-ink") : primary} disabled={pending} onClick={askEmail}>{pending ? t("auth.wait") : t("auth.sendLink")}</button>
+                </>
+              )}
+              {!who.codes && !who.resetEmail && (
+                <>
+                  <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.forgotCare")}</p>
+                  <button type="button" className={primary} disabled={pending} onClick={askCare}>{pending ? t("auth.wait") : t("auth.askCare")}</button>
+                </>
+              )}
+              {err()}
+              {(who.codes || who.resetEmail) && (
+                <p className="text-[13.5px] text-muted">{t("auth.noAccess")} <button type="button" className={linkBtn} disabled={pending} onClick={askCare}>{t("auth.askCare")}</button></p>
+              )}
+            </>
+          )}
+          {who.exists && <button type="button" className={cn(linkBtn, "text-muted")} onClick={() => go("password")}>{t("auth.backToPassword")}</button>}
+        </div>
+      )}
+
+      {step === "emailed" && who && (
+        <div className="space-y-4">
+          {back()}
+          <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.emailedTitle")}</h2>
+          <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.emailedBody", { email: sent.to ?? "" })}</p>
+          {sent.testLink && <p className="border border-warn/40 bg-warn/10 px-3 py-2 text-[13px] text-ink-soft">{t("auth.testLink")} <a href={sent.testLink} className="break-all font-medium underline underline-offset-2">{sent.testLink}</a></p>}
+          {err()}
+          <button type="button" className={cn(linkBtn, "text-muted disabled:no-underline disabled:opacity-60")} disabled={pending || wait > 0} onClick={askEmail}>
+            {wait > 0 ? t("auth.resendIn", { s: wait }) : t("auth.resendLink")}
+          </button>
+        </div>
+      )}
+
+      {step === "asked" && who && (
+        <div className="space-y-4">
+          {back()}
+          <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.askedTitle")}</h2>
+          <p className="text-[14.5px] leading-relaxed text-ink-soft">{t(sent.already ? "auth.askedAlready" : "auth.askedBody", { n: sent.caseNumber ?? 0 })}</p>
+          <p className="text-[13.5px] text-muted">{t("auth.askedFaster")}</p>
                 <ul className="space-y-2 text-[14.5px]">
                   <li className="flex items-center gap-2"><Check className="h-4 w-4 text-success" /> <a href={`tel:+977${support.phone}`} className="font-medium underline underline-offset-4">{support.phone}</a> ({t("auth.callOrWhatsapp")})</li>
                   <li className="flex items-center gap-2"><Check className="h-4 w-4 text-success" /> <a href={support.whatsapp} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-4">WhatsApp</a></li>
                 </ul>
-              )}
-            </>
-          )}
-          <button type="button" className={cn(linkBtn, "text-muted")} onClick={() => go("password")}>{t("auth.backToPassword")}</button>
         </div>
       )}
     </div>

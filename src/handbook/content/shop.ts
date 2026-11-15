@@ -36,10 +36,18 @@ After ordering, the customer sees the confirmation and gets an SMS. The order pa
     summary: "Signing in, following orders, what customers can change themselves, returns and size exchanges.",
     audience: ["care", "cashier", "shop-manager", "warehouse", "ops-manager", "owner"],
     minutes: 6,
-    version: 1,
+    version: 2,
     related: ["sys-orders", "sop-online-changes", "sys-customers-loyalty"],
     body: `## Signing in
-One box: **mobile number or email**. Then the right next step: password; a one-time **SMS code**; creating a new account; or resetting a forgotten password. Signing in happens in a side drawer, so the customer doesn't lose their page. Care staff can send a **reset link** to a customer who can't get in. "Continue with Google" is ready to switch on.
+One box: **mobile number or email**. Then the right next step: password; a one-time **SMS code**; creating a new account; or resetting a forgotten password. Signing in happens in a side drawer, so the customer doesn't lose their page. "Continue with Google" is ready to switch on.
+
+## Forgotten passwords
+**Forgot password?** is on the first screen and on the password screen. The customer gets whichever works:
+- a one-time **SMS code** (once the SMS gateway is connected);
+- a one-time **link by email** (1 hour), if their account has a real email and the email service is connected;
+- otherwise, one tap on **Ask us to reset it** opens a customer care case ("Password reset request", with a request number).
+
+For a reset request: **call or WhatsApp the number on the account** to check it's really them, then send a one-time link from Customers → Reset link (24 hours) and close the case. Never send a link to a different number or email than the one on the account without checking with a manager.
 
 ## The account
 Orders, addresses, wishlist, loyalty points and tier, referral code, back-in-stock and price-drop alerts, details.
