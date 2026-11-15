@@ -1,6 +1,7 @@
 name: Deploy
 
-# Staging deploys automatically after CI passes on main.
+# Staging deploys automatically after CI passes on a push to main in this repository (never for a pull
+# request, and never for a fork: a fork's branch can also be called "main", and the repo is public).
 # Production deploys only when started by hand: Actions → Deploy → Run workflow → production.
 on:
   workflow_run:
@@ -22,7 +23,9 @@ concurrency:
 jobs:
   deploy:
     if: >-
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' && (inputs.environment == 'staging' || github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
