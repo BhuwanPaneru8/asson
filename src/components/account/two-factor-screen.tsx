@@ -18,7 +18,7 @@ export function TwoFactorScreen(props: Props) {
       <section className="mx-auto max-w-md border border-line bg-white p-8 text-center">
         <h1 className="font-display text-3xl">Sign-in timed out</h1>
         <p className="mt-3 text-[15px] text-ink-soft">For your security the second step has to be done within 10 minutes of your password. Please sign in again.</p>
-        <Link href="/login?next=/admin" className="mt-6 inline-block text-[14px] font-medium underline underline-offset-4">Sign in</Link>
+        <Link href="/admin/login" className="mt-6 inline-block text-[14px] font-medium underline underline-offset-4">Sign in</Link>
       </section>
     );
   }

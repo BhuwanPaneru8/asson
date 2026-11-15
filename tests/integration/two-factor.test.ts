@@ -21,11 +21,11 @@ async function staff(role: "ADMIN" | "MANAGER" | "CASHIER", phone?: string) {
   if (phone) await db.user.update({ where: { id: u.id }, data: { phone } });
   return u;
 }
-const password = (u: { email: string }, next?: string) => signInWithPassword({ identifier: u.email, password: "Password1", next });
+const password = (u: { email: string; role?: string }, next?: string) => signInWithPassword({ identifier: u.email, password: "Password1", next, area: u.role === "CUSTOMER" ? "shop" : "staff" });
 
 /** Sign in with the password, set up the app, and keep the secret (as a person would after scanning). */
 async function setUp(u: { email: string; id: string }) {
-  expect(await redirected(password(u))).toBe("/login/two-factor");
+  expect(await redirected(password(u))).toBe("/admin/login/two-factor");
   const s = await beginTotpSetup();
   if (!s.ok) throw new Error(s.error);
   const r = await finishTotpSetup({ code: totpAt(s.secret, totpStep()) });
@@ -40,7 +40,7 @@ describe("two-step sign-in", () => {
 
   it("a manager who hasn't set it up goes to set-up straight after the password, before any session", async () => {
     const m = await staff("MANAGER");
-    expect(await redirected(password(m, "/admin/orders"))).toBe("/login/two-factor");
+    expect(await redirected(password(m, "/admin/orders"))).toBe("/admin/login/two-factor");
     expect(sessionMock).not.toHaveBeenCalled();
     const pending = await verifyPending(session.cookies.get(PENDING_COOKIE));
     expect(pending).toMatchObject({ sub: m.id, stage: "setup", next: "/admin/orders" });
@@ -78,7 +78,7 @@ describe("two-step sign-in", () => {
     const m = await staff("MANAGER");
     const { secret } = await setUp(m);
     sessionMock.mockClear();
-    expect(await redirected(password(m, "/admin/cash"))).toBe("/login/two-factor");
+    expect(await redirected(password(m, "/admin/cash"))).toBe("/admin/login/two-factor");
     expect((await verifyPending(session.cookies.get(PENDING_COOKIE)))?.stage).toBe("verify");
     expect(sessionMock).not.toHaveBeenCalled();
 
@@ -117,18 +117,18 @@ describe("two-step sign-in", () => {
     const other = await staff("MANAGER");
     await setUp(other);
     session.cookies.clear(); session.cookies.set(trustCookieName(other.id), trust!);
-    expect(await redirected(password(other))).toBe("/login/two-factor");
+    expect(await redirected(password(other))).toBe("/admin/login/two-factor");
 
     // a password change (or removal, or a 2FA reset) bumps tokenVersion: the device is no longer trusted
     await db.user.update({ where: { id: m.id }, data: { tokenVersion: { increment: 1 } } });
     session.cookies.clear(); session.cookies.set(trustCookieName(m.id), trust!);
-    expect(await redirected(password(m))).toBe("/login/two-factor");
+    expect(await redirected(password(m))).toBe("/admin/login/two-factor");
 
     // and it runs out after 30 days
     await db.user.update({ where: { id: m.id }, data: { tokenVersion: { decrement: 1 } } });
     vi.setSystemTime(new Date("2026-12-16T06:00:00Z"));
     session.cookies.clear(); session.cookies.set(trustCookieName(m.id), trust!);
-    expect(await redirected(password(m))).toBe("/login/two-factor");
+    expect(await redirected(password(m))).toBe("/admin/login/two-factor");
   });
 
   it("backup codes sign in once each", async () => {
@@ -186,7 +186,7 @@ describe("two-step sign-in", () => {
     expect(await requireMemberTwoFactor({ userId: c.id, required: true })).toEqual({ ok: true });
     expect(await requireMemberTwoFactor({ userId: owner.id, required: false })).toMatchObject({ ok: false, error: expect.stringMatching(/always need/) });
     actAs(null);
-    expect(await redirected(password(c))).toBe("/login/two-factor");
+    expect(await redirected(password(c))).toBe("/admin/login/two-factor");
     expect((await verifyPending(session.cookies.get(PENDING_COOKIE)))?.stage).toBe("setup");
     expect((await db.auditLog.findFirstOrThrow({ where: { action: "team.2fa_required" } })).summary).toMatch(/now required/);
   });
@@ -224,7 +224,7 @@ describe("two-step sign-in", () => {
   it("a new manager from an invite link sets it up before the staff area", async () => {
     const owner = await staff("ADMIN");
     const { token } = await db.$transaction((tx) => addTeamMember(tx, owner, { name: "Hari Thapa", email: "hari@test.local", job: "shop-manager", storeIds: [], all: true }));
-    expect(await redirected(setPasswordFromInvite({ token, password: "NewPass2026", confirm: "NewPass2026" }))).toBe("/login/two-factor");
+    expect(await redirected(setPasswordFromInvite({ token, password: "NewPass2026", confirm: "NewPass2026" }))).toBe("/admin/login/two-factor");
     expect(sessionMock).not.toHaveBeenCalled();
     expect((await verifyPending(session.cookies.get(PENDING_COOKIE)))?.stage).toBe("setup");
   });
@@ -243,7 +243,7 @@ describe("two-step sign-in", () => {
     expect(after.backupCodes).toHaveLength(0);
     expect((await db.auditLog.findFirstOrThrow({ where: { action: "team.2fa_reset" } }))).toMatchObject({ actorId: owner.id, entityId: m.id, summary: expect.stringMatching(/lost phone, checked by call/) });
     actAs(null);
-    expect(await redirected(password(m))).toBe("/login/two-factor");
+    expect(await redirected(password(m))).toBe("/admin/login/two-factor");
     expect((await verifyPending(session.cookies.get(PENDING_COOKIE)))?.stage).toBe("setup");
   });
 

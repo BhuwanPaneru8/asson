@@ -134,10 +134,13 @@ If a page doesn't match what you see on screen, or something you do every day is
     summary: "The nine jobs, the four levels, approval limits, and why access is split the way it is.",
     audience: "all",
     minutes: 6,
-    version: 1,
+    version: 2,
     open: [{ label: "Team & access", href: "/admin/team" }, { label: "My approval PIN", href: "/admin/me" }],
     related: ["how-we-run", "sys-team-access"],
     body: `Everyone on the staff side has their **own login**, a **level** and a **job**.
+
+## Where staff sign in
+Staff sign in at **/admin/login** (asson.bhuwanpaneru.com/admin/login, or just open /admin), never on the shop's sign-in. The shop's sign-in is for customers only: if you type a staff email there, it sends you to the staff page. Customers can't sign in on the staff page. Forgot your password? Ask the owner for a new sign-in link from Team & access.
 
 - Your **level** (Cashier, Fulfilment staff, Manager or Owner) sets your approval limits and which procedures you must sign.
 - Your **job** decides which parts of the system you see. The menu on the left only shows what your job needs.

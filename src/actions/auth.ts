@@ -18,7 +18,7 @@ import { beginSignIn } from "@/lib/two-factor";
 import { clientIp } from "@/lib/client-ip";
 import { audit } from "@/lib/audit";
 import { getLocale, localiseResult } from "@/lib/i18n/server";
-import { askCareForReset, emailMode, emailResetLink, maskEmail, realEmail, ResetError } from "@/lib/password-reset";
+import { askCareForReset, resetChannels, resetTarget, ResetError, sendResetCode, type ResetVia } from "@/lib/password-reset";
 
 export type AuthState = { error?: string; fieldErrors?: Record<string, string> } | undefined;
 
@@ -90,8 +90,10 @@ async function registerImpl(_: AuthState, form: FormData): Promise<AuthState> {
 }
 
 export async function logout() {
+  const me = await getCurrentUser();
   await destroySession();
-  redirect("/");
+  // staff go back to their own sign-in page; shoppers to the shop
+  redirect(me && isStaffRole(me.role) ? "/admin/login" : "/");
 }
 
 const pwSchema = z.object({ current: z.string().min(1), next: z.string().min(8).regex(/[A-Za-z]/).regex(/\d/) });
@@ -117,7 +119,7 @@ type Result = { ok: true } | { ok: false; error: string };
 const remembered = (v: unknown) => v !== false;
 
 /** Step 1: who is this? Says whether there's an account and what they can sign in with. */
-async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean; resetEmail: string | null } | { ok: false; error: string }> {
+async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean; reset: Partial<Record<ResetVia, string>> } | { ok: false; error: string }> {
   if (!rateLimit(await clientKey("identify", "x"), 40, 10 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
   const id = parseIdentifier(raw);
   if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
@@ -125,9 +127,9 @@ async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "e
   if (ambiguous) return { ok: false, error: "More than one account uses this number. Please sign in with your email." };
   const staff = !!user && isStaffRole(user.role);
   // staff always use their password (every sign-in is recorded); codes go to phones
-  // a forgotten password can be reset by email when the account has a real address and email is connected
-  const resetEmail = user && !staff && realEmail(user.email) && emailMode() !== "off" ? maskEmail(user.email) : null;
-  return { ok: true, kind: id.kind, exists: !!user, firstName: user ? user.name.split(" ")[0] : null, codes: id.kind === "phone" && !staff && codeMode() !== "off", staff, resetEmail };
+  // where a forgotten-password code can go (SMS, WhatsApp, email), each masked; none: ask customer care
+  const reset = user && !staff ? resetChannels(user) : {};
+  return { ok: true, kind: id.kind, exists: !!user, firstName: user ? user.name.split(" ")[0] : null, codes: id.kind === "phone" && !staff && codeMode() !== "off", staff, reset };
 }
 
 /** Password (or code) checked: sign in, or (staff with two-step sign-in) on to the second step first. */
@@ -138,7 +140,12 @@ async function finish(user: Parameters<typeof beginSignIn>[0], remember: boolean
   redirect(r.to);
 }
 
-async function signInWithPasswordImpl(input: { identifier: string; password: string; remember?: boolean; next?: string }): Promise<Result> {
+/**
+ * Password sign-in. The shop (/login) and the staff side (/admin/login) are separate doors: customers can't sign
+ * in at the staff page and staff can't sign in on the shop, so each sign-in page only ever opens its own side.
+ */
+async function signInWithPasswordImpl(input: { identifier: string; password: string; remember?: boolean; next?: string; area?: "shop" | "staff" }): Promise<Result> {
+  const area = input.area === "staff" ? "staff" : "shop";
   const id = parseIdentifier(input.identifier ?? "");
   if (!id || !input.password) return { ok: false, error: "Enter your password." };
   if (!rateLimit(await clientKey("login", id.value), 8, 15 * 60_000)) {
@@ -147,10 +154,14 @@ async function signInWithPasswordImpl(input: { identifier: string; password: str
     return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
   }
   const { user } = await findAccount(id);
+  if (area === "shop" && user && isStaffRole(user.role)) return { ok: false, error: "Staff accounts sign in on the staff page, not the shop." };
   const ok = await verifyPassword(input.password, user?.passwordHash ?? "$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv");
   if (user && !ok && isStaffRole(user.role)) await audit(db, null, { action: "auth.login_failed", entity: ["User", user.id], summary: `Wrong password for staff account ${user.email}` });
-  if (!user || !ok) return { ok: false, error: "That password isn't right. Try again, or reset it." };
-  await finish(user, remembered(input.remember), input.next);
+  if (area === "staff") {
+    // never say whether a customer account exists: the staff page answers the same for both
+    if (!user || !ok || !isStaffRole(user.role)) return { ok: false, error: "That email or mobile and password don't match a staff account." };
+  } else if (!user || !ok) return { ok: false, error: "That password isn't right. Try again, or reset it." };
+  await finish(user, remembered(input.remember), area === "staff" && !input.next?.startsWith("/admin") ? "/account" /* finish() sends staff to their home */ : input.next);
   return { ok: true };
 }
 
@@ -161,8 +172,9 @@ async function sendCodeImpl(input: { identifier: string; purpose: "LOGIN" | "RES
   const { user } = await findAccount(id);
   if (input.purpose === "RESET" && !user) return { ok: false, error: "There's no account with that number." };
   if (user && isStaffRole(user.role)) return { ok: false, error: "Staff sign in with their password. Ask the owner for a new sign-in link if you've forgotten it." };
+  if (input.purpose === "RESET") return sendResetImpl({ identifier: input.identifier, via: "sms" }, false);
   try {
-    const r = await issueCode(id.value, input.purpose === "RESET" ? "RESET" : "LOGIN");
+    const r = await issueCode(id.value, "LOGIN");
     after(() => dispatchNotifications(10).catch(() => {}));
     return { ok: true, ...r };
   } catch (e) {
@@ -224,27 +236,36 @@ async function createAccountImpl(input: { identifier: string; name: string; emai
 /** Forgotten password, with the code from the SMS: set a new one and sign in. */
 async function resetWithCodeImpl(input: { identifier: string; code: string; password: string; next?: string }): Promise<Result> {
   const id = parseIdentifier(input.identifier ?? "");
-  if (!id || id.kind !== "phone") return { ok: false, error: "Enter your mobile number." };
+  if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
   const pw = newAccountSchema.shape.password.safeParse(input.password);
   if (!pw.success) return { ok: false, error: pw.error.issues[0]?.message ?? "Choose a stronger password." };
-  try { await checkCode(id.value, "RESET", input.code ?? ""); } catch (e) { if (e instanceof CodeError) return { ok: false, error: e.message }; throw e; }
   const { user } = await findAccount(id);
-  if (!user || isStaffRole(user.role)) return { ok: false, error: "There's no account with that number." };
+  if (!user || isStaffRole(user.role)) return { ok: false, error: "That code has expired. Ask for a new one." };
+  // the code is for the account, whichever way it was sent (SMS, WhatsApp or email)
+  try { await checkCode(resetTarget(user.id), "RESET", input.code ?? ""); } catch (e) { if (e instanceof CodeError) return { ok: false, error: e.message }; throw e; }
   // a new password signs out every other device
   const updated = await db.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(pw.data), tokenVersion: { increment: 1 } } });
   await finish({ ...updated }, true, input.next);
   return { ok: true };
 }
 
-/** Forgotten password: a one-time link to the account's email (lib/password-reset.ts). */
-async function emailResetImpl(input: { identifier: string }): Promise<{ ok: true; sentTo: string; testLink?: string } | { ok: false; error: string }> {
+/** Forgotten password: a 6-digit code by SMS, WhatsApp or email, as the shopper chooses (lib/password-reset.ts). */
+async function sendResetImpl(input: { identifier: string; via: ResetVia }, limit = true): Promise<{ ok: true; sentTo: string; testCode?: string } | { ok: false; error: string }> {
   const id = parseIdentifier(input.identifier ?? "");
   if (!id) return { ok: false, error: "Enter a mobile number (98XXXXXXXX) or an email address." };
-  if (!rateLimit(await clientKey("reset-email", id.value), 6, 15 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
+  if (!["sms", "whatsapp", "email"].includes(input.via)) return { ok: false, error: "Choose how to get your code." };
+  if (limit && !rateLimit(await clientKey("reset-code", id.value), 6, 15 * 60_000)) return { ok: false, error: "Too many attempts. Please wait a few minutes and try again." };
   const { user } = await findAccount(id);
   if (!user) return { ok: false, error: "There's no account with that number or email." };
   if (isStaffRole(user.role)) return { ok: false, error: "Staff sign in with their password. Ask the owner for a new sign-in link if you've forgotten it." };
-  try { return { ok: true, ...(await emailResetLink(user)) }; } catch (e) { if (e instanceof ResetError) return { ok: false, error: e.message }; throw e; }
+  try {
+    const r = await sendResetCode(user, input.via);
+    if (input.via === "sms") after(() => dispatchNotifications(10).catch(() => {}));
+    return { ok: true, ...r };
+  } catch (e) {
+    if (e instanceof ResetError || e instanceof CodeError) return { ok: false, error: e.message };
+    throw e;
+  }
 }
 
 /** Forgotten password, and no SMS or email to send a reset to: customer care checks it's them and sends a link. */
@@ -270,5 +291,5 @@ export async function sendCode(...args: Parameters<typeof sendCodeImpl>) { retur
 export async function signInWithCode(...args: Parameters<typeof signInWithCodeImpl>) { return localiseResult(await signInWithCodeImpl(...args)); }
 export async function createAccount(...args: Parameters<typeof createAccountImpl>) { return localiseResult(await createAccountImpl(...args)); }
 export async function resetWithCode(...args: Parameters<typeof resetWithCodeImpl>) { return localiseResult(await resetWithCodeImpl(...args)); }
-export async function emailReset(...args: Parameters<typeof emailResetImpl>) { return localiseResult(await emailResetImpl(...args)); }
+export async function sendReset(input: Parameters<typeof sendResetImpl>[0]) { return localiseResult(await sendResetImpl(input)); }
 export async function askResetHelp(...args: Parameters<typeof askResetHelpImpl>) { return localiseResult(await askResetHelpImpl(...args)); }

@@ -2,17 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { signIn, totpCode } from "./helpers";
 
 async function passwordSignIn(page: Page, email: string, password: string) {
-  await page.goto("/login?next=/admin");
+  await page.goto("/admin/login");
   await page.waitForLoadState("networkidle");
-  await page.getByLabel("Mobile number or email").fill(email);
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Email or mobile number").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
 async function signOut(page: Page) {
   await page.getByRole("button", { name: "Sign out" }).first().click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/admin\/login$/); // staff go back to their own sign-in page
 }
 
 test("a new manager sets up an authenticator app, signs in with a code, and a trusted device skips it; the owner can reset it", async ({ browser }) => {
@@ -38,11 +37,11 @@ test("a new manager sets up an authenticator app, signs in with a code, and a tr
   await ram.getByLabel("New password").fill("Ram2026pass");
   await ram.getByLabel("The same password again").fill("Ram2026pass");
   await ram.getByRole("button", { name: "Set password and sign in" }).click();
-  await expect(ram).toHaveURL(/\/login\/two-factor/);
+  await expect(ram).toHaveURL(/\/admin\/login\/two-factor/);
   await expect(ram.getByRole("heading", { name: "Set up two-step sign-in" })).toBeVisible();
   await ram.goto("/admin"); // no way round it
   await expect(ram).toHaveURL(/\/login/);
-  await ram.goto("/login/two-factor");
+  await ram.goto("/admin/login/two-factor");
   await ram.waitForLoadState("networkidle");
   await ram.getByRole("button", { name: "Set up authenticator app" }).click();
   await expect(ram.getByRole("img", { name: "QR code for your authenticator app" })).toBeVisible();
@@ -68,7 +67,7 @@ test("a new manager sets up an authenticator app, signs in with a code, and a tr
   // sign out, sign in: the password, then a code
   await signOut(ram);
   await passwordSignIn(ram, email, "Ram2026pass");
-  await expect(ram).toHaveURL(/\/login\/two-factor/);
+  await expect(ram).toHaveURL(/\/admin\/login\/two-factor/);
   await expect(ram.getByRole("heading", { name: "Two-step sign-in" })).toBeVisible();
   await ram.waitForLoadState("networkidle");
   await ram.getByLabel("Code", { exact: true }).fill("000000");

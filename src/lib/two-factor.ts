@@ -15,7 +15,7 @@ import { PENDING_COOKIE, PENDING_MAX_AGE, signPending, signTrust, TRUST_MAX_AGE,
 
 // Two-step sign-in for staff. After the password, someone who uses it (or must: managers and owners always,
 // anyone else the owner requires) gets a short-lived "second step" cookie, not a session, and is sent to
-// /login/two-factor: a code from their authenticator app, a text message code (fallback, when the SMS gateway
+// /admin/login/two-factor: a code from their authenticator app, a text message code (fallback, when the SMS gateway
 // is live) or a one-time backup code. Someone who must use it but hasn't set it up does that first, before any
 // staff page. "Trust this device for 30 days" skips the code on that browser; it's tied to the person's
 // tokenVersion, so a password change, removal from the team or a two-step reset ends it. Tries are rate-limited
@@ -58,7 +58,7 @@ export async function beginSignIn(user: SignInUser, opts: { remember: boolean; d
   }
   const token = await signPending({ sub: user.id, v: user.tokenVersion, stage: step, remember: opts.remember, next: opts.dest });
   jar.set(PENDING_COOKIE, token, { ...cookieOpts(), maxAge: PENDING_MAX_AGE });
-  return { to: "/login/two-factor", signedIn: false };
+  return { to: "/admin/login/two-factor", signedIn: false };
 }
 
 async function isTrustedDevice(user: { id: string; tokenVersion: number }) {

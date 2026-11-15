@@ -1,24 +1,37 @@
 import "server-only";
-import { createHash, randomBytes } from "node:crypto";
 import { db } from "./db";
 import { store } from "./config";
 import { openCase } from "./care";
+import { codeMode, codeSms, createCode, maskPhone } from "./sign-in";
 import type { Locale } from "./i18n";
 
-// Forgotten passwords for shoppers, when the SMS code isn't available (no gateway yet, or an email account):
-//  1. a one-time link by email (1 hour), once an email service is connected (RESEND_API_KEY + EMAIL_FROM);
-//     staging and tests show the link on screen instead, as they do with SMS codes;
-//  2. otherwise one tap asks customer care, who check it's them by phone and send a one-time link
-//     (Customers → Reset link). The link is the same one-time reset token either way (lib/team.ts redeemResetLink).
+// Forgotten passwords for shoppers: a 6-digit code (10 minutes, 5 tries) to the shopper's choice of
+//  - SMS to their mobile, once an SMS gateway is connected (NOTIFY_SMS_PROVIDER; lib/notifications.ts),
+//  - WhatsApp to their mobile, once WhatsApp Business is connected (WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID +
+//    WHATSAPP_RESET_TEMPLATE, an approved "authentication" template; see deploy/README.md),
+//  - email, once an email service is connected (RESEND_API_KEY + EMAIL_FROM), real addresses only.
+// Staging and tests show the code on screen instead of sending it, as they do with sign-in codes. With none
+// connected, one tap asks customer care, who check it's them by phone and send a one-time link (Customers → Reset
+// link, lib/team.ts redeemResetLink). Every reset code is for the account (`reset:<userId>`), whichever way it went,
+// so a newer code cancels older ones and the 3-per-10-minutes limit covers all three ways together.
 // Staff never use these: the owner sends them a new sign-in link from Team & access.
 
-export type EmailMode = "email" | "test" | "off";
+export type SendMode = "live" | "test" | "off";
+export type ResetVia = "sms" | "whatsapp" | "email";
 
-export function emailMode(): EmailMode {
-  if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) return "email";
-  if (process.env.AUTH_CODES_TEST === "1" || process.env.ASSON_ENV === "staging" || process.env.NODE_ENV !== "production") return "test";
-  return "off";
+const testMode = () => process.env.AUTH_CODES_TEST === "1" || process.env.ASSON_ENV === "staging" || process.env.NODE_ENV !== "production";
+
+export function emailMode(): SendMode {
+  if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) return "live";
+  return testMode() ? "test" : "off";
 }
+
+export function whatsappMode(): SendMode {
+  if (process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_RESET_TEMPLATE) return "live";
+  return testMode() ? "test" : "off";
+}
+
+const smsMode = (): SendMode => ({ sms: "live", test: "test", off: "off" } as const)[codeMode()];
 
 /** Phone-only sign-ups get a placeholder address that can't receive mail. */
 export const realEmail = (email: string | null | undefined): email is string => !!email && !email.endsWith("@phone.asson.local");
@@ -31,33 +44,44 @@ export function maskEmail(email: string) {
 
 export class ResetError extends Error {}
 
-const sha = (s: string) => createHash("sha256").update(s).digest("hex");
-const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const LINK_MINUTES = 60;
+type Account = { id: string; name: string; email: string; phone: string | null };
 
-/** Email a one-time link to set a new password. At most 3 per account per hour; a new link cancels older ones. */
-export async function emailResetLink(user: { id: string; name: string; email: string }, now = new Date()): Promise<{ sentTo: string; testLink?: string }> {
-  const mode = emailMode();
-  if (mode === "off" || !realEmail(user.email)) throw new ResetError("Reset by email isn't available for this account. Ask us to reset it instead.");
-  const recent = await db.staffInvite.count({ where: { userId: user.id, purpose: "RESET", createdById: user.id, createdAt: { gt: new Date(now.getTime() - 3_600_000) } } });
-  if (recent >= 3) throw new ResetError("We've sent 3 reset links in the last hour. Check your inbox (and spam), or wait a little.");
-  const token = randomBytes(24).toString("base64url");
-  const link = `${siteUrl()}/reset/${token}`;
-  await db.$transaction(async (tx) => {
-    await tx.staffInvite.updateMany({ where: { userId: user.id, purpose: "RESET", usedAt: null }, data: { expiresAt: now } });
-    // createdById is the customer: they asked for it themselves
-    await tx.staffInvite.create({ data: { userId: user.id, purpose: "RESET", tokenHash: sha(token), expiresAt: new Date(now.getTime() + LINK_MINUTES * 60_000), createdById: user.id } });
-  });
-  if (mode === "test") return { sentTo: maskEmail(user.email), testLink: link };
+/** Where a reset code can go for this account right now, each shown masked. Empty: ask customer care. */
+export function resetChannels(user: Account): Partial<Record<ResetVia, string>> {
+  const out: Partial<Record<ResetVia, string>> = {};
+  if (user.phone && smsMode() !== "off") out.sms = maskPhone(user.phone);
+  if (user.phone && whatsappMode() !== "off") out.whatsapp = maskPhone(user.phone);
+  if (realEmail(user.email) && emailMode() !== "off") out.email = maskEmail(user.email);
+  return out;
+}
 
+export const resetTarget = (userId: string) => `reset:${userId}`;
+
+/** Send a reset code the chosen way. Returns where it went (masked) and, in test mode, the code itself. */
+export async function sendResetCode(user: Account, via: ResetVia, now = new Date()): Promise<{ sentTo: string; testCode?: string }> {
+  const sentTo = resetChannels(user)[via];
+  if (!sentTo) throw new ResetError("We can't send a code that way for this account. Choose another way, or ask us to reset it.");
+  const mode = via === "sms" ? smsMode() : via === "whatsapp" ? whatsappMode() : emailMode();
+  const target = resetTarget(user.id);
+  if (mode === "test") return { sentTo, testCode: await createCode(target, "RESET", now) };
+  if (via === "sms") {
+    // queued with the code, sent by the dispatcher (retries included)
+    await createCode(target, "RESET", now, (tx, code) => tx.notification.create({ data: { channel: "SMS", template: "reset_code", to: user.phone!, body: codeSms("RESET", code) } }).then(() => {}));
+    return { sentTo };
+  }
+  const code = await createCode(target, "RESET", now);
+  const to = via === "whatsapp" ? user.phone! : user.email;
   const first = user.name.split(" ")[0] || "there";
-  const subject = `Reset your ${store.name} password`;
-  const text = `Hi ${first},\n\nSomeone (hopefully you) asked to reset the password for your ${store.name} account. Open this link within ${LINK_MINUTES} minutes to choose a new one:\n\n${link}\n\nIf you didn't ask, ignore this email: your password stays the same. Never share this link.\n\n${store.name}`;
-  const note = await db.notification.create({ data: { channel: "EMAIL", template: "reset_link", to: user.email, body: text.replace(link, `${siteUrl()}/reset/…`), status: "SENDING", attempts: 1, claimedAt: now } });
-  const r = await sendEmail(user.email, subject, text).catch((e) => ({ ok: false as const, error: String(e) }));
-  await db.notification.update({ where: { id: note.id }, data: r.ok ? { status: "SENT", sentAt: new Date(), provider: "resend", providerRef: r.ref ?? null } : { status: "FAILED", provider: "resend", error: r.error.slice(0, 300) } });
-  if (!r.ok) throw new ResetError("We couldn't send the email just now. Try again in a minute, or ask us to reset it.");
-  return { sentTo: maskEmail(user.email) };
+  const text = via === "email"
+    ? `Hi ${first},\n\n${code} is your code to reset the password for your ${store.name} account. It expires in 10 minutes.\n\nIf you didn't ask, ignore this email: your password stays the same. Never share this code, not even with us.\n\n${store.name}`
+    : codeSms("RESET", code);
+  // the message log never keeps a working code
+  const note = await db.notification.create({ data: { channel: via === "email" ? "EMAIL" : "WHATSAPP", template: "reset_code", to, body: text.replace(code, "••••••"), status: "SENDING", attempts: 1, claimedAt: now } });
+  const r = await (via === "email" ? sendEmail(to, `${code} is your ${store.name} reset code`, text) : sendWhatsApp(to, code)).catch((e) => ({ ok: false as const, error: String(e) }));
+  const provider = via === "email" ? "resend" : "whatsapp";
+  await db.notification.update({ where: { id: note.id }, data: r.ok ? { status: "SENT", sentAt: new Date(), provider, providerRef: r.ref ?? null } : { status: "FAILED", provider, error: r.error.slice(0, 300) } });
+  if (!r.ok) throw new ResetError("We couldn't send the code just now. Try again in a minute, choose another way, or ask us to reset it.");
+  return { sentTo };
 }
 
 async function sendEmail(to: string, subject: string, text: string): Promise<{ ok: true; ref?: string } | { ok: false; error: string }> {
@@ -70,6 +94,34 @@ async function sendEmail(to: string, subject: string, text: string): Promise<{ o
   if (!res.ok) return { ok: false, error: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
   const j = (await res.json().catch(() => ({}))) as { id?: string };
   return { ok: true, ref: j.id };
+}
+
+/**
+ * WhatsApp Business (Meta Cloud API): codes must go in an approved "authentication" template, whose body holds
+ * the code and whose copy-code button repeats it. Numbers are sent as 977XXXXXXXXXX.
+ */
+async function sendWhatsApp(phone: string, code: string): Promise<{ ok: true; ref?: string } | { ok: false; error: string }> {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: `977${phone}`,
+      type: "template",
+      template: {
+        name: process.env.WHATSAPP_RESET_TEMPLATE,
+        language: { code: process.env.WHATSAPP_TEMPLATE_LANG ?? "en" },
+        components: [
+          { type: "body", parameters: [{ type: "text", text: code }] },
+          { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
+        ],
+      },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) return { ok: false, error: `WhatsApp ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  const j = (await res.json().catch(() => ({}))) as { messages?: { id?: string }[] };
+  return { ok: true, ref: j.messages?.[0]?.id };
 }
 
 export const RESET_SUBJECT = "Password reset request";

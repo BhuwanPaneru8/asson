@@ -8,7 +8,7 @@ import { parseHandbook } from "@/components/admin/handbook-text";
 // The handbook lives in code, so these checks catch a broken link, a missing page on someone's path, or a
 // question whose answer points nowhere, in CI, before staff ever see it.
 
-const ADMIN = path.join(process.cwd(), "src/app/admin");
+const ADMIN = path.join(process.cwd(), "src/app/admin/(staff)"); // staff pages live in the (staff) route group
 
 /** Does an /admin/... link point at a real page (dynamic segments match anything)? */
 function adminRouteExists(href: string) {

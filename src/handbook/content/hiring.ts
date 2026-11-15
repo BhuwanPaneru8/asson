@@ -140,7 +140,7 @@ Hire only with no 1s and an average of 3 or more. **Honesty below 3 is a no**, w
 
 ## Day 1
 - [ ] Welcome, a tour, introductions, safety (exits, fire, first aid), where things are.
-- [ ] They set their password from the link; check they can sign in on the shop device and their phone (install Asson Admin).
+- [ ] They set their password from the link; check they can sign in at /admin/login on the shop device and their phone (install Asson Admin).
 - [ ] Show them Today, My time (clock in) and the Handbook: their path is ready.
 - [ ] Managers and cashiers: set their **approval PIN** (managers only) on My approval PIN.
 - [ ] First pages of their path together: Welcome, How the company runs.

@@ -40,16 +40,15 @@ export async function signIn(page: Page, who: keyof typeof ACCOUNTS, next = "/ad
   }
   const trust = trusted.get(who);
   if (trust) await page.context().addCookies(trust);
-  await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.waitForLoadState("networkidle"); // the sign-in panel needs its JavaScript before typing
-  // one-step sign-in: who you are, then your password
-  await page.getByLabel("Mobile number or email").fill(ACCOUNTS[who].email);
-  await page.getByRole("button", { name: "Continue" }).click();
+  // staff have their own sign-in page, separate from the shop's
+  await page.goto(`/admin/login?next=${encodeURIComponent(next)}`);
+  await page.waitForLoadState("networkidle"); // the form needs its JavaScript before typing
+  await page.getByLabel("Email or mobile number").fill(ACCOUNTS[who].email);
   await page.getByLabel("Password", { exact: true }).fill(ACCOUNTS[who].password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).not.toHaveURL(/\/login(\?|$)/);
+  await expect(page).not.toHaveURL(/\/admin\/login(\?|$)/);
   // managers and owners: the code from their authenticator app (known secret in the E2E database only)
-  if (/\/login\/two-factor/.test(page.url())) {
+  if (/\/admin\/login\/two-factor/.test(page.url())) {
     const secret = E2E_TOTP[who as keyof typeof E2E_TOTP];
     if (!secret) throw new Error(`${who} has no known two-step secret`);
     await page.waitForLoadState("networkidle");

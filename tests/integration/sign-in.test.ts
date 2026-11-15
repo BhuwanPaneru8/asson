@@ -79,6 +79,19 @@ describe("sign-in", () => {
     expect(u.tokenVersion).toBe(before + 1);
   });
 
+  it("two doors: staff sign in only at /admin/login, shoppers only on the shop", async () => {
+    const staff = await makeUser("CASHIER");
+    // the shop turns staff away, without even checking the password
+    expect(await signInWithPassword({ identifier: staff.email, password: "Password1" })).toMatchObject({ ok: false, error: expect.stringMatching(/staff page/) });
+    // the staff page signs staff in and sends them to their staff home
+    expect(await redirected(signInWithPassword({ identifier: staff.email, password: "Password1", area: "staff" }))).toMatch(/\/admin/);
+    // a shopper's right password still doesn't open the staff page, and the answer doesn't reveal the account
+    const shopper = await signInWithPassword({ identifier: "sita@test.local", password: "Sita2026pass", area: "staff" });
+    const nobody = await signInWithPassword({ identifier: "nobody@test.local", password: "Sita2026pass", area: "staff" });
+    expect(shopper).toMatchObject({ ok: false, error: expect.stringMatching(/staff account/) });
+    expect(nobody).toEqual(shopper);
+  });
+
   it("staff can't use codes (every staff sign-in is with their password and recorded)", async () => {
     const staff = await makeUser("CASHIER");
     await db.user.update({ where: { id: staff.id }, data: { phone: "9800000009" } });
