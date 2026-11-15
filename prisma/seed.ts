@@ -12,6 +12,7 @@
 import { PrismaClient, type Gender, type OrderStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { CATEGORIES, SUPPLIERS, deliveryRates } from "./reference-data";
+import { loadOldMoneyEdit } from "./catalogue-old-money";
 
 const db = new PrismaClient();
 
@@ -500,6 +501,9 @@ async function main() {
   for (const [k, v] of soldOut.entries()) {
     await db.stockAlert.createMany({ data: Array.from({ length: (k % 3) + 1 }, (_, j) => ({ variantId: v.id, phone: `98${String(41000000 + k * 10 + j).padStart(8, "0")}` })) });
   }
+
+  // the Old Money Edit: a featured collection, two categories and four looks (same loader the live shop uses)
+  console.log("Old Money Edit:", await loadOldMoneyEdit(db));
 
   const counts = await Promise.all([db.product.count(), db.variant.count(), db.order.count(), db.user.count()]);
   console.log(`Done: ${counts[0]} products, ${counts[1]} variants, ${counts[2]} orders, ${counts[3]} users`);
