@@ -52,12 +52,14 @@ export async function attention(user: { id: string; role: string; permissions?: 
   })());
 
   if (can(role, "closing")) jobs.push((async () => {
-    const [diffs, cash, sold, locked] = await Promise.all([
+    const [diffs, cash, sold, locked, offline] = await Promise.all([
       db.shift.count({ where: here({ status: "CLOSED" as const, closedAt: { gte: dayStart(yesterday) }, NOT: { difference: 0 } }) }),
       cashPosition(scope, now),
       db.order.groupBy({ by: ["shiftId"], where: { channel: "STORE", createdAt: { gte: dayStart(yesterday), lt: dayStart(today) }, shift: ids ? { storeId: { in: ids } } : {} }, _count: { _all: true } }),
       db.dayClose.findMany({ where: here({ date: yesterday }), select: { storeId: true } }),
+      db.posException.count({ where: here({ resolvedAt: null }) }),
     ]);
+    add("offline", "danger", offline, (n) => `${s(n, "offline-sale exception")} to check (stock sold that the system didn't have, or a sale that arrived late)`, "/admin/closing");
     add("cashdiff", "danger", diffs, (n) => `${s(n, "till")} closed with a cash difference since yesterday`, "/admin/closing");
     const flagged = cash.filter((c) => c.flags.length);
     add("cash", "warn", flagged.length, (n) => `${s(n, "location")} with a cash to-do (bank it, check a deposit or count the safe)`, "/admin/cash");

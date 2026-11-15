@@ -11,7 +11,7 @@ export const WORLDCLASS: HandbookPage[] = [
     summary: "Each part of the business compared with what the best retailers run, with strengths and gaps.",
     audience: ["owner"],
     minutes: 12,
-    version: 2,
+    version: 3,
     restricted: "system",
     related: ["worldclass-roadmap", "owner-launch"],
     body: `## How we compared
@@ -30,7 +30,7 @@ export const WORLDCLASS: HandbookPage[] = [
 | Storefront and discovery | Strong | Fast pages (tested at national scale), typo-tolerant search incl. Nepali, live stock, delivery estimate per district, recommendations, lookbook, Nepali language, installable app | Product videos; live chat |
 | Checkout and payments | Partial | Guest checkout, COD with limits and risk rating, coupons, points, click-and-collect | **Online payments switched off** (built, on hold); gift cards |
 | Omnichannel order management | World-class | One inventory; routing by district/province; click-and-collect; order-for-customer from any location; order changes before packing; self-service exchanges; buy again | Ship-from-store to the customer's door from the till (partly via routing) |
-| Store operations and POS | Strong | Shifts, scan-to-sell, split payments, PIN approvals, returns with condition, pickups, daily close and lock, cash books, checklists, VM, visits, scorecard | **Till works only online** (critical for Nepal's internet and power cuts); hardware integration (cash drawer, printers) is basic |
+| Store operations and POS | Strong | Shifts, scan-to-sell, split payments, PIN approvals, returns with condition, pickups, daily close and lock, cash books, checklists, VM, visits, scorecard | ✅ Till sells offline (done 15 Nov 2026); hardware integration (cash drawer, printers) is basic |
 | Inventory and warehouse | Strong | One ledger with reasons, transfers counted in, replenishment and rebalancing, bins, waves with slots, scan-verified packing, manifests, RTO, blind counts, damaged register, nightly audit | Carton and shelf-life features aren't needed; RFID later |
 | Buying and merchandise planning | Partial | Demand forecast with festival seasonality, reorder by speed, dead stock, size/colour margin, markdowns with margin floor, supplier scorecards | **Open-to-buy budgets by season and category**; assortment and size-curve allocation for new products by store grade; sample and approval workflow |
 | Own production | Partial | Materials at average cost, bills of materials, production orders, rejects, true cost per piece, workshop bills | Tech packs, per-size consumption, piece-rate by worker, quality stages |
@@ -46,7 +46,7 @@ export const WORLDCLASS: HandbookPage[] = [
 
 ## What this means
 Asson OS is already beyond what most retailers in Nepal run, and in several areas (omnichannel orders, store controls, finance closes, onboarding) it matches what international chains use. The gaps that matter most for **operating at national scale without problems** are:
-1. **The till must keep selling when the internet or power goes.** In many districts this is daily life.
+1. ✅ **The till keeps selling when the internet goes** (offline till, 15 Nov 2026). In many districts this is daily life.
 2. **Tax invoices must meet IRD rules** before volume grows. Built (15 Nov 2026): the business PAN, the accountant's answers and, when turnover requires it, IRD enlistment for CBMS remain.
 3. **Staff accounts must have two-factor sign-in**, as more people in more places can touch money.
 4. **Production infrastructure** must match the launch (owner accounts and a bigger server).
@@ -61,7 +61,7 @@ The next page turns these into an ordered roadmap.`,
     summary: "The prioritised list of improvements, why each matters, who does what, and its size.",
     audience: ["owner"],
     minutes: 8,
-    version: 2,
+    version: 3,
     restricted: "system",
     related: ["worldclass-review", "owner-launch", "owner-switch-on"],
     body: `Ordered by risk to daily operations first, then growth. Size: **S** days, **M** 1–2 weeks, **L** several weeks.
@@ -69,7 +69,7 @@ The next page turns these into an ordered roadmap.`,
 ## Tier 1: before and at launch (protects operations)
 | # | Improvement | Why it matters | Who | Size |
 |---|---|---|---|---|
-| 1 | **Offline till**: sell, take cash and print receipts with no internet; sales sync with the same safety (no double sale, stock checked on sync) when back | Internet and power cuts are daily in many districts; a shop that can't sell loses money and customers | Developer | L |
+| 1 | ✅ **Offline till** (done 15 Nov 2026): sell, take cash and print receipts with no internet; sales sync with the same safety (no double sale, stock checked on sync) when back | Internet and power cuts are daily in many districts; a shop that can't sell loses money and customers | Developer | L |
 | 2 | **IRD-compliant tax invoices**: ✅ built 15 Nov 2026 (IRD format with PAN, gap-free numbers per fiscal year and location, BS and AD dates, buyer PAN, "Copy of original" reprints, credit notes, CBMS ready and off). Left: business PAN, the accountant's answers, IRD enlistment before CBMS goes on | Legal requirement for a VAT-registered business; easier to do before volume | Developer + accountant | M |
 | 3 | **Two-factor sign-in for staff**: an authenticator app or SMS code for the owner and managers (optional for others), trusted devices | Stolen or shared passwords are the commonest way money is taken | Developer | M |
 | 4 | **Production infrastructure**: a proper production server, UptimeRobot, monthly restore drill | Launch traffic and reliability | Owner + developer | S |

@@ -177,6 +177,7 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 - ✅ Click-and-collect: pickup at a shop, pay at the counter, hand-over at the till
 - ✅ Accounting export (CSV registers + VAT summary); ⬜ direct sync to accounting software
 - Search engine (Meilisearch or Typesense) when the catalogue exceeds about 100k variants
+- ✅ Offline till: sells with no internet from a signed price list on the device, syncs each sale exactly once on reconnect, flags stock shortfalls and late syncs for the manager, blocks shift close and day lock until synced (15 Nov 2026)
 - ✅ Installable phone apps (no app store): the shop ("Asson") and the staff app ("Asson Admin"), each with its own icon; offline page; "Get the app" in the footer (14 Nov 2026)
 - Native mobile app on the same domain logic (only if the installable app proves not enough: push notifications, app-store presence)
 - Own garment production: tech packs, fabric inventory, production orders

@@ -9,6 +9,8 @@ import { buildDaySummary, getShop, getShops, ktmDate, type DaySummary } from "@/
 import { formatDate, formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { Card, PageHeader, Pill } from "@/components/admin/ui";
 import { LockDayForm } from "@/components/admin/lock-day-form";
+import { OfflineExceptions } from "@/components/admin/offline-exceptions";
+import { openPosExceptions, POS_EXCEPTION_LABEL } from "@/lib/pos-offline";
 
 export const metadata = { title: "Daily closing" };
 
@@ -21,9 +23,10 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
   const scope = await scopeFor(me);
   const [store, shops] = await Promise.all([getShop(sp.store, scope), getShops(scope)]);
   if (!store) return <PageHeader title="Daily closing" description="You're not assigned to a shop yet. Ask the owner to add you under Customers & team." />;
-  const [locked, history] = await Promise.all([
+  const [locked, history, toCheck] = await Promise.all([
     db.dayClose.findUnique({ where: { storeId_date: { storeId: store.id, date } } }),
     db.dayClose.findMany({ where: { storeId: store.id }, orderBy: { date: "desc" }, take: 14 }),
+    openPosExceptions(store.id),
   ]);
   // A locked day shows the frozen snapshot, not a recalculation
   const s = (locked ? locked.summary : await buildDaySummary(store.id, date)) as unknown as DaySummary;
@@ -131,7 +134,9 @@ export default async function ClosingPage({ searchParams }: { searchParams: Prom
         </Card>
       </div>
 
-      {!locked && <LockDayForm date={date} storeId={store.id} ready={s.allShiftsClosed} hasDifference={s.cash.difference !== 0} />}
+      {toCheck.length > 0 && <OfflineExceptions rows={toCheck.map((x) => ({ id: x.id, label: POS_EXCEPTION_LABEL[x.kind], detail: x.detail, at: x.createdAt.toISOString(), order: { id: x.order.id, number: x.order.number, soldAt: x.order.createdAt.toISOString() } }))} />}
+
+      {!locked && <LockDayForm date={date} storeId={store.id} ready={s.allShiftsClosed && !s.offline?.waiting} hasDifference={s.cash.difference !== 0} />}
 
       <Card title="Recent closings" className="mt-4">
         <ul className="divide-y divide-line text-[13.5px]">

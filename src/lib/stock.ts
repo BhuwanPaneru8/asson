@@ -162,7 +162,12 @@ export async function allocateOrder(tx: Tx, opts: {
   actorId?: string | null;
   note?: string;
   picked?: boolean;
-}) {
+  /**
+   * Offline till sales only: the goods have already left the shop, so take what the location has and
+   * return the rest as shortfalls (for the manager) instead of refusing. Stock never goes below zero.
+   */
+  allowShort?: boolean;
+}): Promise<{ variantId: string; orderItemId: string; quantity: number }[]> {
   const select = { id: true, priority: true, district: true } as const;
   const locations = opts.only
     ? await tx.store.findMany({ where: { id: opts.only, active: true }, select })
@@ -172,6 +177,7 @@ export async function allocateOrder(tx: Tx, opts: {
   const available = await stockByLocation([...new Set(opts.lines.map((l) => l.variantId))], tx);
   const order = rankLocations(opts.lines, locations, available, opts.prefer ?? opts.only, opts.toDistrict);
   const now = new Date();
+  const short: { variantId: string; orderItemId: string; quantity: number }[] = [];
 
   for (const line of opts.lines) {
     let remaining = line.quantity;
@@ -192,8 +198,10 @@ export async function allocateOrder(tx: Tx, opts: {
       }
       available.get(line.variantId)?.set(storeId, have);
     }
-    if (remaining) throw new StockError(`${line.label} just sold out. Please update your bag.`, line.variantId);
+    if (remaining && opts.allowShort) short.push({ variantId: line.variantId, orderItemId: line.orderItemId, quantity: remaining });
+    else if (remaining) throw new StockError(`${line.label} just sold out. Please update your bag.`, line.variantId);
   }
+  return short;
 }
 
 /**

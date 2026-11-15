@@ -11,12 +11,14 @@ import { requirePermission, verifyPassword, getCurrentUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { onShiftClose, onShiftOpen } from "@/lib/cash";
 import { can, discountLimitPercent, type Role } from "@/lib/permissions";
-import { buildDaySummary, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
+import { buildDaySummary, dayBounds, expectedCashForShift, getOpenShift, getShop, isDayLocked, ktmDate, lookupVariants } from "@/lib/pos";
 import { allocateOrder, StockError, stockByLocation } from "@/lib/stock";
 import { findApproverByPin } from "@/lib/approvals";
 import { scopeFor } from "@/lib/scope";
 import { transitionOrder, TransitionError } from "@/lib/orders";
 import { formatOrderNumber, formatPrice } from "@/lib/utils";
+import { store as storeConfig } from "@/lib/config";
+import { flagOfflineSale, offlineSaleTime, priceIsGenuine, unsyncedOffline } from "@/lib/pos-offline";
 import { createShopOrder, ShopOrderError, stockElsewhere } from "@/lib/shop-orders";
 import { issueInvoice } from "@/lib/invoices";
 import { syncSoon } from "@/lib/cbms";
@@ -64,6 +66,9 @@ export async function closeShift(countedCashRupees: number, note?: string): Prom
   const me = await requirePermission("pos.sell");
   const shift = await getOpenShift(me.id);
   if (!shift) return { ok: false, error: "No open shift." };
+  // a till still holding offline sales for this shift would leave them out of the count
+  const waiting = await unsyncedOffline({ shiftId: shift.id });
+  if (waiting.sales) return { ok: false, error: `${waiting.sales} sale${waiting.sales > 1 ? "s" : ""} made offline on this shift ${waiting.sales > 1 ? "haven't" : "hasn't"} reached the server yet. Connect the till to the internet and let ${waiting.sales > 1 ? "them" : "it"} sync, then close the shift.` };
   const counted = rupeesToPaisa(countedCashRupees);
   if (!Number.isFinite(counted) || counted < 0) return { ok: false, error: "Enter the cash you counted." };
   const expected = await expectedCashForShift(shift.id);
@@ -104,6 +109,12 @@ const saleSchema = z.object({
     /** a business buyer's PAN: printed on a full tax invoice (they can claim the VAT) */
     pan: z.string().trim().regex(/^\d{9}$/).optional().or(z.literal("")),
   }).optional(),
+  /** A sale the till made while offline, now being sent: when it happened, on which shift, at which prices. */
+  offline: z.object({
+    soldAt: z.iso.datetime(),
+    shiftId: z.string().min(1).max(40),
+    prices: z.array(z.object({ variantId: z.string(), price: z.number().int().positive(), issuedAt: z.iso.datetime(), sig: z.string().max(64) })).min(1).max(100),
+  }).optional(),
 });
 
 export type PosSaleInput = z.input<typeof saleSchema>;
@@ -120,8 +131,10 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
   const existing = await db.order.findUnique({ where: { clientRef: d.clientRef }, select: { id: true, number: true } });
   if (existing) return { ok: true, orderId: existing.id, number: formatOrderNumber(existing.number), change: 0 };
 
-  const shift = await getOpenShift(me.id);
-  if (!shift) return { ok: false, error: "Open your shift before selling." };
+  // An offline sale belongs to the shift it was made on (it may have closed since), and only its own cashier sends it
+  const off = d.offline;
+  const shift = off ? await db.shift.findFirst({ where: { id: off.shiftId, cashierId: me.id } }) : await getOpenShift(me.id);
+  if (!shift) return { ok: false, error: off ? "This sale was made on another cashier's shift. The cashier who made it must sign in on this till to send it." : "Open your shift before selling." };
 
   // Merge duplicate scans of the same variant
   const qty = new Map<string, number>();
@@ -132,8 +145,19 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
   });
   if (variants.length !== qty.size) return { ok: false, error: "An item in this sale no longer exists. Remove it and rescan." };
 
-  // Prices always come from the database, never from the till
-  const subtotal = variants.reduce((s, v) => s + v.product.price * qty.get(v.id)!, 0);
+  // Prices always come from the database, never from the till. Offline, the till charged a price from a list
+  // we signed; that price stands (it's what the customer paid). One we can't verify is kept and flagged.
+  const unitPrice = new Map(variants.map((v) => [v.id, v.product.price]));
+  const unverified: string[] = [];
+  if (off) {
+    for (const v of variants) {
+      const p = off.prices.find((x) => x.variantId === v.id);
+      if (!p) return { ok: false, error: "An item in this offline sale has no price. Contact your manager." };
+      if (p.price !== v.product.price && !priceIsGenuine({ storeId: shift.storeId, ...p }, shift.openedAt)) unverified.push(v.id);
+      unitPrice.set(v.id, p.price);
+    }
+  }
+  const subtotal = variants.reduce((s, v) => s + unitPrice.get(v.id)! * qty.get(v.id)!, 0);
 
   // Discount with accountability: employee + amount + reason + approver
   let discount = 0;
@@ -142,6 +166,8 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     discount = d.discount.type === "PERCENT" ? Math.floor((subtotal * Math.min(d.discount.value, 100)) / 100 / 100) * 100 : Math.min(rupeesToPaisa(d.discount.value), subtotal);
     if (!d.discount.reason) return { ok: false, error: "Add a reason for the discount." };
     const percent = (discount / subtotal) * 100;
+    // no approval PIN can be checked offline, so the till only allows the cashier's own limit (and never above the offline cap)
+    if (off && (d.approverPin || percent > Math.min(discountLimitPercent(me.role as Role), storeConfig.posOffline.maxDiscountPercent))) return { ok: false, error: "This offline sale has a discount above what's allowed without a manager. Contact your manager." };
     if (percent > discountLimitPercent(me.role as Role)) {
       if (!d.approverPin) return { ok: false, error: `A ${percent.toFixed(1)}% discount needs a ${percent > 15 ? "owner" : "manager"}'s PIN.` };
       const found = await findApproverByPin(me.id, d.approverPin, "approve.discount");
@@ -163,6 +189,8 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
     }
   }
 
+  if (off && d.tenders.some((t) => t.method === "VOUCHER" || t.method === "BANK" || (t.method !== "CASH" && !t.reference))) return { ok: false, error: "This offline sale has a payment the till can't take offline. Contact your manager." };
+
   // Store-credit vouchers: must exist, be active and cover the amount applied
   const voucherTenders = d.tenders.filter((t) => t.method === "VOUCHER");
   for (const t of voucherTenders) {
@@ -178,8 +206,11 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
   const phone = d.customer?.phone || "";
   const customer = phone ? await db.user.findFirst({ where: { phone, role: "CUSTOMER" }, select: { id: true, email: true } }) : null;
   const store = await db.store.findUniqueOrThrow({ where: { id: shift.storeId }, select: { id: true, name: true } });
-  const inactive = variants.find((v) => v.product.status !== "ACTIVE");
+  // (an offline sale is recorded even if the product was taken off sale since: the goods have left)
+  const inactive = off ? undefined : variants.find((v) => v.product.status !== "ACTIVE");
   if (inactive) return { ok: false, error: `${inactive.product.name} is not for sale.` };
+  const when = off ? offlineSaleTime(off.soldAt, shift.openedAt) : { at: new Date(), clockWasOff: false };
+  const offlineNote = off ? ` · made offline${when.clockWasOff ? " (the till's clock was wrong, so it's dated when it reached the server)" : ""}` : "";
 
   try {
     const order = await db.$transaction(async (tx) => {
@@ -192,6 +223,7 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
         data: {
           channel: "STORE",
           clientRef: d.clientRef,
+          createdAt: when.at,
           userId: customer?.id,
           email: customer?.email ?? "",
           phone,
@@ -208,17 +240,19 @@ export async function createPosSale(input: PosSaleInput): Promise<R<{ orderId: s
           items: {
             create: variants.map((v) => ({
               variantId: v.id, productId: v.product.id, name: v.product.name, slug: v.product.slug, sku: v.sku,
-              color: v.color, size: v.size, image: v.product.images[0]?.url ?? "", unitPrice: v.product.price, quantity: qty.get(v.id)!,
+              color: v.color, size: v.size, image: v.product.images[0]?.url ?? "", unitPrice: unitPrice.get(v.id)!, quantity: qty.get(v.id)!,
               unitCost: v.costPrice,
             })),
           },
           tenders: { create: d.tenders.map((t) => ({ method: t.method, amount: t.amount, tendered: t.method === "CASH" ? t.tendered ?? t.amount : null, reference: t.reference || null })) },
-          events: { create: { status: "DELIVERED", actor: me.email, message: `Sold in store by ${me.name}${discount ? ` · discount ${formatPrice(discount)} (${d.discount!.reason})` : ""}` } },
+          events: { create: { status: "DELIVERED", actor: me.email, createdAt: when.at, message: `Sold in store by ${me.name}${discount ? ` · discount ${formatPrice(discount)} (${d.discount!.reason})` : ""}${offlineNote}` } },
         },
         select: { id: true, number: true, items: { select: { id: true, variantId: true, quantity: true } } },
       });
       // stock comes from this shop only, handed over on the spot (picked)
-      await allocateOrder(tx, { orderId: o.id, only: store.id, picked: true, actorId: me.id, note: `Store sale · ${store.name}`, lines: o.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: i.variantId! })) });
+      // offline: the goods already left, so take what the system has and flag the rest (never below zero)
+      const short = await allocateOrder(tx, { orderId: o.id, only: store.id, picked: true, actorId: me.id, allowShort: !!off, note: `Store sale · ${store.name}${off ? " (offline)" : ""}`, lines: o.items.map((i) => ({ orderItemId: i.id, variantId: i.variantId!, quantity: i.quantity, label: i.variantId! })) });
+      if (off) await flagOfflineSale(tx, me, { orderId: o.id, number: o.number, storeId: store.id, shift, soldAt: when.at, short, unverified, variants });
       for (const v of variants) await tx.product.update({ where: { id: v.product.id }, data: { soldCount: { increment: qty.get(v.id)! } } });
       if (customer) await earnForOrder(tx, o.id); // a store sale is delivered on the spot
       // the tax invoice is numbered with the sale: if anything here fails, the number isn't used
@@ -338,6 +372,8 @@ export async function lockDay(date: string, note?: string, storeId?: string): Pr
   if (await isDayLocked(store.id, date)) return { ok: false, error: "This day is already locked." };
   const summary = await buildDaySummary(store.id, date);
   if (!summary.allShiftsClosed) return { ok: false, error: "Close every shift before locking the day." };
+  const waiting = await unsyncedOffline({ storeId: store.id, before: dayBounds(date).end });
+  if (waiting.sales) return { ok: false, error: `${waiting.sales} offline sale${waiting.sales > 1 ? "s" : ""} on ${waiting.tills > 1 ? `${waiting.tills} tills` : "a till"} here ${waiting.sales > 1 ? "haven't" : "hasn't"} synced yet. Connect ${waiting.tills > 1 ? "them" : "it"} to the internet first.` };
   if (summary.cash.difference !== 0 && !note?.trim()) return { ok: false, error: "There is a cash difference. Add a closing note before locking." };
   await db.$transaction(async (tx) => {
     const dc = await tx.dayClose.create({ data: { storeId: store.id, date, summary: summary as unknown as Prisma.InputJsonValue, note: note?.trim().slice(0, 500) || null, lockedById: me.id } });

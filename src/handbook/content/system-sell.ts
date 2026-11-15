@@ -76,10 +76,10 @@ The Dashboard shows the last 30 days: sales, average order value, orders to conf
     slug: "sys-pos",
     section: "system",
     title: "Point of sale (the till)",
-    summary: "Selling in a shop: shifts, scanning, discounts, payments, receipts, returns, pickups and ordering for a customer.",
+    summary: "Selling in a shop: shifts, scanning, discounts, payments, receipts, returns, pickups, ordering for a customer, and selling when the internet is down.",
     audience: ["cashier", "shop-manager", "ops-manager", "owner"],
-    minutes: 9,
-    version: 2,
+    minutes: 11,
+    version: 3,
     open: [{ label: "Point of sale", href: "/admin/pos" }],
     related: ["sop-open-shop", "sop-till", "sop-store-returns", "sop-pickups", "sys-closing"],
     body: `The till sells from the same stock as the website. It's built for speed: **scan, scan, scan, pay**.
@@ -109,6 +109,17 @@ Every refund on an invoiced sale is a **credit note** against that invoice (its 
 ## Pickups (click-and-collect)
 Online orders for collection at this shop appear under **Pickups**. Find by order number or phone, take payment if it's due (Pay when collecting), and **Hand over**. The order is marked collected and the money lands in your shift.
 
+## When the internet drops (offline mode)
+The till keeps selling. A yellow strip says **Offline: sales are saved on this device**, with how many sales are waiting to sync.
+- Scanning works from this shop's **price list saved on the till** (it refreshes by itself every few minutes while online). The till won't sell offline from a list more than 3 days old: keep it online at least once a day.
+- Take **cash**, or **QR or card with the transaction ID** from the customer's app or the card slip (required offline).
+- Press **Save sale offline**. The receipt says **OFFLINE · PENDING SYNC** and has a code like OFF-7K3F9Q instead of an order number.
+- **Not possible offline:** returns and exchanges, pickups, ordering for a customer, store credit, bank transfer, discounts above **5%** (no manager PIN can be checked), and closing your shift.
+- When the connection is back the saved sales **go to the server by themselves**, oldest first, with the time you made them and on your shift. Each is recorded once, however often it's sent. The strip shows "N offline sales sent" and your shift count goes up.
+- **You can't close your shift until every offline sale has synced**, because the drawer count would miss them. Only the cashier who made the sales can send them: don't sign someone else in on your till while sales are waiting.
+- If the shelf had fewer units than the system thought (another shop or the website took them meanwhile), the sale is still recorded and your manager sees it on **Needs attention** to check.
+- If the till itself won't open at all (device broken), use the numbered paper sales sheet: see the incident runbook.
+
 ## Order for a customer
 When the size isn't here: **Order for a customer** shows which locations have it. Choose **PICKUP** (they collect here later) or **DELIVERY** (to their address), and **Pay now** or **Pay when collecting**. It becomes a normal order the warehouse or other shop fulfils.
 
@@ -117,6 +128,7 @@ When the size isn't here: **Order for a customer** shows which locations have it
       { q: "The drawer has Rs. 120 less than Expected in drawer when you close. What do you do?", options: ["Add Rs. 120 from your own pocket", "Type the real count and explain the difference", "Type the expected amount so it balances"], answer: 1, why: "Always the real count. Differences are explained and reviewed; hiding them is the serious problem." },
       { q: "A customer pays half by Fonepay QR and half in cash. Can the till do that?", options: ["No, one payment method per sale", "Yes, split the payment; the QR part needs its transaction reference", "Only with a manager PIN"], answer: 1, why: "Split payments are normal. Every non-cash payment needs its reference so it can be matched later." },
       { q: "A customer comes back for another copy of yesterday's invoice. What do you print?", options: ["A new invoice for the same sale", "A reprint, which says Copy of original with its number", "Nothing: invoices can't be printed twice"], answer: 1, why: "Reprints are allowed and must say Copy of original (n); the system numbers and records each one. A sale never gets a second invoice." },
+      { q: "The internet is down and a customer pays by Fonepay QR. What do you do?", options: ["Refuse: QR needs the internet", "Take it and type the transaction ID from their app, then Save sale offline", "Write it on paper"], answer: 1, why: "Offline the till takes QR and card with the transaction ID, so the payment can be matched later. The sale syncs by itself." },
       { q: "A returned shirt has a stain. Which condition?", options: ["RESELLABLE", "DAMAGED", "Doesn't matter"], answer: 1, why: "Damaged items never go back on the shelf. DAMAGED sends it to the damaged register for a decision." },
     ],
   },

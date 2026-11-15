@@ -183,6 +183,7 @@ async function main() {
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
+    db.posException.deleteMany(), db.posDevice.deleteMany(),
     db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(),
     db.staffLocation.deleteMany(), db.look.deleteMany(), db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
     db.inventoryLog.deleteMany(), db.cartItem.deleteMany(), db.cart.deleteMany(),
