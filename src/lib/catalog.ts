@@ -52,6 +52,30 @@ export const getCategoryTree = unstable_cache(
   { tags: ["catalog"], revalidate: 3600 },
 );
 
+/**
+ * A picture for each category tile: the owner's own category image when set, otherwise the first photo of the
+ * category's best-selling active product (its sub-categories included). Cached with the catalogue.
+ */
+export const getCategoryCovers = unstable_cache(
+  async (): Promise<Record<string, string>> => {
+    const rows = await db.$queryRaw<{ id: string; url: string }[]>`
+      WITH RECURSIVE tree AS (
+        SELECT id AS root, id FROM "Category"
+        UNION ALL
+        SELECT t.root, c.id FROM "Category" c JOIN tree t ON c."parentId" = t.id
+      )
+      SELECT DISTINCT ON (t.root) t.root AS id, i.url
+      FROM tree t
+      JOIN "Product" p ON p."categoryId" = t.id AND p.status = 'ACTIVE'
+      JOIN LATERAL (SELECT url FROM "ProductImage" WHERE "productId" = p.id ORDER BY position LIMIT 1) i ON true
+      ORDER BY t.root, p."soldCount" DESC, p."createdAt" DESC`;
+    const own = await db.category.findMany({ where: { image: { not: null } }, select: { id: true, image: true } });
+    return { ...Object.fromEntries(rows.map((r) => [r.id, r.url])), ...Object.fromEntries(own.filter((c) => c.image).map((c) => [c.id, c.image!])) };
+  },
+  ["category-covers"],
+  { tags: ["catalog", "products"], revalidate: 3600 },
+);
+
 export async function getCategoryBySlug(slug: string) {
   const tree = await getCategoryTree();
   const flat = tree.flatMap((r) => [r, ...r.children.flatMap((c) => [c, ...c.children])]);

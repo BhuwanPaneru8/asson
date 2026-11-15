@@ -34,6 +34,22 @@ describe("online checkout (guest, COD)", () => {
     expect(await db.cartItem.count()).toBe(0);
   });
 
+  it("needs no email: a guest orders with just a mobile; a bad email is still caught; a signed-in shopper's email fills in", async () => {
+    const p = await makeProduct({ price: 999, cost: 400, stock: { M: 5 } });
+    await db.deliveryRate.create({ data: { district: "Kaski", province: "Gandaki", zone: "OUTSIDE", fee: 15_000, etaMinDays: 3, etaMaxDays: 5 } });
+    await newGuest();
+    await addToCart({ variantId: p.variants[0].id });
+    expect(await placed("Kaski", { email: "not-an-email" })).toMatchObject({ error: expect.any(String) });
+    expect((await placed("Kaski", { email: "" })).url).toMatch(/^\/orders\//);
+    expect(await db.order.findFirstOrThrow()).toMatchObject({ email: "", phone: "9841234567" });
+
+    const shopper = await db.user.create({ data: { name: "Gita", email: "gita@test.local", phone: "9841111111", passwordHash: "x" } });
+    session.user = { ...shopper, permissions: [] } as unknown as typeof session.user;
+    await addToCart({ variantId: p.variants[0].id });
+    expect((await placed("Kaski", { email: "" })).url).toMatch(/^\/orders\//);
+    expect(await db.order.findFirstOrThrow({ where: { userId: shopper.id } })).toMatchObject({ email: "gita@test.local" });
+  });
+
   it("delivers free at Rs 2,500+ and blocks express outside the express districts", async () => {
     const p = await makeProduct({ price: 2600, stock: { M: 5 } });
     await newGuest();

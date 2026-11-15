@@ -48,7 +48,7 @@ describe("Nepali storefront", () => {
     expect(!q.ok && q.error).toBe("यो कोड मान्य छैन।");
     expect(await addToCart({ variantId: "missing" })).toEqual({ ok: false, error: "यो सामान अब उपलब्ध छैन।" });
     const form = new FormData();
-    expect((await trackOrder(undefined, form)).error).toBe("आफ्नो अर्डर नम्बर र इमेल लेख्नुहोस्।");
+    expect((await trackOrder(undefined, form)).error).toBe("आफ्नो अर्डर नम्बर र अर्डर गर्दा दिएको मोबाइल नम्बर वा इमेल लेख्नुहोस्।");
   });
 });
 

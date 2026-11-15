@@ -26,7 +26,8 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
   const [pickupId, setPickupId] = useState(pickupPoints.find((p) => p.readyNow)?.id ?? pickupPoints[0]?.id ?? "");
   const [pickupName, setPickupName] = useState(user?.name ?? "");
   const pickup = fulfil === "pickup";
-  const [email, setEmail] = useState(user?.email ?? "");
+  // phone-only accounts have a placeholder address that can't receive mail: leave the field empty for them
+  const [email, setEmail] = useState(user?.email && !user.email.endsWith("@phone.asson.local") ? user.email : "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [addressId, setAddressId] = useState<string | "new">(addresses[0]?.id ?? "new");
   const [addr, setAddr] = useState({ fullName: user?.name ?? "", phone: user?.phone ?? "", line1: "", line2: "", city: "", district: "", postalCode: "" });
@@ -93,6 +94,12 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
     });
   };
 
+  // the delivery phone starts as the mobile number and follows it, until the shopper types a different one
+  const setMobile = (raw: string) => {
+    const next = raw.replace(/\D/g, "").slice(0, 10);
+    setAddr((a) => (a.phone === phone ? { ...a, phone: next } : a));
+    setPhone(next);
+  };
   const set = (k: keyof typeof addr) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setAddr({ ...addr, [k]: e.target.value });
 
   return (
@@ -108,10 +115,10 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
           <Step n={1} title={t("co.contact")}>
             {!user && <p className="mb-4 text-[14px] text-muted">{rich(t("co.haveAccount"), { link: <Link href="/login?next=/checkout" className="font-medium text-ink underline underline-offset-4">{t("nav.signIn")}</Link> })}</p>}
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t("co.email")} error={errors.email}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required aria-invalid={!!errors.email} /></Field>
               <Field label={t("co.mobile")} error={errors.phone} hint={pickup ? t("co.hintPickup") : t("co.hintRider")}>
-                <div className="flex"><span className="flex h-11 items-center border border-r-0 border-line bg-cloud px-3 text-[14px] text-muted">{store.phonePrefix}</span><Input value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} inputMode="numeric" autoComplete="tel-national" required aria-invalid={!!errors.phone} /></div>
+                <div className="flex"><span className="flex h-11 items-center border border-r-0 border-line bg-cloud px-3 text-[14px] text-muted">{store.phonePrefix}</span><Input value={phone} onChange={(e) => setMobile(e.target.value)} inputMode="numeric" autoComplete="tel-national" required aria-invalid={!!errors.phone} /></div>
               </Field>
+              <Field label={t("co.email")} error={errors.email} hint={t("co.emailOptional")}><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" aria-invalid={!!errors.email} /></Field>
             </div>
           </Step>
 
@@ -159,7 +166,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
             {addressId === "new" && (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label={t("co.fullName")} error={errors["address.fullName"]}><Input value={addr.fullName} onChange={set("fullName")} autoComplete="name" aria-invalid={!!errors["address.fullName"]} /></Field>
-                <Field label={t("co.phone")} error={errors["address.phone"]}><Input value={addr.phone} onChange={(e) => setAddr({ ...addr, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} inputMode="numeric" autoComplete="tel-national" aria-invalid={!!errors["address.phone"]} /></Field>
+                <Field label={t("co.phone")} error={errors["address.phone"]} hint={addr.phone && addr.phone === phone ? t("co.phoneSame") : undefined}><Input value={addr.phone} onChange={(e) => setAddr({ ...addr, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} inputMode="numeric" autoComplete="tel-national" aria-invalid={!!errors["address.phone"]} /></Field>
                 <Field label={t("co.district")} error={errors["address.district"]} hint={addr.district && rate ? t("co.districtHint", { province: provinceOf(addr.district) ?? "", eta: etaText(t, rate) }) : undefined}>
                   <DistrictSelect value={addr.district} onChange={set("district")} placeholder={t("de.choose")} aria-invalid={!!errors["address.district"]} />
                 </Field>
