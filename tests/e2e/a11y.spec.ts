@@ -32,7 +32,7 @@ const SHOP = ["/", "/c/women", "/p/oxford-button-down-shirt", "/shop?q=shirt", "
 const STAFF = ["/admin", "/admin/activity", "/admin/bins", "/admin/care", "/admin/cash", "/admin/closing", "/admin/cod", "/admin/counts", "/admin/coupons", "/admin/customers", "/admin/damaged", "/admin/delivery",
   "/admin/finance", "/admin/finance/bank", "/admin/finance/budgets", "/admin/finance/close", "/admin/finance/shops", "/admin/finance/vat", "/admin/finance/year", "/admin/fulfilment", "/admin/fulfilment/deliveries", "/admin/fulfilment/exchanges",
   "/admin/insights", "/admin/insights?tab=demand", "/admin/inventory", "/admin/issues", "/admin/locations", "/admin/markdowns", "/admin/network", "/admin/notifications", "/admin/ops", "/admin/orders", "/admin/payables", "/admin/payroll", "/admin/people", "/admin/people/absences",
-  "/admin/picking", "/admin/production", "/admin/products", "/admin/products/new", "/admin/purchasing", "/admin/replenishment", "/admin/reviews", "/admin/rosters", "/admin/scorecard", "/admin/suppliers", "/admin/team", "/admin/today", "/admin/training", "/admin/training/new", "/admin/transfers", "/admin/visits", "/admin/vm"];
+  "/admin/picking", "/admin/production", "/admin/products", "/admin/products/new", "/admin/purchasing", "/admin/replenishment", "/admin/reviews", "/admin/rosters", "/admin/scorecard", "/admin/suppliers", "/admin/team", "/admin/today", "/admin/handbook", "/admin/handbook/onboarding", "/admin/handbook/sys-pos", "/admin/handbook/worldclass-review", "/admin/training", "/admin/training/new", "/admin/transfers", "/admin/visits", "/admin/vm"];
 
 test("shop pages meet the accessibility basics", async ({ page }) => {
   const found: Record<string, string[]> = {};

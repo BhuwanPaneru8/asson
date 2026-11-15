@@ -9,6 +9,7 @@ import { targetProgress } from "@/lib/budgets";
 import { myShifts } from "@/lib/rosters";
 import { swapsFor } from "@/lib/shift-swaps";
 import { mySops } from "@/lib/training";
+import { myPath } from "@/lib/handbook";
 import { MySwaps, OfferSwap } from "@/components/admin/swap-forms";
 import { ktmDate } from "@/lib/pos";
 import { formatPrice } from "@/lib/utils";
@@ -25,7 +26,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const locations = await db.store.findMany({ where: { active: true, ...storeFilter(scope) }, orderBy: [{ kind: "desc" }, { name: "asc" }], select: { id: true, name: true } });
   const want = (await searchParams).store;
   const here = locations.find((l) => l.id === want) ?? locations[0];
-  const [sops, shifts, swaps, news, lists, issues, displays, visits, target] = await Promise.all([mySops(me), myShifts(me.id), swapsFor(me.id), announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null)]);
+  const [sops, shifts, swaps, news, lists, issues, displays, visits, target, path] = await Promise.all([mySops(me), myShifts(me.id), swapsFor(me.id), announcementsFor(me), here ? checklistsAt(here.id) : Promise.resolve([]), here ? openIssuesAt(here.id) : Promise.resolve([]), here ? vmToDo(here.id) : Promise.resolve([]), here ? visitToDo(here.id) : Promise.resolve({ actions: [], toAck: [] }), here ? targetProgress(here.id) : Promise.resolve(null), myPath(me)]);
   const unread = news.filter((a) => a.requiresAck && !a.readAt);
   return (
     <>
@@ -71,6 +72,17 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
           )}
         </div>
         <div className="space-y-4">
+        {path.done < path.of && (() => {
+          const next = path.items.find((i) => i.state !== "done")!;
+          return (
+            <Card title={`Your handbook path · ${path.done} of ${path.of}`} action={<Link href="/admin/handbook" className="text-[13px] underline underline-offset-4">Handbook</Link>}>
+              <Link href={`/admin/handbook/${next.slug}`} className="flex items-center justify-between gap-3 px-5 py-3 text-[14px] hover:bg-cloud/40">
+                <span><span className="text-muted">Next: </span>{next.title}</span>
+                <span className="shrink-0 text-[12.5px] font-medium text-warn">{next.state === "changed" ? "changed: read again" : next.state === "read" ? "questions to pass" : `${next.minutes} min`}</span>
+              </Link>
+            </Card>
+          );
+        })()}
         {sops.some((x) => x.required && x.state !== "signed") && (
           <Card title={`Training to read and sign · ${sops.filter((x) => x.required && x.state !== "signed").length}`} action={<Link href="/admin/training" className="text-[13px] underline underline-offset-4">All</Link>}>
             <ul className="divide-y divide-line">{sops.filter((x) => x.required && x.state !== "signed").slice(0, 5).map((x) => (
