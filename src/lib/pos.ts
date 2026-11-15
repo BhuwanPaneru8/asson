@@ -5,6 +5,7 @@ import { store as storeConfig } from "./config";
 import { formatPrice } from "./utils";
 import { ensureFlagship } from "./stock";
 import { storeFilter, type Scope } from "./scope";
+import { unsyncedOffline } from "./pos-offline";
 
 export const TENDER_LABEL: Record<TenderMethod, string> = {
   CASH: "Cash",
@@ -96,6 +97,10 @@ export async function buildDaySummary(storeId: string, date: string) {
     db.tender.findMany({ where: { createdAt: { gte: start, lt: end }, order: { channel: "ONLINE", shift: { storeId } } }, select: { method: true, amount: true } }),
   ]);
 
+  const [offlineWaiting, offlineToCheck] = await Promise.all([
+    unsyncedOffline({ storeId, before: end }),
+    db.posException.count({ where: { storeId, resolvedAt: null, order: { createdAt: { gte: start, lt: end } } } }),
+  ]);
   const name = (id: string | null | undefined) => staff.find((s) => s.id === id)?.name ?? (id ? "Unknown" : "—");
 
   // Live expected cash for shifts that are still open
@@ -127,6 +132,8 @@ export async function buildDaySummary(storeId: string, date: string) {
   const cashDifference = shiftRows.reduce((s, r) => s + (r.difference ?? 0), 0);
   const alerts: string[] = [];
   if (shiftRows.some((r) => r.status === "OPEN")) alerts.push("Some shifts are still open — close them before locking the day.");
+  if (offlineWaiting.sales) alerts.push(`${offlineWaiting.sales} sale${offlineWaiting.sales > 1 ? "s" : ""} made offline ${offlineWaiting.sales > 1 ? "are" : "is"} still on a till, not yet synced. Connect it to the internet before locking the day.`);
+  if (offlineToCheck) alerts.push(`${offlineToCheck} offline-sale exception${offlineToCheck > 1 ? "s" : ""} to check (see “Offline sales to check”).`);
   if (shiftRows.some((r) => r.difference)) alerts.push(`Cash is ${cashDifference < 0 ? "short" : "over"} by ${formatPrice(Math.abs(cashDifference))} across today's shifts.`);
   const bigDiscounts = discounts.filter((d) => d.percent > 15);
   if (bigDiscounts.length) alerts.push(`${bigDiscounts.length} discount${bigDiscounts.length > 1 ? "s" : ""} above 15%.`);
@@ -161,6 +168,7 @@ export async function buildDaySummary(storeId: string, date: string) {
     pickups: { count: pickups.length, total: pickups.reduce((s, t) => s + t.amount, 0) },
     alerts,
     allShiftsClosed: shiftRows.every((r) => r.status === "CLOSED"),
+    offline: { waiting: offlineWaiting.sales, toCheck: offlineToCheck },
   };
 }
 

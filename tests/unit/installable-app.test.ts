@@ -104,6 +104,31 @@ describe("installable app: service worker", () => {
     expect([...next.stores.keys()].sort()).toEqual(["asson-new", "someone-else"]);
   });
 
+  it("keeps the till's offline copy only when the till asks, and shows it when the till can't load", async () => {
+    const w = loadWorker("r2", net);
+    await w.run("install");
+    expect(w.stores.get("asson-r2")!.has("/pos-offline")).toBe(false); // shoppers' phones never download it
+    const navigate = (url: string) => ({ request: Object.defineProperty(new Request(`https://asson.test${url}`), "mode", { value: "navigate" }) });
+    net.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await (await w.run("fetch", navigate("/admin/pos")))!.text()).toBe(html); // not saved yet: the plain offline page
+    net.mockImplementationOnce(async () => new Response('<html><script src="/_next/static/chunks/till-77.js"></script></html>'));
+    await w.run("message", { data: { type: "save-till-shell" } });
+    const store = w.stores.get("asson-r2")!;
+    expect(store.has("/pos-offline")).toBe(true);
+    expect(store.has("/_next/static/chunks/till-77.js")).toBe(true);
+    // fetched without cookies, so the saved copy can't hold anyone's data
+    expect(net).toHaveBeenCalledWith("/pos-offline");
+    net.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await (await w.run("fetch", navigate("/admin/pos")))!.text()).toContain("till-77.js");
+    net.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await (await w.run("fetch", navigate("/admin/orders")))!.text()).toBe(html); // the rest of the admin: the offline page
+    net.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    expect(await (await w.run("fetch", navigate("/admin/pos/receipt/abc")))!.text()).toBe(html);
+    // online, the till always comes fresh from the server, never from the saved copy
+    expect(await (await w.run("fetch", navigate("/admin/pos")))!.text()).toBe("page:https://asson.test/admin/pos");
+    await w.run("message", { data: { type: "something-else" } });
+  });
+
   it("puts only safe characters of the release into the store name", () => {
     expect(serviceWorkerSource('a"b;c')).toContain('const CACHE = "asson-abc";');
     expect(serviceWorkerSource("")).toContain('"asson-dev"');

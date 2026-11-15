@@ -8,12 +8,20 @@ import { closeShift, createPosSale, openShift, posLookup, type PosItem } from "@
 import { ReturnPanel } from "./return-panel";
 import { PickupPanel } from "./pickup-panel";
 import { OrderPanel } from "./order-panel";
+import { useTill } from "./use-till";
+import { OfflineReceipt, printOfflineReceipt, TillBanner } from "./offline-till";
 import { cn, formatDateTime, formatPrice } from "@/lib/utils";
+import {
+  discountAmount as computeDiscount, offlineCode, offlineDiscountLimit, offlineSaleProblem, OFFLINE_METHODS, priceListProblem, queueSale, queueStats,
+  searchPriceList, unitsQueued, type OfflineLine, type OfflineTender, type QueuedSale, type TillRow, type TillSession,
+} from "@/lib/till-offline";
 
 type Line = PosItem & { quantity: number };
 type TenderMethod = "CASH" | "ESEWA_QR" | "KHALTI_QR" | "FONEPAY_QR" | "CARD" | "BANK" | "VOUCHER";
 type Tender = { method: TenderMethod; amount: number; tendered?: number; reference?: string };
-type Shift = { store: string; openedAt: string; openingFloat: number; expectedCash: number; sales: number; total: number } | null;
+type Shift = { id: string; storeId: string; store: string; openedAt: string; openingFloat: number; expectedCash: number; sales: number; total: number } | null;
+type Cashier = { id: string; name: string; discountLimit: number; canApproveReturns: boolean };
+type Till = ReturnType<typeof useTill>;
 
 const METHODS: { id: TenderMethod; label: string }[] = [
   { id: "CASH", label: "Cash" }, { id: "ESEWA_QR", label: "eSewa QR" }, { id: "KHALTI_QR", label: "Khalti QR" },
@@ -24,19 +32,36 @@ const REASONS = ["Loyal customer", "Damaged / display piece", "Staff purchase", 
 const rupees = (s: string) => Math.round((Number(s.replace(/[^\d.]/g, "")) || 0) * 100);
 const newRef = () => `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export function PosTerminal({ cashier, shift, shops }: { cashier: { name: string; discountLimit: number; canApproveReturns: boolean }; shift: Shift; shops: { id: string; name: string }[] }) {
+/**
+ * The till. Online it sells through the server as always; when the connection drops it keeps selling from
+ * the price list saved on this device and queues the sales, which sync by themselves when it's back.
+ * `standalone` is the offline copy of the till (/pos-offline), opened by the service worker after a reload
+ * with no internet; its cashier and shift come from the device.
+ */
+export function PosTerminal({ cashier, shift, shops, standalone }: { cashier: Cashier; shift: Shift; shops: { id: string; name: string }[]; standalone?: boolean }) {
   const [mode, setMode] = useState<"sale" | "order" | "return" | "pickup">("sale");
-  if (!shift) return <OpenShift name={cashier.name} shops={shops} />;
+  const session = useMemo<TillSession | null>(() => (shift ? {
+    cashierId: cashier.id, cashierName: cashier.name, discountLimit: cashier.discountLimit,
+    shift: { id: shift.id, storeId: shift.storeId, store: shift.store, openedAt: shift.openedAt, openingFloat: shift.openingFloat, expectedCash: shift.expectedCash, sales: shift.sales, total: shift.total },
+  } : null), [cashier.id, cashier.name, cashier.discountLimit, shift]);
+  const till = useTill(session, { standalone });
+  // the service worker keeps a copy of the till's page (no data in it) for a reload with no internet
+  useEffect(() => { if (!standalone) navigator.serviceWorker?.controller?.postMessage({ type: "save-till-shell" }); }, [standalone]);
+  const banner = <TillBanner online={till.online} queue={till.queue} syncing={till.syncing} waitingForOthers={till.waitingForOthers} standalone={standalone} onRetry={() => void till.sync()} />;
+  if (!shift || !session) return <>{banner}<OpenShift name={cashier.name} shops={shops} /></>;
+  // only selling works offline: returns, pickups and ordering for a customer need the server
+  const active = till.online ? mode : "sale";
   return (
     <div>
-      <div className="no-scrollbar -mx-4 -mt-4 mb-4 flex gap-1 overflow-x-auto border-b border-line bg-white px-4 md:-mx-8 md:-mt-8 md:px-8">
+      {banner}
+      <div className="no-scrollbar -mx-4 mb-4 flex gap-1 overflow-x-auto border-b border-line bg-white px-4 md:-mx-8 md:px-8">
         {(["sale", "order", "return", "pickup"] as const).map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={cn("-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-[14px] font-medium", mode === m ? "border-ink" : "border-transparent text-muted hover:text-ink")}>
+          <button key={m} onClick={() => setMode(m)} disabled={!till.online && m !== "sale"} title={!till.online && m !== "sale" ? "Needs the internet" : undefined} className={cn("-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-3 text-[14px] font-medium disabled:opacity-40", active === m ? "border-ink" : "border-transparent text-muted hover:text-ink")}>
             {m === "sale" ? "Sale" : m === "order" ? "Order for a customer" : m === "return" ? "Return / exchange" : "Pickups"}
           </button>
         ))}
       </div>
-      {mode === "sale" ? <Terminal cashier={cashier} shift={shift} /> : mode === "order" ? <OrderPanel shop={shift.store} /> : mode === "return" ? <ReturnPanel canApprove={cashier.canApproveReturns} /> : <PickupPanel shop={shift.store} />}
+      {active === "sale" ? <Terminal cashier={cashier} shift={shift} session={session} till={till} /> : active === "order" ? <OrderPanel shop={shift.store} /> : active === "return" ? <ReturnPanel canApprove={cashier.canApproveReturns} /> : <PickupPanel shop={shift.store} />}
     </div>
   );
 }
@@ -49,7 +74,7 @@ function OpenShift({ name, shops }: { name: string; shops: { id: string; name: s
     <div className="mx-auto mt-10 max-w-md rounded-lg border border-line bg-white p-8">
       <h1 className="text-[22px] font-semibold">Open your shift</h1>
       <p className="mt-1 text-[14px] text-muted">Hi {name.split(" ")[0]}. Count the cash in the drawer before your first sale.</p>
-      <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await openShift(Number(float || 0), shop || undefined); if (!r.ok) toast.error(r.error); else toast.success("Shift opened"); }); }}>
+      <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await openShift(Number(float || 0), shop || undefined).catch(() => null); if (!r) toast.error("No connection. A shift can only be opened online."); else if (!r.ok) toast.error(r.error); else toast.success("Shift opened"); }); }}>
         {shops.length > 1 && (
           <label className="block text-[13px] font-medium text-ink-soft">Shop
             <select value={shop} onChange={(e) => setShop(e.target.value)} className="mt-1.5 h-12 w-full rounded-md border border-line bg-white px-3 text-[15px] outline-none focus:border-ink">
@@ -66,7 +91,7 @@ function OpenShift({ name, shops }: { name: string; shops: { id: string; name: s
   );
 }
 
-function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: number; canApproveReturns: boolean }; shift: NonNullable<Shift> }) {
+function Terminal({ cashier, shift, session, till }: { cashier: Cashier; shift: NonNullable<Shift>; session: TillSession; till: Till }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PosItem[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
@@ -74,7 +99,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
   const [pin, setPin] = useState("");
   const [tenders, setTenders] = useState<Tender[]>([]);
   const [customer, setCustomer] = useState({ name: "", phone: "", pan: "" });
-  const [receipt, setReceipt] = useState<{ orderId: string; number: string; change: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ orderId: string; number: string; change: number; offline?: QueuedSale } | null>(null);
   const [closing, setClosing] = useState(false);
   const [searching, startSearch] = useTransition();
   const [paying, startPay] = useTransition();
@@ -82,17 +107,39 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
   const scanRef = useRef<HTMLInputElement>(null);
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const discountAmount = useMemo(() => {
-    if (!discount || !discount.value) return 0;
-    const v = Number(discount.value) || 0;
-    return discount.type === "PERCENT" ? Math.floor((subtotal * Math.min(v, 100)) / 100 / 100) * 100 : Math.min(Math.round(v * 100), subtotal);
-  }, [discount, subtotal]);
+  const discountAmount = useMemo(() => computeDiscount(subtotal, discount && { type: discount.type, value: Number(discount.value) || 0 }), [discount, subtotal]);
   const total = subtotal - discountAmount;
   const discountPct = subtotal ? (discountAmount / subtotal) * 100 : 0;
-  const needsPin = discountPct > cashier.discountLimit;
+  const offline = !till.online;
+  const offlineLimit = offlineDiscountLimit(cashier.discountLimit);
+  const needsPin = !offline && discountPct > cashier.discountLimit;
+  const listProblem = offline ? priceListProblem(till.priceList, shift.storeId) : null;
+  const queued = queueStats(till.queue, shift.id);
   const paid = tenders.reduce((s, t) => s + t.amount, 0);
   const remaining = total - paid;
   const change = tenders.reduce((s, t) => s + (t.method === "CASH" && t.tendered ? t.tendered - t.amount : 0), 0);
+
+  // offline: the saved price list stands in for the server (its count less what's already sold offline)
+  const fromList = (r: TillRow): PosItem => ({ variantId: r.variantId, sku: r.sku, name: r.name, color: r.color, size: r.size, price: r.price, stock: Math.max(0, r.stock - unitsQueued(till.queue, r.variantId)), image: null });
+  const offlineLines = (): { lines: OfflineLine[] } | { error: string } => {
+    const rows = new Map((till.priceList?.rows ?? []).map((r) => [r.variantId, r]));
+    const out: OfflineLine[] = [];
+    for (const l of lines) {
+      const r = rows.get(l.variantId);
+      if (!r) return { error: `${l.name} isn't in the price list saved on this till.` };
+      if (r.price !== l.price) return { error: `${l.name}'s price has changed. Remove it and scan it again.` };
+      out.push({ variantId: l.variantId, sku: l.sku, name: l.name, color: l.color, size: l.size, price: r.price, issuedAt: r.issuedAt, sig: r.sig, quantity: l.quantity });
+    }
+    return { lines: out };
+  };
+  const offlineDiscount = discount && discountAmount > 0 ? { type: discount.type, value: Number(discount.value), reason: discount.reason } : null;
+  const offlineProblem = (() => {
+    if (!offline || !lines.length) return null;
+    if (listProblem) return listProblem;
+    const ol = offlineLines();
+    if ("error" in ol) return ol.error;
+    return offlineSaleProblem({ lines: ol.lines, discount: offlineDiscount, tenders, ownLimit: cashier.discountLimit });
+  })();
 
   // keep the scanner input focused so the barcode gun always works
   useEffect(() => { if (!receipt && !closing) scanRef.current?.focus(); }, [receipt, closing, lines.length]);
@@ -117,7 +164,16 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
     // clear at once so a fast second scan from the barcode gun isn't swallowed by this lookup
     setQuery("");
     startSearch(async () => {
-      const found = await posLookup(q);
+      const local = () => {
+        if (listProblem || !till.priceList) { toast.error(listProblem ?? "No saved price list on this till."); return null; }
+        return searchPriceList(till.priceList, q).map(fromList);
+      };
+      let found: PosItem[] | null;
+      if (offline) found = local();
+      else {
+        try { found = await posLookup(q); } catch { till.markOffline(); found = local(); }
+      }
+      if (!found) return;
       if (found.length === 1 && found[0].sku.toLowerCase() === q.toLowerCase()) { add(found[0]); setResults([]); return; }
       if (!found.length) toast.error(`Nothing found for “${q}”`);
       setResults(found);
@@ -131,13 +187,28 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
   };
 
   const addTender = (method: TenderMethod) => {
-    if (remaining <= 0) return;
+    if (remaining <= 0 || (offline && !(OFFLINE_METHODS as readonly string[]).includes(method))) return;
     setTenders((ts) => [...ts, { method, amount: remaining, tendered: method === "CASH" ? remaining : undefined, reference: method === "VOUCHER" ? "" : undefined }]);
   };
 
   const reset = () => { setLines([]); setDiscount(null); setPin(""); setTenders([]); setCustomer({ name: "", phone: "", pan: "" }); setResults([]); setQuery(""); clientRef.current = newRef(); };
 
+  // no connection: keep the sale on this device (same clientRef, so it's recorded once even if the request did arrive)
+  const saveOffline = async () => {
+    const ol = listProblem ? { error: listProblem } : offlineLines();
+    const problem = "error" in ol ? ol.error : offlineSaleProblem({ lines: ol.lines, discount: offlineDiscount, tenders, ownLimit: cashier.discountLimit });
+    if (problem || "error" in ol) { toast.error(`No connection, and this sale can't be saved offline: ${problem}`); return; }
+    const sale = queueSale({
+      clientRef: clientRef.current, queue: till.queue, session, lines: ol.lines, discount: offlineDiscount,
+      tenders: tenders as OfflineTender[], customer: customer.phone || customer.name || customer.pan ? { name: customer.name || undefined, phone: customer.phone, pan: customer.pan || undefined } : undefined,
+    });
+    try { await till.saveOffline(sale); } catch { toast.error("This device couldn't save the sale. Write it on the paper sales sheet."); return; }
+    setReceipt({ orderId: "", number: offlineCode(sale.clientRef), change: sale.change, offline: sale });
+    reset();
+  };
+
   const complete = () => startPay(async () => {
+    if (offline) { await saveOffline(); return; }
     const r = await createPosSale({
       clientRef: clientRef.current,
       lines: lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity })),
@@ -145,21 +216,23 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
       approverPin: needsPin ? pin : undefined,
       tenders: tenders.map((t) => ({ method: t.method, amount: t.amount, tendered: t.tendered, reference: t.reference || undefined })),
       customer: customer.phone || customer.name || customer.pan ? { name: customer.name || undefined, phone: customer.phone, pan: customer.pan } : undefined,
-    });
+    }).catch(() => null);
+    if (!r) { till.markOffline(); await saveOffline(); return; }
     if (!r.ok) { toast.error(r.error); return; }
     setReceipt({ orderId: r.orderId, number: r.number, change: r.change });
     reset();
   });
 
-  const canComplete = lines.length > 0 && remaining === 0 && tenders.every((t) => t.method !== "VOUCHER" || !!t.reference?.trim()) && (!discountAmount || (discount?.reason && (!needsPin || /^\d{4,6}$/.test(pin)))) && tenders.every((t) => t.method !== "CASH" || (t.tendered ?? 0) >= t.amount);
+  const canComplete = offline ? lines.length > 0 && remaining === 0 && !offlineProblem : lines.length > 0 && remaining === 0 && tenders.every((t) => t.method !== "VOUCHER" || !!t.reference?.trim()) && (!discountAmount || (discount?.reason && (!needsPin || /^\d{4,6}$/.test(pin)))) && tenders.every((t) => t.method !== "CASH" || (t.tendered ?? 0) >= t.amount);
 
   return (
     <div className="-mx-4 -mb-4 flex min-h-[calc(100vh-110px)] flex-col md:-mx-8 md:-mb-8 lg:flex-row">
       {/* Left: scan & search */}
       <section className="flex min-w-0 flex-1 flex-col border-line bg-white lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-5 py-3 text-[13px]">
-          <span className="text-muted">{shift.store} · shift opened {formatDateTime(shift.openedAt)} · {shift.sales} sales · {formatPrice(shift.total)}</span>
-          <button onClick={() => setClosing(true)} className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 hover:border-ink"><LogOut className="h-3.5 w-3.5" /> Close shift</button>
+          <span className="text-muted">{shift.store} · shift opened {formatDateTime(shift.openedAt)} · {shift.sales} sales · {formatPrice(shift.total)}{queued.pending > 0 && ` · ${queued.pending} offline, not synced`}</span>
+          {/* the drawer count would miss sales still on this device */}
+          <button onClick={() => setClosing(true)} disabled={offline || queued.pending > 0} title={offline ? "Needs the internet" : queued.pending ? "Sync the offline sales first" : undefined} className="flex items-center gap-1.5 rounded-md border border-line px-3 py-1.5 hover:border-ink disabled:opacity-40"><LogOut className="h-3.5 w-3.5" /> {queued.pending > 0 ? "Sync offline sales to close" : "Close shift"}</button>
         </div>
         <form onSubmit={scan} className="flex gap-2 border-b border-line p-4">
           <div className="relative flex-1">
@@ -220,7 +293,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
         <div className="space-y-3 border-t border-line p-5">
           {/* Discount */}
           {!discount ? (
-            <button onClick={() => setDiscount({ type: "PERCENT", value: "", reason: "" })} disabled={!lines.length} className="flex items-center gap-1.5 text-[13px] underline underline-offset-4 disabled:opacity-40"><Percent className="h-3.5 w-3.5" /> Add discount</button>
+            <button onClick={() => setDiscount({ type: "PERCENT", value: "", reason: "" })} disabled={!lines.length || (offline && offlineLimit <= 0)} className="flex items-center gap-1.5 text-[13px] underline underline-offset-4 disabled:opacity-40"><Percent className="h-3.5 w-3.5" /> Add discount</button>
           ) : (
             <div className="space-y-2 rounded-md border border-line bg-white p-3">
               <div className="flex items-center gap-2">
@@ -229,6 +302,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
                 <select value={discount.reason} onChange={(e) => setDiscount({ ...discount, reason: e.target.value })} className="h-9 flex-1 rounded border border-line px-2 text-[13px]" aria-label="Discount reason"><option value="">Reason…</option>{REASONS.map((r) => <option key={r}>{r}</option>)}</select>
                 <button onClick={() => { setDiscount(null); setPin(""); setTenders([]); }} aria-label="Remove discount" className="p-1 text-muted hover:text-ink"><X className="h-4 w-4" /></button>
               </div>
+              {offline && discountPct > offlineLimit && <p className="text-[12.5px] text-warn">Offline, discounts can be at most {offlineLimit}%: no manager PIN can be checked.</p>}
               {needsPin && (
                 <div className="flex items-center gap-2 text-[12.5px]">
                   <span className="text-warn">{discountPct.toFixed(1)}% is over your {cashier.discountLimit}% limit — {discountPct > 15 ? "owner" : "manager"} PIN:</span>
@@ -246,7 +320,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
 
           {/* Payments */}
           <div className="grid grid-cols-3 gap-1.5">
-            {METHODS.map((m) => <button key={m.id} onClick={() => addTender(m.id)} disabled={!lines.length || remaining <= 0} className="h-10 rounded-md border border-line bg-white text-[13px] font-medium hover:border-ink disabled:opacity-40">{m.label}</button>)}
+            {METHODS.map((m) => <button key={m.id} onClick={() => addTender(m.id)} disabled={!lines.length || remaining <= 0 || (offline && !(OFFLINE_METHODS as readonly string[]).includes(m.id))} className="h-10 rounded-md border border-line bg-white text-[13px] font-medium hover:border-ink disabled:opacity-40">{m.label}</button>)}
           </div>
           {tenders.length > 0 && (
             <ul className="space-y-1.5">
@@ -257,7 +331,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
                   {t.method === "CASH" ? (
                     <label className="flex items-center gap-1 text-muted">received<input value={(t.tendered ?? 0) / 100} onChange={(e) => setTenders((ts) => ts.map((x, j) => (j === i ? { ...x, tendered: rupees(e.target.value) } : x)))} inputMode="decimal" aria-label="Cash received" className="h-8 w-20 rounded border border-line px-2 tabular-nums text-ink" /></label>
                   ) : (
-                    <input value={t.reference ?? ""} onChange={(e) => setTenders((ts) => ts.map((x, j) => (j === i ? { ...x, reference: e.target.value } : x)))} placeholder={t.method === "VOUCHER" ? "Voucher code CR-…" : "Txn ID (optional)"} aria-label="Transaction reference" className="h-8 min-w-0 flex-1 rounded border border-line px-2" />
+                    <input value={t.reference ?? ""} onChange={(e) => setTenders((ts) => ts.map((x, j) => (j === i ? { ...x, reference: e.target.value } : x)))} placeholder={t.method === "VOUCHER" ? "Voucher code CR-…" : offline ? "Txn ID (needed offline)" : "Txn ID (optional)"} aria-label="Transaction reference" className="h-8 min-w-0 flex-1 rounded border border-line px-2" />
                   )}
                   <button onClick={() => setTenders((ts) => ts.filter((_, j) => j !== i))} className="ml-auto p-1 text-muted hover:text-danger" aria-label="Remove payment"><X className="h-3.5 w-3.5" /></button>
                 </li>
@@ -279,13 +353,27 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
             <input value={customer.pan} onChange={(e) => setCustomer({ ...customer, pan: e.target.value.replace(/\D/g, "").slice(0, 9) })} placeholder="Buyer PAN (9 digits, for a business)" inputMode="numeric" aria-label="Buyer PAN" className="mt-2 h-9 w-full rounded border border-line px-2" />
           </details>
 
+          {offlineProblem && remaining === 0 && <p className="text-[13px] text-warn">{offlineProblem}</p>}
           <button onClick={complete} disabled={!canComplete || paying} className="h-14 w-full rounded-md bg-ink text-[16px] font-semibold text-white disabled:opacity-40">
-            {paying ? "Completing…" : `Complete sale${total ? ` · ${formatPrice(total)}` : ""}`}
+            {paying ? "Completing…" : `${offline ? "Save sale offline" : "Complete sale"}${total ? ` · ${formatPrice(total)}` : ""}`}
           </button>
         </div>
       </section>
 
-      {receipt && (
+      {receipt?.offline && (
+        <Modal onClose={() => setReceipt(null)}>
+          <p className="text-[13px] uppercase tracking-wider text-warn">Saved on this device · pending sync</p>
+          <p className="mt-1 text-[26px] font-semibold">{receipt.number}</p>
+          <p className="mt-1 text-[13px] text-muted">It goes to the server by itself when the internet is back.</p>
+          {receipt.change > 0 && <p className="mt-3 rounded-md bg-[#fbf1df] p-3 text-[18px] font-semibold text-warn">Give change: {formatPrice(receipt.change)}</p>}
+          <div className="mt-6 flex gap-2">
+            <button onClick={printOfflineReceipt} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-line hover:border-ink"><Printer className="h-4 w-4" /> Print receipt</button>
+            <button autoFocus onClick={() => setReceipt(null)} className="h-11 flex-1 rounded-md bg-ink font-medium text-white">New sale</button>
+          </div>
+          <OfflineReceipt sale={receipt.offline} />
+        </Modal>
+      )}
+      {receipt && !receipt.offline && (
         <Modal onClose={() => setReceipt(null)}>
           <p className="text-[13px] uppercase tracking-wider text-success">Sale complete</p>
           <p className="mt-1 text-[26px] font-semibold">{receipt.number}</p>

@@ -164,6 +164,12 @@ export const store = {
     readyNow: "In stock at this shop: usually ready the same day",
     readyLater: "Comes from our warehouse: usually ready in 2–4 days",
   },
+  /** The till keeps selling when the shop's internet drops (Point of sale). */
+  posOffline: {
+    snapshotMaxAgeHours: 72, // the till won't sell offline from a price list older than this
+    maxDiscountPercent: 5, // no approval PIN can be checked offline, so never more than a cashier's own limit
+    clockSkewMinutes: 10, // a device clock this far off is corrected to the sync time (and noted on the sale)
+  },
 } as const;
 
 /** Opens a WhatsApp chat with the support number (wa.me needs the country code, digits only). */

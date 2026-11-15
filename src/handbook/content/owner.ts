@@ -211,7 +211,7 @@ Secrets go into the server's settings file by the developer or through GitHub's 
     summary: "What to do when the site is down, a shop loses internet or power, cash goes missing, or data is at risk.",
     audience: ["owner", "ops-manager", "shop-manager"],
     minutes: 7,
-    version: 1,
+    version: 2,
     related: ["sop-issues", "sys-system-health", "owner-tech"],
     body: `In every incident: **people safe first, then protect money and data, then restore service, then write down what happened.**
 
@@ -223,14 +223,16 @@ Secrets go into the server's settings file by the developer or through GitHub's 
 5. Afterwards: what happened, why, and what stops it happening again.
 
 ## A shop loses internet
-The till needs a connection today (an offline till is on the roadmap).
-1. Switch to the shop's **4G backup** (hotspot from the shop phone or a 4G router). Every shop must have one.
-2. Still nothing: sell only if you can record each sale on the **numbered paper sales sheet** (item, size, price, payment, time). Cash only, or confirmed QR.
-3. When the connection is back, ring every paper sale into the till straight away, in order, and attach the sheet to the day's closing.
-4. Report it in Issues (category IT, Urgent).
+The till keeps selling by itself (**offline mode**, see the Point of sale page): cash, and QR or card with the transaction ID. Sales are saved on the till and sync on their own when the connection is back.
+1. Keep selling on the till. Returns, pickups, orders for customers and discounts above 5% wait until it's back; tell customers it will be a short wait.
+2. Switch to the shop's **4G backup** (hotspot from the shop phone or a 4G router) as soon as you can, so sales sync and returns work. Every shop must have one.
+3. Don't close the shift or lock the day until the till shows every offline sale has synced. The system blocks both while a till still holds sales.
+4. Afterwards the manager checks **Needs attention** and the closing page's **Offline sales to check** (stock sold that the system didn't have, a sale that arrived after the shift closed) and ticks each off with a note.
+5. Only if the till device itself won't work: record each sale on the **numbered paper sales sheet** (item, size, price, payment, time), ring them in when it's back, and attach the sheet to the day's closing.
+6. Report a long outage in Issues (category IT, Urgent).
 
 ## Power cut at a shop
-UPS keeps the till device, router and printer running. For long cuts, the same steps as internet loss. Keep the safe and drawer locked.
+UPS keeps the till device, router and printer running. For long cuts, the same steps as internet loss: the till sells offline as long as its device has power. Keep the safe and drawer locked.
 
 ## Cash missing or a till short
 1. Recount with a second person. Check the shift's sales, refunds and payments on Daily closing.

@@ -59,3 +59,8 @@ html:lang(ne) [class*="tracking-"] { letter-spacing: normal; }
 @keyframes nav-progress { from { transform: scaleX(0) } to { transform: scaleX(0.85) } }
 .nav-progress-run { transform-origin: left; animation: nav-progress 2.5s cubic-bezier(0.1, 0.7, 0.2, 1) forwards; }
 @media (prefers-reduced-motion: reduce) { .nav-progress-run { animation: none; transform: scaleX(0.85); } }
+
+/* Offline till receipt: printing shows only the receipt (components/pos/offline-till.tsx) */
+@media print {
+  body.printing-receipt > :not(#till-receipt) { display: none !important; }
+}
