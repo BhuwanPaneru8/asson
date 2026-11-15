@@ -78,8 +78,8 @@ The Dashboard shows the last 30 days: sales, average order value, orders to conf
     title: "Point of sale (the till)",
     summary: "Selling in a shop: shifts, scanning, discounts, payments, receipts, returns, pickups and ordering for a customer.",
     audience: ["cashier", "shop-manager", "ops-manager", "owner"],
-    minutes: 8,
-    version: 1,
+    minutes: 9,
+    version: 2,
     open: [{ label: "Point of sale", href: "/admin/pos" }],
     related: ["sop-open-shop", "sop-till", "sop-store-returns", "sop-pickups", "sys-closing"],
     body: `The till sells from the same stock as the website. It's built for speed: **scan, scan, scan, pay**.
@@ -89,15 +89,22 @@ A shift is one cashier's session at the till. **Open your shift** with the exact
 
 ## A sale
 1. **Scan** each item (or type the SKU or product name). Scanned items are added instantly; scanning the same item again adds one more.
-2. **Customer mobile** (optional but always ask): links the sale to their account and loyalty points.
+2. **Customer** (optional but always ask for the mobile): links the sale to their account and loyalty points. A business buyer gives their **Buyer PAN** (9 digits) so it prints on their tax invoice and they can claim the VAT.
 3. **Discount** if needed: choose percent or amount, and the reason (Loyal customer, Festival offer, Price match, Bulk purchase, Staff purchase, Damaged / display piece, Other). Above 5% an approver types their **Approver PIN**.
 4. **Payment**: Cash (type Cash received, and the change is shown), Fonepay QR, Khalti, eSewa, card, bank transfer or store credit. You can split across methods; payments must add up exactly to the total. QR, card and bank payments need the transaction reference.
-5. **Sale complete**: print the receipt and give the change shown.
+5. **Sale complete**: print the **tax invoice** and give the change shown.
 
 Each sale is recorded once even if the button is pressed twice, and stock is checked live: the till won't sell what isn't there.
 
+## The tax invoice
+Every sale gets a **tax invoice** with its own number (for example FLAGSHIP-8384-000123: the shop, the fiscal year, then the number). Numbers follow each other with no gaps within the year, and are separate from order numbers. It shows our PAN, the buyer (and their PAN if given), the date in BS and AD, each item before VAT, the discount, the taxable amount, **VAT 13%** and the total.
+- Print it with the **Print** button. The first print is the original. **Any later print says "Copy of original (1)", "(2)"…** and is recorded with your name. Never use the browser's own print: it prints a note instead of the invoice.
+- An invoice can't be changed or deleted, by anyone. If something was wrong, the fix is a return (a credit note).
+
 ## Return / exchange
 Find the sale by receipt or phone. For each item choose the condition (**RESELLABLE** goes back on sale; **DAMAGED** goes to the damaged register) and the reason (Size too small, Size too large, Colour not as expected, Quality issue / defect, Changed mind). A manager approves with their PIN. **Refund as**: the original way, or **Store credit** (a voucher). For a size swap, return as store credit and sell the new size with that credit.
+
+Every refund on an invoiced sale is a **credit note** against that invoice (its own CN number, the invoice number, the reason and the VAT given back). Print it from the return slip and give it with the refund.
 
 ## Pickups (click-and-collect)
 Online orders for collection at this shop appear under **Pickups**. Find by order number or phone, take payment if it's due (Pay when collecting), and **Hand over**. The order is marked collected and the money lands in your shift.
@@ -109,6 +116,7 @@ When the size isn't here: **Order for a customer** shows which locations have it
     quiz: [
       { q: "The drawer has Rs. 120 less than Expected in drawer when you close. What do you do?", options: ["Add Rs. 120 from your own pocket", "Type the real count and explain the difference", "Type the expected amount so it balances"], answer: 1, why: "Always the real count. Differences are explained and reviewed; hiding them is the serious problem." },
       { q: "A customer pays half by Fonepay QR and half in cash. Can the till do that?", options: ["No, one payment method per sale", "Yes, split the payment; the QR part needs its transaction reference", "Only with a manager PIN"], answer: 1, why: "Split payments are normal. Every non-cash payment needs its reference so it can be matched later." },
+      { q: "A customer comes back for another copy of yesterday's invoice. What do you print?", options: ["A new invoice for the same sale", "A reprint, which says Copy of original with its number", "Nothing: invoices can't be printed twice"], answer: 1, why: "Reprints are allowed and must say Copy of original (n); the system numbers and records each one. A sale never gets a second invoice." },
       { q: "A returned shirt has a stain. Which condition?", options: ["RESELLABLE", "DAMAGED", "Doesn't matter"], answer: 1, why: "Damaged items never go back on the shelf. DAMAGED sends it to the damaged register for a decision." },
     ],
   },

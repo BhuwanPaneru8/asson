@@ -11,7 +11,7 @@ export const WORLDCLASS: HandbookPage[] = [
     summary: "Each part of the business compared with what the best retailers run, with strengths and gaps.",
     audience: ["owner"],
     minutes: 12,
-    version: 1,
+    version: 2,
     restricted: "system",
     related: ["worldclass-roadmap", "owner-launch"],
     body: `## How we compared
@@ -34,7 +34,7 @@ export const WORLDCLASS: HandbookPage[] = [
 | Inventory and warehouse | Strong | One ledger with reasons, transfers counted in, replenishment and rebalancing, bins, waves with slots, scan-verified packing, manifests, RTO, blind counts, damaged register, nightly audit | Carton and shelf-life features aren't needed; RFID later |
 | Buying and merchandise planning | Partial | Demand forecast with festival seasonality, reorder by speed, dead stock, size/colour margin, markdowns with margin floor, supplier scorecards | **Open-to-buy budgets by season and category**; assortment and size-curve allocation for new products by store grade; sample and approval workflow |
 | Own production | Partial | Materials at average cost, bills of materials, production orders, rejects, true cost per piece, workshop bills | Tech packs, per-size consumption, piece-rate by worker, quality stages |
-| Finance and tax | Strong | Exact cost of goods, P&L and profit by shop, budgets, cash books, bank import and matching, month and year close with locks, VAT returns, TDS/SSF, auditor's pack | **IRD electronic billing compliance** (tax invoice format, fiscal-year invoice series, real-time CBMS sync once turnover requires it); direct accounting-software sync; fixed assets and depreciation; cash-flow forecast |
+| Finance and tax | Strong | Exact cost of goods, P&L and profit by shop, budgets, cash books, bank import and matching, month and year close with locks, VAT returns, TDS/SSF, auditor's pack Real-time CBMS sync is built but off until the IRD enlists the software and the accountant confirms the rules (tax invoices, credit notes and per-year series are done); direct accounting-software sync; fixed assets and depreciation; cash-flow forecast |
 | People and HR | Strong | Jobs and permissions, attendance, leave by Labour Act, rosters with checks, swaps, missed shifts, payroll with SSF/TDS, commission, Training sign-offs, this Handbook with quizzes and onboarding tracking | **Recruitment pipeline** (vacancies, candidates, interviews); **performance reviews and goals** in the system; employee documents; mid-year leaver tax settlement |
 | CRM and marketing | Partial | Loyalty with tiers, referrals, birthdays, back-in-stock and price-drop alerts, RFM segments, cohorts, ad measurement with consent, product feeds | **Campaigns** (SMS, WhatsApp, email to segments, with opt-out); email as a channel; WhatsApp Business; NPS |
 | Channels | Partial | Own website and app, own shops | **Marketplaces** (Daraz); **wholesale, dealers and franchise** (credit limits, dealer prices, consignment) |
@@ -47,7 +47,7 @@ export const WORLDCLASS: HandbookPage[] = [
 ## What this means
 Asson OS is already beyond what most retailers in Nepal run, and in several areas (omnichannel orders, store controls, finance closes, onboarding) it matches what international chains use. The gaps that matter most for **operating at national scale without problems** are:
 1. **The till must keep selling when the internet or power goes.** In many districts this is daily life.
-2. **Tax invoices must meet IRD rules** before volume grows.
+2. **Tax invoices must meet IRD rules** before volume grows. Built (15 Nov 2026): the business PAN, the accountant's answers and, when turnover requires it, IRD enlistment for CBMS remain.
 3. **Staff accounts must have two-factor sign-in**, as more people in more places can touch money.
 4. **Production infrastructure** must match the launch (owner accounts and a bigger server).
 5. **Growth tools**: campaigns, online payments, recruitment at scale, and new channels (dealers, marketplaces) for districts without a shop yet.
@@ -61,7 +61,7 @@ The next page turns these into an ordered roadmap.`,
     summary: "The prioritised list of improvements, why each matters, who does what, and its size.",
     audience: ["owner"],
     minutes: 8,
-    version: 1,
+    version: 2,
     restricted: "system",
     related: ["worldclass-review", "owner-launch", "owner-switch-on"],
     body: `Ordered by risk to daily operations first, then growth. Size: **S** days, **M** 1–2 weeks, **L** several weeks.
@@ -70,7 +70,7 @@ The next page turns these into an ordered roadmap.`,
 | # | Improvement | Why it matters | Who | Size |
 |---|---|---|---|---|
 | 1 | **Offline till**: sell, take cash and print receipts with no internet; sales sync with the same safety (no double sale, stock checked on sync) when back | Internet and power cuts are daily in many districts; a shop that can't sell loses money and customers | Developer | L |
-| 2 | **IRD-compliant tax invoices**: tax invoice format with PAN, fiscal-year invoice numbers per location, VAT shown, buyer PAN for large sales, "copy" marking on reprints, cancellation by credit note, ready for CBMS sync | Legal requirement for a VAT-registered business; easier to do before volume | Developer + accountant | M |
+| 2 | **IRD-compliant tax invoices**: ✅ built 15 Nov 2026 (IRD format with PAN, gap-free numbers per fiscal year and location, BS and AD dates, buyer PAN, "Copy of original" reprints, credit notes, CBMS ready and off). Left: business PAN, the accountant's answers, IRD enlistment before CBMS goes on | Legal requirement for a VAT-registered business; easier to do before volume | Developer + accountant | M |
 | 3 | **Two-factor sign-in for staff**: an authenticator app or SMS code for the owner and managers (optional for others), trusted devices | Stolen or shared passwords are the commonest way money is taken | Developer | M |
 | 4 | **Production infrastructure**: a proper production server, UptimeRobot, monthly restore drill | Launch traffic and reliability | Owner + developer | S |
 | 5 | **Switch on SMS gateway and Nepal Can Move** | Customers informed at every step; no manual tracking | Owner accounts, developer | S each |
