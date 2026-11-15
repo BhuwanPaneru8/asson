@@ -6,7 +6,8 @@ import os from "node:os";
  * (asson_e2e) — they never touch development data. Uses the locally installed Google Chrome.
  */
 export const E2E_DB = process.env.E2E_DATABASE_URL ?? `postgresql://${os.userInfo().username}@localhost:5432/asson_e2e?schema=public`;
-const PORT = 3100;
+// E2E_PORT lets two checkouts run their suites at once (each also needs its own E2E_DATABASE_URL)
+const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 export default defineConfig({
   testDir: "tests/e2e",

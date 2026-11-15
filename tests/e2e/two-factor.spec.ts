@@ -55,6 +55,8 @@ test("a new manager sets up an authenticator app, signs in with a code, and a tr
   await expect(ram.getByText("Two-step sign-in is on")).toBeVisible();
   const codes = ram.getByRole("list", { name: "Backup codes" }).getByRole("listitem");
   await expect(codes).toHaveCount(10);
+  await expect(ram.getByRole("button", { name: "Continue" })).toBeDisabled(); // not until they say they've kept them
+  await ram.getByRole("checkbox", { name: "I've saved my backup codes" }).check();
   await ram.getByRole("button", { name: "Continue" }).click();
   await expect(ram).toHaveURL(/\/admin/);
   await expect(ram.getByRole("navigation", { name: "Staff menu" }).first()).toBeVisible();
@@ -71,7 +73,7 @@ test("a new manager sets up an authenticator app, signs in with a code, and a tr
   await ram.waitForLoadState("networkidle");
   await ram.getByLabel("Code", { exact: true }).fill("000000");
   await ram.getByRole("button", { name: "Verify" }).click();
-  await expect(ram.getByRole("alert")).toContainText("isn't right");
+  await expect(ram.getByText("That code isn't right", { exact: false })).toBeVisible();
   await ram.getByLabel("Code", { exact: true }).fill(await totpCode(secret, last));
   await ram.getByRole("checkbox", { name: "Trust this device for 30 days" }).check();
   await ram.getByRole("button", { name: "Verify" }).click();
