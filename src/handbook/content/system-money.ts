@@ -68,21 +68,26 @@ A **closed month is locked in the database**: no expense, supplier bill or payme
     title: "VAT returns, accounting export and the fiscal year close",
     summary: "Monthly VAT returns per Nepali month, registers for the accountant, and signing off the year.",
     audience: ["accountant", "owner"],
-    minutes: 5,
-    version: 1,
+    minutes: 7,
+    version: 2,
     restricted: "finance",
-    open: [{ label: "VAT", href: "/admin/finance/vat" }, { label: "Accounting export", href: "/admin/finance/export" }, { label: "Fiscal year", href: "/admin/finance/year" }],
+    open: [{ label: "Tax invoices", href: "/admin/finance/invoices" }, { label: "VAT", href: "/admin/finance/vat" }, { label: "Accounting export", href: "/admin/finance/export" }, { label: "Fiscal year", href: "/admin/finance/year" }],
     related: ["sys-bank-close", "sys-payroll"],
-    body: `## VAT returns
-One return per Nepali month: **output VAT** on sales (less returns), minus **input VAT** on supplier bills **with a PAN**, less any credit carried from the last return. Returns are filed in order, and filing locks the period. The VAT payment is matched from the bank. Every price and delivery fee includes 13% VAT; the system splits it out per document.
+    body: `## Tax invoices and credit notes
+Every sale has a **tax invoice** in the IRD format: till sales at once, online orders when they're delivered or collected. Numbers run without gaps per **fiscal year** (Shrawan to Asar) and **series**: each shop's code, and WEB for online orders. Credit notes (CN-…) have their own series. Issued documents can't be changed or deleted, even in the database; a return or refund is a credit note against the invoice. Reprints say "Copy of original (n)" and are in the activity log.
+
+[Tax invoices](/admin/finance/invoices) lists every invoice and credit note with BS and AD dates, prints, and its state in the IRD's **CBMS** (central billing monitoring). Sending to CBMS is **off** until the IRD approves our software and the owner adds the taxpayer login to the server settings; until then documents wait and are sent once it's on.
+
+## VAT returns
+One return per Nepali month: **output VAT** on tax invoices (less credit notes), minus **input VAT** on supplier bills **with a PAN**, less any credit carried from the last return. Returns are filed in order, and filing locks the period. The VAT payment is matched from the bank. Every price and delivery fee includes 13% VAT; the system splits it out per document.
 
 ## Accounting export
-Registers for any period for the accountant: sales, returns, purchases, expenses, the VAT summary. Amounts in rupees with dates in both calendars.
+Registers for any period for the accountant: sales (one row per tax invoice, with the buyer's PAN), returns (one row per credit note, with its invoice), purchases, expenses, the VAT summary. Sales from before tax invoices started keep their order numbers. Amounts in rupees with dates in both calendars. Online orders not yet delivered aren't invoiced yet: the export shows them, as the timing difference with the P&L.
 
 ## Fiscal year close
 The year runs Shrawan to Ashadh. Sign off a year once every month in it is closed, VAT is filed for every day, payroll TDS and SSF are deposited, and the bank is fully explained. The checklist blocks the close until all of that is true, and produces the **auditor's pack**.
 
-> **Note:** have the company's accountant confirm the VAT and invoice setup (PAN, invoice format) before launch. See the World-class review for IRD electronic billing.`,
+> **Note:** the business PAN must be set before invoices are valid (they print "PAN/VAT No.: not set" until then), and the accountant still has open questions to answer on abbreviated invoices, the CBMS threshold and invoice timing (developer docs: Tax-Invoices).`,
   },
   {
     slug: "sys-payables",

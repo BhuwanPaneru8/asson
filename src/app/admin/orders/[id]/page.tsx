@@ -23,7 +23,7 @@ type Addr = { fullName: string; phone: string; line1: string; line2?: string | n
 export default async function AdminOrder({ params }: { params: Promise<{ id: string }> }) {
   const me = await requirePermission("orders");
   const { id } = await params;
-  const order = await db.order.findUnique({ where: { id }, include: { items: true, tenders: true, pickupStore: { select: { name: true, address: true } }, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
+  const order = await db.order.findUnique({ where: { id }, include: { invoice: { select: { id: true, number: true, creditNotes: { select: { id: true, number: true }, orderBy: { issuedAt: "asc" } } } }, items: true, tenders: true, pickupStore: { select: { name: true, address: true } }, allocations: { select: { orderItemId: true, quantity: true, pickedAt: true, store: { select: { id: true, name: true } } } }, events: { orderBy: { createdAt: "desc" } }, user: { select: { id: true, name: true, createdAt: true, _count: { select: { orders: true } } } } } });
   if (!order) notFound();
   const a = order.shippingAddress as Addr;
   const exchange = order.status === "DELIVERED" && order.channel === "ONLINE" ? await exchangeOptions(order.id) : null;
@@ -40,8 +40,10 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
           <StatusPill status={order.status} />
           <Pill tone={order.paymentStatus === "PAID" ? "success" : "neutral"}>{order.paymentMethod === "COD" ? "COD" : order.paymentMethod === "IN_STORE" ? "Store sale" : "Prepaid"} · {order.paymentStatus.toLowerCase()}</Pill>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href={`/admin/orders/${order.id}/slip`} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-[13.5px] hover:border-ink"><Printer className="h-4 w-4" /> Packing slip</Link>
+          {order.invoice && <Link href={`/admin/finance/invoices/${order.invoice.id}`} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-[13.5px] hover:border-ink"><Printer className="h-4 w-4" /> Tax invoice {order.invoice.number}</Link>}
+          {order.invoice?.creditNotes.map((c) => <Link key={c.id} href={`/admin/finance/invoices/credit/${c.id}`} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-[13.5px] hover:border-ink"><Printer className="h-4 w-4" /> {c.number}</Link>)}
           {order.channel === "ONLINE" && <Link href={`/admin/orders/${order.id}/label`} target="_blank" className="inline-flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-[13.5px] hover:border-ink"><Printer className="h-4 w-4" /> Shipping label</Link>}
         </div>
       </div>

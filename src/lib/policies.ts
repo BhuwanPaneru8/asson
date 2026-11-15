@@ -242,7 +242,7 @@ export const POLICIES: Policy[] = [
         `Available everywhere we deliver for orders up to ${rs(store.codMaxOrder)}. Have the exact amount ready if you can; the rider may also accept QR payment. We may call to confirm a cash-on-delivery order before we pack it, especially for a first order or a larger amount.`,
       ] },
       { id: "vat", title: "VAT and receipts", blocks: [
-        `All prices and delivery fees include ${store.vatPercent}% VAT. You receive a receipt with your order${store.vatNumber ? `, showing our VAT number ${store.vatNumber}` : ""}. If you need a VAT invoice in your business's name and PAN, ask us before the order is dispatched.`,
+        `All prices and delivery fees include ${store.vatPercent}% VAT. You receive a tax invoice when your order is delivered or collected (on your order page, to print or save)${store.vatNumber ? `, showing our VAT number ${store.vatNumber}` : ""}. If you need it in your business's name and PAN, ask us before the order is dispatched; in our shops, give your PAN at the till.`,
       ] },
       { id: "security", title: "Payment security", blocks: [
         "We never ask for your card PIN, wallet password or OTP by phone, SMS or WhatsApp. If anyone claiming to be us asks, don't share it, and tell us.",

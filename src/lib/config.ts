@@ -10,7 +10,21 @@ export const store = {
   supportWhatsApp: "9761452270",
   /** Flagship shop address — printed on POS receipts. */
   storeAddress: "Kathmandu, Nepal",
+  /** The business's 9-digit PAN/VAT number from the IRD, printed on every tax invoice (empty = invoices say "PAN not set"). */
   vatNumber: "",
+  /** Registered business name for tax invoices (as on the PAN certificate); empty = `name`. */
+  legalName: "",
+  /** Tax invoices (docs/Tax-Invoices.md). Rules to be confirmed by the accountant before switching anything on. */
+  invoices: {
+    /** Abbreviated tax invoices at the till need the tax officer's permission (VAT Rules r.18): off until granted. */
+    abbreviated: false,
+    /** …and only up to this total (paisa), never when the buyer gives a PAN or asks for a full invoice. */
+    abbreviatedMax: 1_000_000,
+    /** Series for online orders (each shop's till uses its location code). */
+    onlineSeries: "WEB",
+    /** A CBMS post this soon after issue counts as real time (isrealtime). */
+    cbmsRealtimeMinutes: 10,
+  },
   currency: "NPR",
   currencySymbol: "Rs.",
   /** Number grouping: Nepal uses lakh/crore grouping (1,00,000), same as en-IN. */

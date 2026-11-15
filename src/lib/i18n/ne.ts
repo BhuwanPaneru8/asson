@@ -404,6 +404,7 @@ export const ne: Record<keyof typeof en, string> = {
   "ord.guest": "अर्डर ट्र्याक गर्न यो पेज बुकमार्क गर्नुहोस्, वा सबै अर्डर एकै ठाउँमा राख्न {link}।",
   "ord.createAccount": "खाता खोल्नुहोस्",
   "ord.title": "अर्डर {number}",
+  "ord.invoice": "कर बीजक (प्रिन्ट वा सेभ गर्नुहोस्)",
   "ord.placedOn": "{date} मा अर्डर गरिएको · {n} सामान",
   "ord.prepaid": "अग्रिम भुक्तानी",
   "ord.readyAt": "{store} मा तयार छ। काउन्टरमा आफ्नो अर्डर नम्बर देखाउनुहोस्।",

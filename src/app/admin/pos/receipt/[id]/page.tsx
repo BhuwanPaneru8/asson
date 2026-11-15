@@ -5,10 +5,12 @@ import { store } from "@/lib/config";
 import { TENDER_LABEL } from "@/lib/pos";
 import { formatDateTime, formatOrderNumber, formatPrice } from "@/lib/utils";
 import { PrintButton } from "@/components/admin/print-button";
+import { invoiceView } from "@/lib/invoices";
+import { PrintDocument } from "@/components/invoices/print-document";
 
-export const metadata = { title: "Receipt" };
+export const metadata = { title: "Tax invoice" };
 
-// 80 mm thermal-printer layout
+// 80 mm thermal-printer layout: the sale's tax invoice (sales from before invoicing started: the old receipt)
 export default async function Receipt({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("pos.sell");
   const order = await db.order.findUnique({ where: { id: (await params).id }, include: { items: true, tenders: true } });
@@ -16,6 +18,22 @@ export default async function Receipt({ params }: { params: Promise<{ id: string
   const cashier = order.cashierId ? await db.user.findUnique({ where: { id: order.cashierId }, select: { name: true } }) : null;
   const change = order.tenders.reduce((s, t) => s + (t.method === "CASH" && t.tendered ? t.tendered - t.amount : 0), 0);
   const addr = order.shippingAddress as { fullName?: string };
+  const invoice = await invoiceView({ orderId: order.id });
+  if (invoice) {
+    const tenders = order.tenders.map((t) => <p key={t.id} className="flex justify-between"><span>{TENDER_LABEL[t.method]}{t.reference ? ` (${t.reference})` : ""}</span><span>{formatPrice(t.method === "CASH" && t.tendered ? t.tendered : t.amount)}</span></p>);
+    return (
+      <div className="bg-white py-2">
+        <PrintDocument doc={invoice} size="thermal" note={
+          <div className="mx-auto mt-2 border-t border-dashed border-black pt-2 font-mono text-[12px]">
+            {tenders}
+            {change > 0 && <p className="flex justify-between font-bold"><span>Change</span><span>{formatPrice(change)}</span></p>}
+            <p className="mt-2 text-center">Thank you for shopping with {store.name}!</p>
+            <p className="text-center text-[11px]">Exchanges within {store.returnWindowDays} days with this invoice and tags attached.</p>
+          </div>
+        } />
+      </div>
+    );
+  }
   return (
     <div className="mx-auto w-[302px] bg-white p-3 font-mono text-[12px] leading-snug text-black print:p-0">
       <div className="text-center">

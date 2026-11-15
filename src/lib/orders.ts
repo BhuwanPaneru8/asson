@@ -9,6 +9,7 @@ import { audit } from "./audit";
 import { reverseReferral, rewardReferrer } from "./referrals";
 import { formatOrderNumber, formatPrice } from "./utils";
 import { cancelExchangeFor } from "./exchanges";
+import { creditRemainder, issueInvoice } from "./invoices";
 
 export { STATUS_LABEL, TRANSITIONS, CUSTOMER_CANCELLABLE } from "./order-status";
 import { statusLabel, transitionsFor } from "./order-status";
@@ -84,6 +85,10 @@ export async function transitionOrder(opts: {
     }
     // loyalty: earn on delivery, give back spent points on cancel, take back earned points on return
     if (to === "DELIVERED") { await earnForOrder(tx, orderId); await rewardReferrer(tx, orderId); }
+    // the tax invoice is issued when the goods reach the customer (delivered, or collected at the shop); a
+    // whole return is a credit note for what till returns haven't already credited
+    if (to === "DELIVERED") await issueInvoice(tx, orderId, { actorId });
+    if (to === "RETURNED") await creditRemainder(tx, orderId, actorId);
     if (to === "CANCELLED") { await refundRedeemed(tx, orderId); await cancelExchangeFor(tx, orderId); }
     if (to === "RETURNED") {
       await reverseReferral(tx, orderId);

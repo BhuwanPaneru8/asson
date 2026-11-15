@@ -23,7 +23,7 @@ export default async function AccountingExportPage({ searchParams }: { searchPar
 
   return (
     <>
-      <PageHeader title="Accounting export" description="Registers for your accountant and the VAT return, for any period. Amounts in rupees; every price and delivery fee includes 13% VAT, split out per document. Dates are AD (Nepal time)." />
+      <PageHeader title="Accounting export" description="Registers for your accountant and the VAT return, for any period. Amounts in rupees; every price and delivery fee includes 13% VAT, split out per document. Sales are listed by tax invoice number and returns by credit note number; dates are AD (Nepal time) with the BS date alongside." />
       <form className="mb-4 flex flex-wrap items-end gap-2">
         <label className="text-[13px] font-medium text-ink-soft">From<input type="date" name="from" defaultValue={from} max={today} className="mt-1 block h-10 rounded-md border border-line bg-white px-3 text-[14px]" /></label>
         <label className="text-[13px] font-medium text-ink-soft">To<input type="date" name="to" defaultValue={to} max={today} className="mt-1 block h-10 rounded-md border border-line bg-white px-3 text-[14px]" /></label>
@@ -50,6 +50,7 @@ export default async function AccountingExportPage({ searchParams }: { searchPar
             {line("Paid to suppliers", s.payments.total)}
             {line("Expenses", s.expenses.total)}
           </dl>
+          {s.uninvoiced.count > 0 && <p className="border-t border-line px-5 py-3 text-[12.5px] text-muted">{s.uninvoiced.count} online order{s.uninvoiced.count === 1 ? "" : "s"} ({formatPrice(s.uninvoiced.total)}) placed in this period {s.uninvoiced.count === 1 ? "isn't" : "aren't"} invoiced yet: the invoice is issued on delivery or collection. <Link href="/admin/finance/invoices" className="underline">Tax invoices</Link></p>}
         </Card>
       </div>
 

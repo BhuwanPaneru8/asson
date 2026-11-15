@@ -73,7 +73,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
   const [discount, setDiscount] = useState<{ type: "PERCENT" | "AMOUNT"; value: string; reason: string } | null>(null);
   const [pin, setPin] = useState("");
   const [tenders, setTenders] = useState<Tender[]>([]);
-  const [customer, setCustomer] = useState({ name: "", phone: "" });
+  const [customer, setCustomer] = useState({ name: "", phone: "", pan: "" });
   const [receipt, setReceipt] = useState<{ orderId: string; number: string; change: number } | null>(null);
   const [closing, setClosing] = useState(false);
   const [searching, startSearch] = useTransition();
@@ -135,7 +135,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
     setTenders((ts) => [...ts, { method, amount: remaining, tendered: method === "CASH" ? remaining : undefined, reference: method === "VOUCHER" ? "" : undefined }]);
   };
 
-  const reset = () => { setLines([]); setDiscount(null); setPin(""); setTenders([]); setCustomer({ name: "", phone: "" }); setResults([]); setQuery(""); clientRef.current = newRef(); };
+  const reset = () => { setLines([]); setDiscount(null); setPin(""); setTenders([]); setCustomer({ name: "", phone: "", pan: "" }); setResults([]); setQuery(""); clientRef.current = newRef(); };
 
   const complete = () => startPay(async () => {
     const r = await createPosSale({
@@ -144,7 +144,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
       discount: discount && discountAmount > 0 ? { type: discount.type, value: Number(discount.value), reason: discount.reason } : null,
       approverPin: needsPin ? pin : undefined,
       tenders: tenders.map((t) => ({ method: t.method, amount: t.amount, tendered: t.tendered, reference: t.reference || undefined })),
-      customer: customer.phone || customer.name ? { name: customer.name || undefined, phone: customer.phone } : undefined,
+      customer: customer.phone || customer.name || customer.pan ? { name: customer.name || undefined, phone: customer.phone, pan: customer.pan } : undefined,
     });
     if (!r.ok) { toast.error(r.error); return; }
     setReceipt({ orderId: r.orderId, number: r.number, change: r.change });
@@ -276,6 +276,7 @@ function Terminal({ cashier, shift }: { cashier: { name: string; discountLimit: 
               <input value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} placeholder="Name" aria-label="Customer name" className="h-9 flex-1 rounded border border-line px-2" />
               <input value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} placeholder="98XXXXXXXX" inputMode="numeric" aria-label="Customer mobile" className="h-9 w-32 rounded border border-line px-2" />
             </div>
+            <input value={customer.pan} onChange={(e) => setCustomer({ ...customer, pan: e.target.value.replace(/\D/g, "").slice(0, 9) })} placeholder="Buyer PAN (9 digits, for a business)" inputMode="numeric" aria-label="Buyer PAN" className="mt-2 h-9 w-full rounded border border-line px-2" />
           </details>
 
           <button onClick={complete} disabled={!canComplete || paying} className="h-14 w-full rounded-md bg-ink text-[16px] font-semibold text-white disabled:opacity-40">

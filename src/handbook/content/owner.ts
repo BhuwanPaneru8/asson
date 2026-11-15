@@ -81,9 +81,9 @@ Write three actions with owners and dates. Check last week's three first.
     summary: "The owner-side checklist between today's system and taking real orders across Nepal.",
     audience: ["owner"],
     minutes: 5,
-    version: 1,
+    version: 2,
     restricted: "system",
-    related: ["owner-switch-on", "worldclass-roadmap", "owner-tech"],
+    related: ["owner-switch-on", "worldclass-roadmap", "owner-tech", "sys-vat-year"],
     body: `The system is built and running on production. These are what stand between it and a public launch. Most need the owner's accounts or decisions, not more code.
 
 ## Must do before launch
@@ -93,7 +93,8 @@ Write three actions with owners and dates. Check last week's three first.
 - [ ] **Production server size**: a proper VM (2+ dedicated vCPU, 8 GB+) for production; the small free one stays for staging. See Technology overview.
 - [ ] **Policies reviewed by a lawyer**: returns, delivery, privacy, terms, cookies.
 - [ ] **Nepali text** reviewed by a native speaker.
-- [ ] **VAT and invoices** confirmed by the accountant: PAN on receipts, invoice format, IRD electronic billing (see World-class review).
+- [ ] **Tax invoices**: give the developer the business **PAN and registered name** for the invoices (they print "PAN/VAT No.: not set" today), and have the accountant answer the open questions (abbreviated invoices, the CBMS turnover threshold, invoice timing for prepaid orders, cancellations). Tax invoices, credit notes and copy marking are built.
+- [ ] **IRD electronic billing**: if turnover requires real-time CBMS sync, apply to the IRD to enlist the software, then put the taxpayer login into the server settings to switch it on.
 - [ ] **Real staff accounts** created; the demo accounts don't exist on production; everyone onboarded.
 - [ ] **Procedures** in Training edited to match how we work, and signed by everyone.
 - [ ] **Shop hardware**: receipt printer, barcode scanner, cash drawer, label printer, a backup internet connection (4G) and a UPS at every shop.

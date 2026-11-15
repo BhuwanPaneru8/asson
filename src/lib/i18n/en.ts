@@ -413,6 +413,7 @@ export const en = {
   "ord.guest": "Bookmark this page to track your order, or {link} to keep all your orders in one place.",
   "ord.createAccount": "create an account",
   "ord.title": "Order {number}",
+  "ord.invoice": "Tax invoice (print or save)",
   "ord.placedOn": "Placed on {date} · {n} items",
   "ord.prepaid": "Prepaid",
   "ord.readyAt": "Ready at {store}. Show your order number at the counter.",

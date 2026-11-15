@@ -127,6 +127,8 @@ Status: ✅ done · 🟡 in progress · ⬜ not started
 
 **Also done:** store returns and exchanges (condition check, damaged → quarantine, refund or store credit voucher, exchange via voucher tender, manager PIN), refunds in cash expectations and closing, Code 128 barcode labels.
 
+**Tax invoices (15 Nov 2026, [Tax invoices](Tax-Invoices.md)):** IRD-format tax invoices for till sales (80 mm) and delivered/collected online orders (A4, customer page), gap-free numbers per fiscal year and series (each shop, WEB online), BS and AD dates, buyer PAN, "Copy of original (n)" reprints with audit, immutable documents (triggers), credit notes for returns, sales register and VAT return on invoice/credit-note numbers, CBMS outbox ready and off. **Pending:** accountant's answers (Tax-Invoices §6), business PAN in `config.ts`, IRD software enlistment before CBMS goes on; a single Schedule 5 report.
+
 **Remaining (hardware/ops):** receipt printer, label printer and cash-drawer setup at the shop; cashier-level sales reports.
 
 **Goal:** the physical shop sells from the same inventory, with full accountability.
