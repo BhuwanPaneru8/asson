@@ -13,7 +13,8 @@ import { createSession, destroySession, hashPassword, verifyPassword, getCurrent
 import { mergeGuestCart } from "@/lib/cart";
 import { rateLimit } from "@/lib/rate-limit";
 import { phoneSchema } from "@/lib/validators";
-import { homeFor, isStaffRole } from "@/lib/permissions";
+import { homeFor, isStaffRole, twoFactorStep } from "@/lib/permissions";
+import { beginSignIn } from "@/lib/two-factor";
 import { clientIp } from "@/lib/client-ip";
 import { audit } from "@/lib/audit";
 import { localiseResult } from "@/lib/i18n/server";
@@ -50,12 +51,8 @@ async function loginImpl(_: AuthState, form: FormData): Promise<AuthState> {
   // staff accounts are the keys to the business: record every failed and successful sign-in
   if (user && !ok && isStaffRole(user.role)) await audit(db, null, { action: "auth.login_failed", entity: ["User", user.id], summary: `Wrong password for staff account ${email}` });
   if (!user || !ok) return { error: "That email and password don't match our records." };
-  if (isStaffRole(user.role)) await audit(db, user, { action: "auth.login", entity: ["User", user.id], summary: `${user.name} signed in (${user.role.toLowerCase()})` });
-
-  await createSession(user);
-  await mergeGuestCart(user.id);
-  const next = safeNext(form.get("next"));
-  redirect(isStaffRole(user.role) && next === "/account" ? homeFor(user.role) : next);
+  await finish(user, true, form.get("next") as string | null);
+  return undefined;
 }
 
 const registerSchema = z.object({
@@ -107,7 +104,8 @@ async function changePasswordImpl(_: AuthState, form: FormData): Promise<AuthSta
   if (!(await verifyPassword(parsed.data.current, user.passwordHash))) return { error: "Current password is incorrect." };
   // bumping tokenVersion signs out every other device
   const updated = await db.user.update({ where: { id: me.id }, data: { passwordHash: await hashPassword(parsed.data.next), tokenVersion: { increment: 1 } } });
-  await createSession(updated);
+  // this session already passed two-step sign-in (getCurrentUser checks), so the new one keeps that
+  await createSession(updated, { twoFactor: twoFactorStep(updated) !== "none" });
   if (isStaffRole(me.role)) await audit(db, me, { action: "auth.password_changed", entity: ["User", me.id], summary: `${me.name} changed their password (other devices signed out)` });
   return { ok: true };
 }
@@ -129,12 +127,12 @@ async function identifyImpl(raw: string): Promise<{ ok: true; kind: "phone" | "e
   return { ok: true, kind: id.kind, exists: !!user, firstName: user ? user.name.split(" ")[0] : null, codes: id.kind === "phone" && !staff && codeMode() !== "off", staff };
 }
 
-async function finish(user: { id: string; role: Parameters<typeof createSession>[0]["role"]; tokenVersion: number; name: string }, remember: boolean, next: string | null | undefined) {
-  if (isStaffRole(user.role)) await audit(db, user, { action: "auth.login", entity: ["User", user.id], summary: `${user.name} signed in (${user.role.toLowerCase()})` });
-  await createSession(user, { remember });
-  await mergeGuestCart(user.id);
+/** Password (or code) checked: sign in, or (staff with two-step sign-in) on to the second step first. */
+async function finish(user: Parameters<typeof beginSignIn>[0], remember: boolean, next: string | null | undefined) {
   const dest = safeNext(next ?? null);
-  redirect(isStaffRole(user.role) && dest === "/account" ? homeFor(user.role) : dest);
+  const r = await beginSignIn(user, { remember, dest: isStaffRole(user.role) && dest === "/account" ? homeFor(user.role) : dest });
+  if (r.signedIn) await mergeGuestCart(user.id);
+  redirect(r.to);
 }
 
 async function signInWithPasswordImpl(input: { identifier: string; password: string; remember?: boolean; next?: string }): Promise<Result> {

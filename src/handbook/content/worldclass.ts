@@ -11,7 +11,7 @@ export const WORLDCLASS: HandbookPage[] = [
     summary: "Each part of the business compared with what the best retailers run, with strengths and gaps.",
     audience: ["owner"],
     minutes: 12,
-    version: 2,
+    version: 3,
     restricted: "system",
     related: ["worldclass-roadmap", "owner-launch"],
     body: `## How we compared
@@ -39,7 +39,7 @@ export const WORLDCLASS: HandbookPage[] = [
 | CRM and marketing | Partial | Loyalty with tiers, referrals, birthdays, back-in-stock and price-drop alerts, RFM segments, cohorts, ad measurement with consent, product feeds | **Campaigns** (SMS, WhatsApp, email to segments, with opt-out); email as a channel; WhatsApp Business; NPS |
 | Channels | Partial | Own website and app, own shops | **Marketplaces** (Daraz); **wholesale, dealers and franchise** (credit limits, dealer prices, consignment) |
 | Analytics and AI | Strong | Insights, funnel, demand radar, KPI pulse with anomalies, network league tables | AI assistant for questions in plain words; in-store footfall (conversion); BI export |
-| Security and privacy | Strong | Roles, jobs and location scope, PIN approvals, full activity log, database locks, rate limits, no deletes of money records | **Two-factor sign-in for staff**; customer data export and deletion on request; a yearly security test |
+| Security and privacy | Strong | Roles, jobs and location scope, PIN approvals, **two-step sign-in for staff** (authenticator app, backup codes, trusted devices), full activity log, database locks, rate limits, no deletes of money records | Customer data export and deletion on request; a yearly security test |
 | Reliability and scale | Partial | Tested at national scale, zero-downtime deploys, hourly and off-site backups, watchdog texts | Production on a small server; one server (no failover); no managed database with point-in-time restore; outside uptime monitor not set up |
 | Integrations | Partial | Interfaces ready for SMS, courier, eSewa and Khalti | Waiting for accounts: SMS gateway, Nepal Can Move, payments |
 | Knowledge and training | World-class | Handbook for every job with paths and quizzes, signed procedures with versions, onboarding tracking | Video walkthroughs |
@@ -48,7 +48,7 @@ export const WORLDCLASS: HandbookPage[] = [
 Asson OS is already beyond what most retailers in Nepal run, and in several areas (omnichannel orders, store controls, finance closes, onboarding) it matches what international chains use. The gaps that matter most for **operating at national scale without problems** are:
 1. **The till must keep selling when the internet or power goes.** In many districts this is daily life.
 2. **Tax invoices must meet IRD rules** before volume grows. Built (15 Nov 2026): the business PAN, the accountant's answers and, when turnover requires it, IRD enlistment for CBMS remain.
-3. **Staff accounts must have two-factor sign-in**, as more people in more places can touch money.
+3. **Staff accounts must have two-factor sign-in**, as more people in more places can touch money. *Built (Nov 2026): required for owners and managers, optional or required per person for others.*
 4. **Production infrastructure** must match the launch (owner accounts and a bigger server).
 5. **Growth tools**: campaigns, online payments, recruitment at scale, and new channels (dealers, marketplaces) for districts without a shop yet.
 
@@ -61,7 +61,7 @@ The next page turns these into an ordered roadmap.`,
     summary: "The prioritised list of improvements, why each matters, who does what, and its size.",
     audience: ["owner"],
     minutes: 8,
-    version: 2,
+    version: 3,
     restricted: "system",
     related: ["worldclass-review", "owner-launch", "owner-switch-on"],
     body: `Ordered by risk to daily operations first, then growth. Size: **S** days, **M** 1–2 weeks, **L** several weeks.
@@ -71,7 +71,7 @@ The next page turns these into an ordered roadmap.`,
 |---|---|---|---|---|
 | 1 | **Offline till**: sell, take cash and print receipts with no internet; sales sync with the same safety (no double sale, stock checked on sync) when back | Internet and power cuts are daily in many districts; a shop that can't sell loses money and customers | Developer | L |
 | 2 | **IRD-compliant tax invoices**: ✅ built 15 Nov 2026 (IRD format with PAN, gap-free numbers per fiscal year and location, BS and AD dates, buyer PAN, "Copy of original" reprints, credit notes, CBMS ready and off). Left: business PAN, the accountant's answers, IRD enlistment before CBMS goes on | Legal requirement for a VAT-registered business; easier to do before volume | Developer + accountant | M |
-| 3 | **Two-factor sign-in for staff**: an authenticator app or SMS code for the owner and managers (optional for others), trusted devices | Stolen or shared passwords are the commonest way money is taken | Developer | M |
+| 3 | ✅ **Two-factor sign-in for staff** (built Nov 2026): an authenticator app, or an SMS code once the gateway is on, for the owner and managers (optional or required per person for others), backup codes, trusted devices | Stolen or shared passwords are the commonest way money is taken | Developer | M |
 | 4 | **Production infrastructure**: a proper production server, UptimeRobot, monthly restore drill | Launch traffic and reliability | Owner + developer | S |
 | 5 | **Switch on SMS gateway and Nepal Can Move** | Customers informed at every step; no manual tracking | Owner accounts, developer | S each |
 

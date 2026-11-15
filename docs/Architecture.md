@@ -271,8 +271,9 @@ Transitions are defined once in `lib/order-status.ts` and applied by `transition
 
 ### 8.2 Auth and authorisation
 
-- Session is a signed JWT in the httpOnly cookie `tl_session` (30 days), containing `{sub, role, v}`.
-- `getCurrentUser()` checks the token against the DB **and** `tokenVersion`. Bumping the version signs the user out everywhere (password change, role change).
+- Session is a signed JWT in the httpOnly cookie `tl_session` (30 days), containing `{sub, role, v, m?}`; `m: 1` means the sign-in passed two-step verification.
+- `getCurrentUser()` checks the token against the DB **and** `tokenVersion`. Bumping the version signs the user out everywhere (password change, role change, two-step reset). For staff who use or must use two-step sign-in it also needs `m`, so a session from before it was required stops working on the next click.
+- **Two-step sign-in for staff** (`lib/two-factor.ts`, pure parts in `lib/two-factor-core.ts`): required for MANAGER and ADMIN (`TWO_FACTOR_ROLES` / `twoFactorStep` in `lib/permissions.ts`), and for anyone the owner ticks in Team & access (`User.twoFactorRequired`); optional for others from My account & security (`/admin/me`). After the password (`beginSignIn`, also used by invite links) a 10-minute `tl_2fa` token, signed with a separate key and audience so it can never pass as a session, sends them to `/login/two-factor`: set up an authenticator app (QR code, confirm with a code, 10 backup codes shown once) or type a code. Methods: TOTP (RFC 6238, SHA-1, 6 digits, 30 s, ±1 step, each step accepted once via `totpLastStep`), SMS through the outbox (`LoginCode` purpose `MFA`, only when `codeMode()` isn't `off`), or a backup code (HMAC-SHA256 hash, single use). Secrets are AES-256-GCM encrypted with `TWO_FACTOR_KEY` (fallback: a key derived from `AUTH_SECRET`; each value records its key). "Trust this device for 30 days" sets `tl_trust_<hash of user id>`, a JWT tied to `tokenVersion`. Tries: 8 per network and 20 per person per 15 minutes. Audit actions: `auth.2fa_enabled`, `auth.2fa_disabled`, `auth.2fa_failed`, `auth.2fa_blocked`, `auth.2fa_backup_used`, `auth.2fa_backup_codes`, `team.2fa_reset`, `team.2fa_required`, and `auth.login` says how the second step was passed. Customers never see it.
 - Authorisation is **permission-based**: `lib/permissions.ts` maps CASHIER, STAFF, MANAGER and ADMIN to permissions (`pos.sell`, `orders`, `closing`, `approve.discount`, `catalog.edit`, `delivery`, …). Pages and actions call `requirePermission(p)`; the admin menu filters with `can(role, p)`. Approvers authorise till discounts with a bcrypt-hashed PIN (rate-limited).
 - `proxy.ts` gives a fast redirect for `/account` and `/admin`. **This is not the security boundary.** Every page and server action re-checks with `requireUser`, `requireStaff` or `requireAdmin`.
 - Guest orders are reachable by unguessable cuid. Account orders are visible only to their owner and staff (`lib/order-access.ts`).
@@ -290,6 +291,7 @@ Transitions are defined once in `lib/order-status.ts` and applied by `transition
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection (use a pooled URL in production) |
 | `AUTH_SECRET` | ≥ 32 random chars; signs sessions |
+| `TWO_FACTOR_KEY` | ≥ 32 random chars; encrypts staff authenticator secrets. Never change it once set (falls back to a key from `AUTH_SECRET`) |
 | `NEXT_PUBLIC_SITE_URL` | Canonical URL; builds payment return URLs |
 | `ESEWA_ENV`, `ESEWA_PRODUCT_CODE`, `ESEWA_SECRET_KEY` | eSewa (`test` uses the rc-epay UAT) |
 | `KHALTI_ENV`, `KHALTI_SECRET_KEY` | Khalti (`test` uses dev.khalti.com) |
@@ -360,3 +362,4 @@ Cloudflare (DNS, WAF, CDN)  →  App: Vercel or 2+ Node containers (region: Mumb
 | ADR-10 | `loading.tsx` on every dynamic storefront segment | Without a loading boundary, Next prefetches every visible link by fully rendering that page — dozens of DB-heavy renders per product view | Never (keep boundaries) |
 | ADR-11 | Outbox for customer messages | Messages survive gateway outages, are retried, auditable and never double-sent | — |
 | ADR-12 | Loyalty balance on `User.points` + append-only `PointsEntry` ledger | Atomic conditional spend (no double-spend under concurrency) with a full audit trail | Points expiry or multi-currency rewards are needed |
+| ADR-13 | Staff two-step sign-in with an authenticator app (TOTP) first, SMS as fallback, no passkeys yet | Works on any phone with no gateway cost and offline; SMS in Nepal is slow and spoofable; the session only exists after the second step | Staff ask for passkeys, or a shared till needs per-person quick sign-in |

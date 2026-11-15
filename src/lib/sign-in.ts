@@ -26,7 +26,7 @@ export function codeMode(): CodeMode {
 
 /** The account behind a phone or email. A phone shared by several accounts can't sign in by phone (use the email). */
 export async function findAccount(id: Identifier) {
-  const select = { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true, passwordHash: true } as const;
+  const select = { id: true, name: true, email: true, phone: true, role: true, tokenVersion: true, passwordHash: true, twoFactorRequired: true, totpEnabledAt: true } as const;
   if (id.kind === "email") return { user: await db.user.findUnique({ where: { email: id.value }, select }), ambiguous: false };
   const users = await db.user.findMany({ where: { phone: id.value }, select, take: 2 });
   return { user: users.length === 1 ? users[0] : null, ambiguous: users.length > 1 };
@@ -38,7 +38,14 @@ const hashCode = (target: string, purpose: string, code: string) => createHmac("
 export class CodeError extends Error {}
 
 /** Send (or, in test mode, return) a fresh code. Older unused codes for the same number stop working. */
-export async function issueCode(target: string, purpose: "LOGIN" | "RESET", now = new Date()): Promise<{ testCode?: string }> {
+export type CodePurpose = "LOGIN" | "RESET" | "MFA";
+const CODE_TEXT: Record<CodePurpose, { template: string; what: string }> = {
+  LOGIN: { template: "login_code", what: "sign-in" },
+  RESET: { template: "reset_code", what: "password reset" },
+  MFA: { template: "two_factor_code", what: "staff sign-in" }, // the second step for staff (lib/two-factor.ts)
+};
+
+export async function issueCode(target: string, purpose: CodePurpose, now = new Date()): Promise<{ testCode?: string }> {
   const mode = codeMode();
   if (mode === "off") throw new CodeError("Codes by SMS aren't available yet. Use your password, or contact us to reset it.");
   const recent = await db.loginCode.count({ where: { target, createdAt: { gt: new Date(now.getTime() - 10 * 60_000) } } });
@@ -48,14 +55,14 @@ export async function issueCode(target: string, purpose: "LOGIN" | "RESET", now 
     await tx.loginCode.updateMany({ where: { target, purpose, usedAt: null }, data: { expiresAt: now } });
     await tx.loginCode.create({ data: { target, purpose, codeHash: hashCode(target, purpose, code), expiresAt: new Date(now.getTime() + 10 * 60_000) } });
     if (mode === "sms") {
-      await tx.notification.create({ data: { channel: "SMS", template: purpose === "LOGIN" ? "login_code" : "reset_code", to: target, body: `${store.name}: ${code} is your ${purpose === "LOGIN" ? "sign-in" : "password reset"} code. It expires in 10 minutes. Never share it, not even with us.` } });
+      await tx.notification.create({ data: { channel: "SMS", template: CODE_TEXT[purpose].template, to: target, body: `${store.name}: ${code} is your ${CODE_TEXT[purpose].what} code. It expires in 10 minutes. Never share it, not even with us.` } });
     }
   });
   return mode === "test" ? { testCode: code } : {};
 }
 
 /** True when the code is right; uses it up. Wrong tries count; after 5 the code stops working. */
-export async function checkCode(target: string, purpose: "LOGIN" | "RESET", code: string, now = new Date()) {
+export async function checkCode(target: string, purpose: CodePurpose, code: string, now = new Date()) {
   const c = await db.loginCode.findFirst({ where: { target, purpose, usedAt: null, expiresAt: { gt: now } }, orderBy: { createdAt: "desc" } });
   if (!c) throw new CodeError("That code has expired. Ask for a new one.");
   if (c.attempts >= 5) throw new CodeError("Too many wrong tries. Ask for a new code.");

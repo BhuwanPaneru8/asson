@@ -257,19 +257,21 @@ Fix the price (or end the markdown). Orders already placed at a clearly wrong pr
     slug: "owner-access-security",
     section: "owner",
     title: "Access and security controls",
-    summary: "How the owner keeps access tight: accounts, permissions, PINs, the activity log and outside accounts.",
+    summary: "How the owner keeps access tight: accounts, two-step sign-in, permissions, PINs, the activity log and outside accounts.",
     audience: ["owner"],
-    minutes: 4,
-    version: 1,
+    minutes: 6,
+    version: 2,
     restricted: "team.manage",
     related: ["sys-team-access", "sys-activity", "hiring-leaving"],
     body: `## Monthly access review (15 minutes)
 - [ ] Team & access: everyone listed still works here, in the right job and locations.
 - [ ] Unused invites removed; extra permissions still needed.
+- [ ] Every manager and owner shows **Two-step on**; anyone handling cash or refunds who should have it is ticked "Require two-step sign-in".
 - [ ] Activity log: sign-ins at odd hours, unusual refunds, price changes, permission changes.
 
 ## Built-in protections
 - Passwords are stored scrambled (never readable); sign-in attempts are rate-limited, so guessing locks out.
+- **Two-step sign-in**: owners and managers always need a code from an authenticator app after their password; you can require it for anyone else in [Team & access](/admin/team). Codes are rate-limited too, and every failure is recorded.
 - Every session can be ended at once by removing access.
 - Approval PINs are personal and recorded on every approval.
 - Staff can only act at their own locations.
@@ -280,7 +282,12 @@ Fix the price (or end the markdown). Orders already placed at a clearly wrong pr
 ## Outside accounts the owner must protect
 Turn on **two-factor authentication** on every one: GitHub, Cloudflare, Oracle Cloud, the domain, the bank, Google, Meta, TikTok, the SMS gateway, the courier account. Use a password manager. Never share these logins; give people their own where the service allows.
 
-> **Note:** two-factor sign-in for staff accounts in Asson OS is on the roadmap (World-class review).`,
+## Two-step sign-in: resets and your own recovery
+- **Someone lost their phone:** check it's really them (call them, or see them in person), then **Reset two-step sign-in** on their row in Team & access, with the reason. They're signed out everywhere and set up a new app at their next sign-in. Trusted devices stop working.
+- **You lost your own phone:** sign in with one of **your backup codes**, then (once another owner resets you, or after setting up again) make new ones at [My account & security](/admin/me). Keep your backup codes in a safe place at home, not in your phone or wallet.
+- **Lost phone and backup codes, no other owner:** the developer can turn it off from the server (reset-two-factor script); it's recorded in the activity log.
+
+> **Rule:** never reset anyone's two-step sign-in because of a message or call alone. Scammers ask for exactly that.`,
   },
   {
     slug: "owner-tech",

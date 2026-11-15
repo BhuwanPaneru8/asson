@@ -81,7 +81,7 @@ export function AdminNav({ badges, who }: { badges: { orders: number; stock: num
           </div>
         );
       })}
-      {can(role, "approve.discount") && <Link href="/admin/me" onClick={() => setOpen(false)} className={cn("mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-[14px]", path === "/admin/me" ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><KeyRound className="h-4 w-4" /> My approval PIN</Link>}
+      <Link href="/admin/me" onClick={() => setOpen(false)} className={cn("mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-[14px]", path === "/admin/me" ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5 hover:text-white")}><KeyRound className="h-4 w-4" /> My account &amp; security</Link>
       <Link href="/" className="mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-[14px] text-white/65 hover:bg-white/5 hover:text-white"><Store className="h-4 w-4" /> View store</Link>
       <form action={logout}>
         <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[14px] text-white/65 hover:bg-white/5 hover:text-white"><LogOut className="h-4 w-4" /> Sign out</button>

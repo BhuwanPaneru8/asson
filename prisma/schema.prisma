@@ -174,28 +174,39 @@ enum ReviewStatus {
 }
 
 model User {
-  id              String        @id @default(cuid())
-  email           String        @unique
-  name            String
-  phone           String?
-  passwordHash    String
-  role            Role          @default(CUSTOMER)
+  id                String                @id @default(cuid())
+  email             String                @unique
+  name              String
+  phone             String?
+  passwordHash      String
+  role              Role                  @default(CUSTOMER)
   // bump to invalidate every active session for this user
-  tokenVersion    Int           @default(0)
+  tokenVersion      Int                   @default(0)
   /// staff: what they do (lib/permissions.ts JOBS); decides which parts of the system they see. null = the classic set for their role
-  job             String?
+  job               String?
   /// staff: permissions the owner added to or removed from their job, for this person only
-  permAdd         String[]      @default([])
-  permRemove      String[]      @default([])
-  invites         StaffInvite[]
+  permAdd           String[]              @default([])
+  permRemove        String[]              @default([])
+  invites           StaffInvite[]
   /// "Continue with Google": Google's stable id for this person (set on first Google sign-in)
-  googleSub       String?       @unique
+  googleSub         String?               @unique
   /// bcrypt hash of a 4–6 digit PIN managers/owners use to approve discounts at the till
-  approvalPinHash String?
+  approvalPinHash   String?
+  /// two-step sign-in (lib/two-factor.ts): the authenticator-app secret, AES-256-GCM encrypted (TWO_FACTOR_KEY)
+  totpSecret        String?
+  /// when they confirmed their authenticator app; null = two-step sign-in is off
+  totpEnabledAt     DateTime?
+  /// the last 30-second step a code was accepted for, so each code works once
+  totpLastStep      Int?
+  /// a new secret being set up and not confirmed yet (encrypted)
+  totpPendingSecret String?
+  /// the owner requires two-step sign-in for this person (always required for managers and owners)
+  twoFactorRequired Boolean               @default(false)
+  backupCodes       TwoFactorBackupCode[]
   /// loyalty points balance (sum of PointsEntry.delta; kept here for atomic redemption)
-  points          Int           @default(0)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  points            Int                   @default(0)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   addresses          Address[]
   orders             Order[]
@@ -2995,4 +3006,16 @@ model CbmsSync {
   createdAt    DateTime    @default(now())
 
   @@index([status, createdAt])
+}
+
+/// One-time backup codes for two-step sign-in (10 at a time, shown once). Only a keyed hash is stored.
+model TwoFactorBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
