@@ -3,15 +3,24 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ArrowLeft, Check } from "lucide-react";
-import { createAccount, identify, resetWithCode, sendCode, signInWithCode, signInWithPassword } from "@/actions/auth";
+import { askResetHelp, createAccount, identify, resetWithCode, sendCode, sendReset, signInWithCode, signInWithPassword } from "@/actions/auth";
 import { parseIdentifier } from "@/lib/sign-in-shared";
 import { PasswordField } from "./password-field";
 import { useT } from "@/components/site/i18n-provider";
 import { rich } from "@/lib/i18n/rich";
 import { cn } from "@/lib/utils";
+import type { MessageKey } from "@/lib/i18n";
 
-type Step = "identify" | "password" | "create" | "code" | "forgot" | "reset";
-type Who = { identifier: string; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean };
+type Step = "identify" | "password" | "create" | "code" | "forgot" | "reset" | "asked" | "staff";
+type Via = "sms" | "whatsapp" | "email";
+type Who = { identifier: string; kind: "phone" | "email"; exists: boolean; firstName: string | null; codes: boolean; staff: boolean; reset: Partial<Record<Via, string>> };
+
+// the ways a reset code can go, in the order offered
+const VIAS: { via: Via; button: MessageKey; sent: MessageKey }[] = [
+  { via: "whatsapp", button: "auth.viaWhatsapp", sent: "auth.sentWhatsapp" },
+  { via: "sms", button: "auth.viaSms", sent: "auth.sentSms" },
+  { via: "email", button: "auth.viaEmail", sent: "auth.sentEmail" },
+];
 
 const input = "h-12 w-full border border-line bg-white px-3.5 text-[15px] outline-none transition-colors focus:border-ink";
 const primary = "flex h-12 w-full items-center justify-center bg-ink text-[15px] font-medium text-white transition-opacity disabled:opacity-40";
@@ -31,6 +40,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
   const [remember, setRemember] = useState(true);
   const [code, setCode] = useState("");
   const [testCode, setTestCode] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ to?: string; via?: Via; caseNumber?: number; already?: boolean }>({});
   const [f, setF] = useState({ name: "", email: "", phone: "" });
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -49,15 +59,17 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
   const go = (s: Step) => { setError(null); setFieldErrors({}); setStep(s); };
   const fail = (r: { ok: false; error?: string; fieldErrors?: Record<string, string> }) => { setError(r.error ?? null); setFieldErrors(r.fieldErrors ?? {}); };
 
-  const onIdentify = (e: React.FormEvent) => {
-    e.preventDefault();
+  const onIdentify = (e: React.FormEvent | null, forgot = false) => {
+    e?.preventDefault();
     setError(null);
     if (!parseIdentifier(raw)) { setError(t("auth.badIdentifier")); return; }
     start(async () => {
       const r = await identify(raw);
       if (!r.ok) { setError(r.error); return; }
-      setWho({ identifier: raw, kind: r.kind, exists: r.exists, firstName: r.firstName, codes: r.codes, staff: r.staff });
-      go(r.exists ? "password" : "create");
+      if (forgot && !r.exists) { setError(t("auth.forgotNoAccount")); return; }
+      setWho({ identifier: raw, kind: r.kind, exists: r.exists, firstName: r.firstName, codes: r.codes, staff: r.staff, reset: r.reset });
+      // staff have their own sign-in page (/admin/login); the shop never signs them in
+      go(r.staff ? "staff" : forgot ? "forgot" : r.exists ? "password" : "create");
     });
   };
 
@@ -68,6 +80,22 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
     setCode("");
     setWait(30);
     go(then);
+  });
+
+  const askReset = (via: Via) => start(async () => {
+    const r = await sendReset({ identifier: who!.identifier, via });
+    if (!r.ok) { setError(r.error); return; }
+    setSent({ to: r.sentTo, via });
+    setTestCode(r.testCode ?? null);
+    setCode("");
+    setWait(30);
+    go("reset");
+  });
+  const askCare = () => start(async () => {
+    const r = await askResetHelp({ identifier: who!.identifier });
+    if (!r.ok) { setError(r.error); return; }
+    setSent({ caseNumber: r.caseNumber, already: r.already });
+    go("asked");
   });
 
   const shown = who ? (who.kind === "phone" ? parseIdentifier(who.identifier)?.value ?? who.identifier : who.identifier) : "";
@@ -95,6 +123,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
           </div>
           {err()}
           <button className={primary} disabled={pending || raw.trim().length < 5}>{pending ? t("auth.wait") : t("auth.continue")}</button>
+          <button type="button" className={cn(linkBtn, "block text-muted")} disabled={pending} onClick={() => (raw.trim().length < 5 ? setError(t("auth.forgotFirst")) : onIdentify(null, true))}>{t("auth.forgot")}</button>
           {google && (
             <>
               <div className="flex items-center gap-3 text-[12.5px] uppercase tracking-wider text-muted"><span className="h-px flex-1 bg-line" />{t("auth.or")}<span className="h-px flex-1 bg-line" /></div>
@@ -105,6 +134,15 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
             </>
           )}
         </form>
+      )}
+
+      {step === "staff" && who && (
+        <div className="space-y-4">
+          {back()}
+          <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.staffTitle")}</h2>
+          <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.staffBody")}</p>
+          <a href="/admin/login" className={primary}>{t("auth.staffGo")}</a>
+        </div>
       )}
 
       {step === "password" && who && (
@@ -154,7 +192,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
         }}>
           {back()}
           <h2 ref={headingRef} tabIndex={-1} className={heading}>{step === "code" ? t("auth.codeTitle") : t("auth.forgotTitle")}</h2>
-          <p className="-mt-2 text-[14px] text-muted">{t("auth.codeSent", { phone: shown })}</p>
+          <p className="-mt-2 text-[14px] text-muted">{step === "reset" && sent.via ? t(VIAS.find((v) => v.via === sent.via)!.sent, { to: sent.to ?? "" }) : t("auth.codeSent", { phone: shown })}</p>
           {testBox()}
           <div>
             <label htmlFor="code" className="mb-1.5 block text-[13px] font-medium text-ink-soft">{t("auth.code")}</label>
@@ -165,7 +203,7 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
           {step === "code" && rememberBox()}
           {err()}
           <button className={primary} disabled={pending || code.length !== 6 || (step === "reset" && password.length < 8)}>{pending ? t("auth.wait") : step === "code" ? t("auth.continue") : t("reset.save")}</button>
-          <button type="button" className={cn(linkBtn, "text-muted disabled:no-underline disabled:opacity-60")} disabled={pending || wait > 0} onClick={() => askCode(step === "code" ? "LOGIN" : "RESET", step)}>
+          <button type="button" className={cn(linkBtn, "text-muted disabled:no-underline disabled:opacity-60")} disabled={pending || wait > 0} onClick={() => (step === "code" ? askCode("LOGIN", step) : askReset(sent.via ?? "sms"))}>
             {wait > 0 ? t("auth.resendIn", { s: wait }) : t("auth.resend")}
           </button>
         </form>
@@ -175,24 +213,47 @@ export function AuthPanel({ next = "/account", google = false, support }: { next
         <div className="space-y-4">
           {back()}
           <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.forgotTitle")}</h2>
-          {who.codes ? (
-            <>
-              <p className="text-[14.5px] text-ink-soft">{t("auth.forgotByCode", { phone: shown })}</p>
-              {err()}
-              <button type="button" className={primary} disabled={pending} onClick={() => askCode("RESET", "reset")}>{pending ? t("auth.wait") : t("auth.sendCode")}</button>
-            </>
+          {who.staff ? (
+            <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.forgotStaff")}</p>
           ) : (
             <>
-              <p className="text-[14.5px] leading-relaxed text-ink-soft">{who.staff ? t("auth.forgotStaff") : t("auth.forgotCare")}</p>
-              {!who.staff && (
+              {VIAS.some((v) => who.reset[v.via]) ? (
+                <>
+                  <p className="text-[14.5px] text-ink-soft">{t("auth.forgotChoose")}</p>
+                  <div className="space-y-2.5">
+                    {VIAS.filter((v) => who.reset[v.via]).map((v, i) => (
+                      <button key={v.via} type="button" className={i === 0 ? primary : cn(primary, "border border-ink bg-white text-ink")} disabled={pending} onClick={() => askReset(v.via)}>
+                        {t(v.button, { to: who.reset[v.via]! })}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-[14.5px] leading-relaxed text-ink-soft">{t("auth.forgotCare")}</p>
+                  <button type="button" className={primary} disabled={pending} onClick={askCare}>{pending ? t("auth.wait") : t("auth.askCare")}</button>
+                </>
+              )}
+              {err()}
+              {VIAS.some((v) => who.reset[v.via]) && (
+                <p className="text-[13.5px] text-muted">{t("auth.noAccess")} <button type="button" className={linkBtn} disabled={pending} onClick={askCare}>{t("auth.askCare")}</button></p>
+              )}
+            </>
+          )}
+          {who.exists && <button type="button" className={cn(linkBtn, "text-muted")} onClick={() => go("password")}>{t("auth.backToPassword")}</button>}
+        </div>
+      )}
+
+      {step === "asked" && who && (
+        <div className="space-y-4">
+          {back()}
+          <h2 ref={headingRef} tabIndex={-1} className={heading}>{t("auth.askedTitle")}</h2>
+          <p className="text-[14.5px] leading-relaxed text-ink-soft">{t(sent.already ? "auth.askedAlready" : "auth.askedBody", { n: sent.caseNumber ?? 0 })}</p>
+          <p className="text-[13.5px] text-muted">{t("auth.askedFaster")}</p>
                 <ul className="space-y-2 text-[14.5px]">
                   <li className="flex items-center gap-2"><Check className="h-4 w-4 text-success" /> <a href={`tel:+977${support.phone}`} className="font-medium underline underline-offset-4">{support.phone}</a> ({t("auth.callOrWhatsapp")})</li>
                   <li className="flex items-center gap-2"><Check className="h-4 w-4 text-success" /> <a href={support.whatsapp} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-4">WhatsApp</a></li>
                 </ul>
-              )}
-            </>
-          )}
-          <button type="button" className={cn(linkBtn, "text-muted")} onClick={() => go("password")}>{t("auth.backToPassword")}</button>
         </div>
       )}
     </div>

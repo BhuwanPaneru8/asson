@@ -48,18 +48,35 @@ const CODE_TEXT: Record<CodePurpose, { template: string; what: string }> = {
 export async function issueCode(target: string, purpose: CodePurpose, now = new Date()): Promise<{ testCode?: string }> {
   const mode = codeMode();
   if (mode === "off") throw new CodeError("Codes by SMS aren't available yet. Use your password, or contact us to reset it.");
+  const code = await createCode(target, purpose, now, mode === "sms"
+    ? (tx, c) => tx.notification.create({ data: { channel: "SMS", template: CODE_TEXT[purpose].template, to: target, body: codeSms(purpose, c) } }).then(() => {})
+    : undefined);
+  return mode === "test" ? { testCode: code } : {};
+}
+
+export const codeSms = (purpose: CodePurpose, code: string) => `${store.name}: ${code} is your ${CODE_TEXT[purpose].what} code. It expires in 10 minutes. Never share it, not even with us.`;
+
+type Tx = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+/**
+ * A fresh 6-digit code for `target` (a phone, an email, or `reset:<userId>`), stored only as a keyed hash. Older
+ * unused codes for the same target and purpose stop working; at most 3 per target per 10 minutes. `queue` runs in
+ * the same transaction (to queue the SMS); the caller sends anything else. Returns the code.
+ */
+export async function createCode(target: string, purpose: CodePurpose, now = new Date(), queue?: (tx: Tx, code: string) => Promise<void>): Promise<string> {
   const recent = await db.loginCode.count({ where: { target, createdAt: { gt: new Date(now.getTime() - 10 * 60_000) } } });
   if (recent >= 3) throw new CodeError("We've sent 3 codes in the last 10 minutes. Please wait a little before asking for another.");
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   await db.$transaction(async (tx) => {
     await tx.loginCode.updateMany({ where: { target, purpose, usedAt: null }, data: { expiresAt: now } });
     await tx.loginCode.create({ data: { target, purpose, codeHash: hashCode(target, purpose, code), expiresAt: new Date(now.getTime() + 10 * 60_000) } });
-    if (mode === "sms") {
-      await tx.notification.create({ data: { channel: "SMS", template: CODE_TEXT[purpose].template, to: target, body: `${store.name}: ${code} is your ${CODE_TEXT[purpose].what} code. It expires in 10 minutes. Never share it, not even with us.` } });
-    }
+    if (queue) await queue(tx, code);
   });
-  return mode === "test" ? { testCode: code } : {};
+  return code;
 }
+
+/** 98******67: enough to recognise, not enough to harvest. */
+export const maskPhone = (phone: string) => `${phone.slice(0, 2)}${"*".repeat(Math.max(0, phone.length - 4))}${phone.slice(-2)}`;
 
 /** True when the code is right; uses it up. Wrong tries count; after 5 the code stops working. */
 export async function checkCode(target: string, purpose: CodePurpose, code: string, now = new Date()) {
@@ -70,7 +87,7 @@ export async function checkCode(target: string, purpose: CodePurpose, code: stri
   const ok = a.length === b.length && timingSafeEqual(a, b);
   if (!ok) {
     await db.loginCode.update({ where: { id: c.id }, data: { attempts: { increment: 1 } } });
-    throw new CodeError(c.attempts + 1 >= 5 ? "Too many wrong tries. Ask for a new code." : "That code isn't right. Check the SMS and try again.");
+    throw new CodeError(c.attempts + 1 >= 5 ? "Too many wrong tries. Ask for a new code." : "That code isn't right. Check the message and try again.");
   }
   const used = await db.loginCode.updateMany({ where: { id: c.id, usedAt: null }, data: { usedAt: now } });
   if (!used.count) throw new CodeError("That code was just used. Ask for a new one.");

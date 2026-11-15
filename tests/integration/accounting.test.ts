@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { accountingSummary, periodBounds, purchaseRegister, returnsRegister, salesRegister, splitVat } from "@/lib/accounting";
 import { profitAndLoss } from "@/lib/finance";
 import { recordSupplierBill, voidSupplierBill } from "@/actions/admin/payables";
-import { GET } from "@/app/admin/finance/export/[register]/route";
+import { GET } from "@/app/admin/(staff)/finance/export/[register]/route";
 import { ktmDate } from "@/lib/pos";
 import { actAs, makeProduct, makeUser, resetDb } from "../support/db";
 

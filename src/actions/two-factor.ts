@@ -13,7 +13,7 @@ import {
   setTwoFactorRequired, startSetup, TwoFactorError, verifySecondFactor,
 } from "@/lib/two-factor";
 
-// Two-step sign-in (lib/two-factor.ts): the second step after the password (/login/two-factor), setting it up
+// Two-step sign-in (lib/two-factor.ts): the second step after the password (/admin/login/two-factor), setting it up
 // (there, or from My account & security), and the owner's controls in Team & access.
 
 type Fail = { ok: false; error: string };

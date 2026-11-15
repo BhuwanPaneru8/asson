@@ -69,8 +69,8 @@ export async function requireUser(next = "/account") {
 
 export async function requireStaff() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login?next=/admin");
-  if (user.role === "CUSTOMER") redirect("/");
+  // the staff side has its own sign-in; a shopper's session doesn't open it
+  if (!user || user.role === "CUSTOMER") redirect("/admin/login");
   return user;
 }
 

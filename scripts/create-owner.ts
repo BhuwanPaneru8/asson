@@ -48,7 +48,7 @@ async function main() {
       update: { passwordHash, role: "ADMIN", tokenVersion: { increment: 1 } },
       create: { email, name, passwordHash, role: "ADMIN" },
     });
-    console.log(`\n✔ ${existing ? "Updated" : "Created"} owner account ${user.email}. Sign in at /login.`);
+    console.log(`\n✔ ${existing ? "Updated" : "Created"} owner account ${user.email}. Sign in at /admin/login.`);
   } finally {
     await db.$disconnect();
   }

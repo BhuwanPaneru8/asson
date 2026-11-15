@@ -18,7 +18,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
           <div className="border border-line bg-white p-8 text-center">
             <h1 className="font-display text-3xl">This link has expired</h1>
             <p className="mt-3 text-[15px] text-ink-soft">Invite links work once, for 7 days. Ask the owner for a new one from Team &amp; access.</p>
-            <Link href="/login" className="mt-6 inline-block text-[14px] underline underline-offset-4">Already set up? Sign in</Link>
+            <Link href="/admin/login" className="mt-6 inline-block text-[14px] underline underline-offset-4">Already set up? Sign in</Link>
           </div>
         ) : (
           <div className="border border-line bg-white p-8">

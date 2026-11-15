@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, MapPin, Heart, User, LayoutDashboard, LogOut, Home } from "lucide-react";
+import { Package, MapPin, Heart, User, LogOut, Home } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/site/i18n-provider";
@@ -16,7 +16,8 @@ const items: { href: string; label: MessageKey; icon: typeof Home }[] = [
   { href: "/account/profile", label: "acc.profile", icon: User },
 ];
 
-export function AccountNav({ isStaff }: { isStaff: boolean }) {
+/** The shopper's account menu. No staff links here: staff use the staff side, /admin, with its own sign-in. */
+export function AccountNav() {
   const path = usePathname();
   const { t } = useT();
   return (
@@ -29,7 +30,6 @@ export function AccountNav({ isStaff }: { isStaff: boolean }) {
           </Link>
         );
       })}
-      {isStaff && <Link href="/admin" className="flex shrink-0 items-center gap-3 px-3 py-2.5 text-[14.5px] text-accent hover:bg-cloud"><LayoutDashboard className="h-4 w-4" /> {t("acc.admin")}</Link>}
       <form action={logout} className="shrink-0 md:mt-4 md:border-t md:border-line md:pt-4">
         <button className="flex w-full items-center gap-3 px-3 py-2.5 text-[14.5px] text-muted hover:bg-cloud hover:text-ink"><LogOut className="h-4 w-4" /> {t("acc.signOut")}</button>
       </form>
