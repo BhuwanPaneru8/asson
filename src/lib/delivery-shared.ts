@@ -50,9 +50,27 @@ export function deliveryFee(method: ShippingMethodId, rate: DeliveryRate, subtot
   return freeStandard ? 0 : rate.fee;
 }
 
-/** Latest date an order placed now should arrive, for display. */
-export function etaDate(rate: DeliveryRate, from = new Date(), method: ShippingMethodId = "standard") {
+/** Saturday is Nepal's weekly holiday: couriers don't deliver, so it never counts as a delivery day. */
+const KTM_OFFSET_MS = (5 * 60 + 45) * 60_000;
+const isSaturdayInNepal = (d: Date) => new Date(d.getTime() + KTM_OFFSET_MS).getUTCDay() === 6;
+
+/** `days` delivery days after `from`, skipping Saturdays. */
+export function addDeliveryDays(from: Date, days: number) {
   const d = new Date(from);
-  d.setDate(d.getDate() + (method === "express" && rate.expressAvailable ? 1 : rate.etaMaxDays));
+  for (let left = days; left > 0; ) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    if (!isSaturdayInNepal(d)) left--;
+  }
   return d;
+}
+
+/** Earliest and latest arrival for an order placed at `from`. */
+export function etaRange(rate: DeliveryRate, from = new Date(), method: ShippingMethodId = "standard"): [Date, Date] {
+  if (method === "express" && rate.expressAvailable) { const d = addDeliveryDays(from, 1); return [d, d]; }
+  return [addDeliveryDays(from, rate.etaMinDays), addDeliveryDays(from, rate.etaMaxDays)];
+}
+
+/** The latest arrival date (the promise to keep). */
+export function etaDate(rate: DeliveryRate, from = new Date(), method: ShippingMethodId = "standard") {
+  return etaRange(rate, from, method)[1];
 }

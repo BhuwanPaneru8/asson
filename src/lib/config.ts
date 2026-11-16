@@ -174,9 +174,9 @@ export const store = {
   },
 } as const;
 
-/** Opens a WhatsApp chat with the support number (wa.me needs the country code, digits only). */
-export function whatsappUrl() {
-  return `https://wa.me/${(store.phonePrefix + store.supportWhatsApp).replace(/\D/g, "")}`;
+/** Opens a WhatsApp chat with the support number (wa.me needs the country code, digits only), with a message typed in. */
+export function whatsappUrl(text?: string) {
+  return `https://wa.me/${(store.phonePrefix + store.supportWhatsApp).replace(/\D/g, "")}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }
 
 export type ShippingMethodId = "standard" | "express";

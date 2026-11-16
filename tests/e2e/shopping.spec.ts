@@ -16,7 +16,7 @@ let orderNumber = "";
 test("guest buys a shirt with COD and the district's delivery fee", async ({ page }) => {
   await page.goto("/p/oxford-button-down-shirt");
   await page.getByLabel("Your district").selectOption("Chitwan");
-  await expect(page.getByText(/Rs\. 150 · arrives in 3–5 days/)).toBeVisible();
+  await expect(page.getByText(/Rs\. 150 · arrives \w{3} \d{1,2} \w{3} – \w{3} \d{1,2} \w{3}/)).toBeVisible(); // real dates, 3–5 delivery days
   await page.getByRole("button", { name: /Add to bag/ }).first().click();
   await expect(page.getByText(/Please select a size/)).toBeVisible(); // size is required
   await page.getByRole("button", { name: /^Size M/ }).click();

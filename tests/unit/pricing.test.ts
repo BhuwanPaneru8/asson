@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Coupon } from "@prisma/client";
 import { computeTotals, evaluateCoupon } from "@/lib/pricing";
-import { defaultRate, deliveryFee, etaLabel, rateFor } from "@/lib/delivery-shared";
+import { addDeliveryDays, defaultRate, deliveryFee, etaLabel, etaRange, rateFor } from "@/lib/delivery-shared";
 import { store } from "@/lib/config";
 
 const coupon = (c: Partial<Coupon>): Coupon => ({
@@ -77,6 +77,17 @@ describe("delivery fees", () => {
     expect(rateFor({}, "")).toBeNull();
     expect(etaLabel(ktm)).toBe("1–2 days");
     expect(etaLabel(ktm, "express")).toBe(store.shipping.express.eta);
+  });
+  it("counts delivery days without Saturdays, Nepal's weekly holiday", () => {
+    const ktmDay = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kathmandu", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+    const thu = new Date("2026-11-19T06:00:00Z"); // Thursday noon in Kathmandu
+    expect(ktmDay(addDeliveryDays(thu, 1))).toMatch(/Fri/);
+    expect(ktmDay(addDeliveryDays(thu, 2))).toMatch(/Sun/); // Saturday skipped
+    const fri = new Date("2026-11-20T17:00:00Z"); // Friday 22:45 in Kathmandu: still Friday there
+    expect(ktmDay(addDeliveryDays(fri, 1))).toMatch(/Sun/);
+    const [a, b] = etaRange(ktm, thu);
+    expect([ktmDay(a), ktmDay(b)].map((x) => x.slice(0, 3))).toEqual(["Fri", "Sun"]); // 1–2 days
+    expect(etaRange(ktm, thu, "express")[0].getTime()).toBe(etaRange(ktm, thu, "express")[1].getTime());
   });
 });
 

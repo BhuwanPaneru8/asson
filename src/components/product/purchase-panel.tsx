@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Heart, Ruler, Truck, RotateCcw, ChevronDown, Check } from "lucide-react";
+import { Heart, Ruler, Truck, RotateCcw, ChevronDown, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { addToCart } from "@/actions/cart";
 import { toggleWishlist } from "@/actions/wishlist";
 import { Button } from "@/components/ui/button";
 import { Price, Stars } from "@/components/ui/misc";
 import { useShop } from "@/components/site/shop-provider";
-import { sortSizes, store } from "@/lib/config";
+import { sortSizes, store, whatsappUrl } from "@/lib/config";
 import { DeliveryEstimator } from "@/components/cart/delivery-estimator";
 import type { RateMap } from "@/lib/delivery-shared";
 import { cn, formatPrice } from "@/lib/utils";
@@ -174,6 +174,16 @@ export function ProductExperience({ product, fitSummary, swapFit, rates }: { pro
           </div>
 
           <DeliveryEstimator rates={rates} className="mt-5" />
+
+          {/* many shoppers ask before they buy: the chat opens with the product, colour and size already typed */}
+          <a
+            href={whatsappUrl(t(size ? "pp.waMessage" : "pp.waMessageNoSize", { name: product.name, color, size: size ?? "", url: `${(process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/$/, "")}${pathname}` }))}
+            target="_blank" rel="noopener noreferrer"
+            className="mt-3 flex items-center gap-2.5 border border-line bg-white px-4 py-3 text-[14px] hover:border-ink"
+          >
+            <MessageCircle className="h-5 w-5 shrink-0 text-success" strokeWidth={1.7} aria-hidden />
+            <span><span className="font-medium">{t("pp.waAsk")}</span> <span className="text-muted">{t("pp.waHint")}</span></span>
+          </a>
 
           <div className="mt-8 border-t border-line">
             <Accordion title={t("pp.description")} defaultOpen>

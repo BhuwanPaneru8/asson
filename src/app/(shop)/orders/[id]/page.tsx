@@ -10,6 +10,7 @@ import { exchangeOptions } from "@/lib/exchanges";
 import { BuyAgain, OrderChange } from "@/components/account/order-change";
 import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
 import { store, whatsappUrl } from "@/lib/config";
+import { addDeliveryDays } from "@/lib/delivery-shared";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
 import { OrderProgress } from "@/components/account/order-timeline";
 import { OrderActions } from "@/components/account/order-actions";
@@ -42,7 +43,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const swapTo = changeable ? await db.variant.findMany({ where: { productId: { in: order.items.map((i) => i.productId) }, stock: { gt: 0 }, product: { status: "ACTIVE" } }, orderBy: { position: "asc" }, select: { id: true, productId: true, color: true, size: true } }) : [];
   const canReturn = order.status === "DELIVERED" && !exchanged && !!deliveredAt && now() - deliveredAt.getTime() < store.returnWindowDays * 86400000;
   const etaDays = a?.etaMaxDays ?? (order.shippingMethod === "express" ? 1 : a?.zone === "VALLEY" ? 2 : a?.zone === "REMOTE" ? 10 : 5);
-  const eta = new Date(order.createdAt); eta.setDate(eta.getDate() + etaDays);
+  const eta = addDeliveryDays(order.createdAt, etaDays); // no deliveries on Saturday
 
   return (
     <div className="container-page max-w-5xl py-8 md:py-12">
