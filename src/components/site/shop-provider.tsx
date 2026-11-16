@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { CartView } from "@/lib/cart";
 
-type User = { id: string; name: string; email: string; role: string } | null;
+type User = { id: string; name: string; email: string; role: string; /** from their default (or latest) saved address, for delivery estimates */ district?: string } | null;
 
 type Ctx = {
   cart: CartView;

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { getT } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
+import { SIZE_CHARTS } from "@/lib/size-charts";
 
 export const metadata: Metadata = { title: "Size guide" };
 
-const TOPS = [["XS", "34–36", "28–30"], ["S", "36–38", "30–32"], ["M", "38–40", "32–34"], ["L", "40–42", "34–36"], ["XL", "42–44", "36–38"], ["XXL", "44–46", "38–40"]];
-const BOTTOMS = [["26", "26", "35"], ["28", "28", "37"], ["30", "30", "39"], ["32", "32", "41"], ["34", "34", "43"], ["36", "36", "45"], ["38", "38", "47"]];
-const KIDS = [["2-3Y", "92–98", "53"], ["4-5Y", "104–110", "56"], ["6-7Y", "116–122", "60"], ["8-9Y", "128–134", "64"], ["10-11Y", "140–146", "68"]];
+// the same charts as the size panel on product pages
+const TOPS = SIZE_CHARTS.tops.rows;
+const BOTTOMS = SIZE_CHARTS.bottoms.rows;
+const KIDS = SIZE_CHARTS.kids.rows;
 
 function Table({ title, head, rows }: { title: string; head: string[]; rows: string[][] }) {
   return (
