@@ -12,34 +12,36 @@
  */
 import { PrismaClient, type Gender } from "@prisma/client";
 
-const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
+export const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
 
-const COLORS: Record<string, string> = {
+export const COLORS: Record<string, string> = {
   White: "#F5F5F2", Black: "#1C1C1C", Navy: "#1F2A44", Grey: "#9A9A9A", Charcoal: "#3C3C3C", Olive: "#5B6338",
   Beige: "#D9C7A7", Sand: "#C8B48F", Maroon: "#6B1E2C", "Sky Blue": "#8DB6D9", Indigo: "#2E3A6E",
-  "Light Wash": "#9BB3CC", "Dark Wash": "#2C3A55", Blush: "#E8B9B0", Sage: "#A7B59A", Cream: "#F1E9D8",
+  "Light Wash": "#9BB3CC", Camel: "#B88A5A", Rust: "#9C4A2B", Forest: "#2F4A3A", Burgundy: "#5E1F2B", Stone: "#BDB4A4", Oatmeal: "#D8CDB8", "Dark Wash": "#2C3A55", Blush: "#E8B9B0", Sage: "#A7B59A", Cream: "#F1E9D8",
   Emerald: "#1F6B4F", Lilac: "#B9A6D3", Red: "#B3262E", Brown: "#6B4A33", Khaki: "#B5A27A", Ivory: "#F4EFE3",
 };
 
-const TOP = ["S", "M", "L", "XL", "XXL"];
-const WOMEN = ["XS", "S", "M", "L", "XL"];
-const WAIST = ["28", "30", "32", "34", "36"];
-const WOMEN_WAIST = ["26", "28", "30", "32", "34"];
+export const TOP = ["S", "M", "L", "XL", "XXL"];
+export const WOMEN = ["XS", "S", "M", "L", "XL"];
+export const WAIST = ["28", "30", "32", "34", "36"];
+export const WOMEN_WAIST = ["26", "28", "30", "32", "34"];
 const KIDS = ["2-3Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y"];
 
 const CORE = "Asson";
 const STUDIO = "Asson Studio";
 
-type Item = {
+export type Item = {
   name: string; cat: string; gender: Gender; brand: string; price: number; colors: string[]; sizes: string[];
   images: string[]; material: string; fit: string; care: string; desc: string; details: string[]; tags: string[];
   collections?: string[]; featured?: boolean; pairs?: string[];
+  /** the "was" price (MRP) when the item starts on sale */
+  compareAt?: number;
 };
 
-const CARE_COTTON = "Machine wash cold, inside out, with like colours. Do not bleach. Line dry in shade. Warm iron.";
-const CARE_LINEN = "Hand or gentle machine wash cold. Line dry. Iron while slightly damp; linen's soft creases are part of its character.";
-const CARE_WOOL = "Hand wash cold with wool detergent or dry clean. Dry flat. Store folded, never on a hanger.";
-const CARE_DRY = "Dry clean only. Store on a wide hanger in a breathable garment bag.";
+export const CARE_COTTON = "Machine wash cold, inside out, with like colours. Do not bleach. Line dry in shade. Warm iron.";
+export const CARE_LINEN = "Hand or gentle machine wash cold. Line dry. Iron while slightly damp; linen's soft creases are part of its character.";
+export const CARE_WOOL = "Hand wash cold with wool detergent or dry clean. Dry flat. Store folded, never on a hanger.";
+export const CARE_DRY = "Dry clean only. Store on a wide hanger in a breathable garment bag.";
 const CARE_DENIM = "Wash rarely, cold and inside out. Line dry. Raw denim: wait at least a month before the first wash.";
 
 export const STARTER: Item[] = [
@@ -104,7 +106,7 @@ export const STARTER_COLLECTIONS = [
   { slug: "festive-edit", name: "Tihar & Festive Edit", description: "Kurtas, silk and tailoring for Tihar, Bhai Tika and the wedding season.", image: U("1610030469983-98e550d6193c"), featured: true },
 ];
 
-const slugify = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+export const slugify = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
 /** Starting stock per size: deeper in the core sizes. */
 function startStock(size: string) {
@@ -113,12 +115,24 @@ function startStock(size: string) {
   return 4;
 }
 
-export async function loadStarterCatalogue(db: PrismaClient) {
-  const result = { productsCreated: 0, productsSkipped: 0, variantsCreated: 0, unitsStocked: 0, collectionsCreated: 0 };
+export type CollectionSeed = { slug: string; name: string; description: string; image: string; featured: boolean };
 
-  for (const [i, c] of STARTER_COLLECTIONS.entries()) {
+export function loadStarterCatalogue(db: PrismaClient) {
+  return loadCatalogue(db, { items: STARTER, collections: STARTER_COLLECTIONS, note: "Starter catalogue" });
+}
+
+/**
+ * Adds the given products and collections (any whose slug is new; existing ones are never edited), with opening
+ * stock written to the inventory ledger under `note`, then links their "Complete the look" pairs.
+ */
+export async function loadCatalogue(db: PrismaClient, { items, collections, note, collectionsFirst = false }: { items: Item[]; collections: CollectionSeed[]; note: string; /** put new collections before the existing ones (home shows the first few) */ collectionsFirst?: boolean }) {
+  const result = { productsCreated: 0, productsSkipped: 0, variantsCreated: 0, unitsStocked: 0, collectionsCreated: 0 };
+  const range = await db.collection.aggregate({ _min: { sortOrder: true }, _max: { sortOrder: true } });
+  const firstPosition = collectionsFirst ? (range._min.sortOrder ?? 0) - collections.length : (range._max.sortOrder ?? -1) + 1;
+
+  for (const [i, c] of collections.entries()) {
     if (await db.collection.findUnique({ where: { slug: c.slug } })) continue;
-    await db.collection.create({ data: { ...c, sortOrder: i } });
+    await db.collection.create({ data: { ...c, sortOrder: firstPosition + i } });
     result.collectionsCreated++;
   }
 
@@ -130,7 +144,7 @@ export async function loadStarterCatalogue(db: PrismaClient) {
   const into = (await db.store.findFirst({ where: { active: true }, orderBy: [{ kind: "desc" }, { priority: "asc" }, { createdAt: "asc" }], select: { id: true } }))
     ?? (await db.store.upsert({ where: { code: "FLAGSHIP" }, update: { active: true }, create: { code: "FLAGSHIP", name: "Asson Flagship", address: "Kathmandu, Nepal", priority: 10 }, select: { id: true } }));
 
-  for (const item of STARTER) {
+  for (const item of items) {
     const slug = slugify(item.name);
     if (await db.product.findUnique({ where: { slug } })) { result.productsSkipped++; continue; }
     const category = await db.category.findUnique({ where: { slug: item.cat } });
@@ -142,7 +156,7 @@ export async function loadStarterCatalogue(db: PrismaClient) {
         data: {
           name: item.name, slug, brand: item.brand, gender: item.gender, status: "ACTIVE",
           description: item.desc, details: item.details, material: item.material, fit: item.fit, care: item.care,
-          tags: item.tags, featured: !!item.featured, price: item.price * 100,
+          tags: item.tags, featured: !!item.featured, price: item.price * 100, compareAtPrice: item.compareAt ? item.compareAt * 100 : null,
           categoryId: category.id,
           collections: { connect: (item.collections ?? []).map((s) => ({ slug: s })) },
           images: { create: item.images.map((id, pos) => ({ url: U(id), alt: pos ? `${item.name}, alternate view` : item.name, position: pos })) },
@@ -161,7 +175,7 @@ export async function loadStarterCatalogue(db: PrismaClient) {
       const units = p.variants.map((v) => ({ variantId: v.id, storeId: into.id, quantity: startStock(v.size) }));
       await tx.storeStock.createMany({ data: units });
       await tx.inventoryLog.createMany({
-        data: units.map((u) => ({ variantId: u.variantId, storeId: u.storeId, delta: u.quantity, reason: "RECEIVED", note: "Starter catalogue" })),
+        data: units.map((u) => ({ variantId: u.variantId, storeId: u.storeId, delta: u.quantity, reason: "RECEIVED", note })),
       });
       result.productsCreated++;
       result.variantsCreated += p.variants.length;
@@ -170,7 +184,7 @@ export async function loadStarterCatalogue(db: PrismaClient) {
   }
 
   // "Complete the look" pairings, both ways, only between products that exist
-  for (const item of STARTER) {
+  for (const item of items) {
     if (!item.pairs?.length) continue;
     const p = await db.product.findUnique({ where: { slug: slugify(item.name) }, select: { id: true } });
     const others = await db.product.findMany({ where: { slug: { in: item.pairs } }, select: { id: true } });
