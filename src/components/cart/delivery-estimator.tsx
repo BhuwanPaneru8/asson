@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { Truck } from "lucide-react";
 import { DistrictSelect } from "@/components/ui/district-select";
 import { store } from "@/lib/config";
-import { deliveryFee, etaDate, rateFor, type RateMap } from "@/lib/delivery-shared";
+import { deliveryFee, etaRange, rateFor, type RateMap } from "@/lib/delivery-shared";
 import { cn, formatPrice, formatShortDate } from "@/lib/utils";
 import { useT } from "@/components/site/i18n-provider";
-import { etaText } from "@/lib/i18n";
 
 const KEY = "asson_district";
 
 /** Lets shoppers pick their district once (remembered on the device) and shows the exact fee and arrival date. */
-export function DeliveryEstimator({ rates, subtotal, className, compact }: { rates: RateMap; subtotal?: number; className?: string; compact?: boolean }) {
+export function DeliveryEstimator({ rates, subtotal, className }: { rates: RateMap; subtotal?: number; className?: string; /** kept for callers; the dates now fit everywhere */ compact?: boolean }) {
   const [district, setDistrict] = useState("");
   const { t, l } = useT();
   // restore after hydration — localStorage is client-only
@@ -21,6 +20,11 @@ export function DeliveryEstimator({ rates, subtotal, className, compact }: { rat
   const choose = (d: string) => { setDistrict(d); try { localStorage.setItem(KEY, d); } catch {} };
 
   const rate = rateFor(rates, district);
+  // real dates ("arrives Thu 19 Nov – Sat 21 Nov"), counted without Saturdays, Nepal's weekly holiday
+  const arrives = (r: NonNullable<typeof rate>) => {
+    const [a, b] = etaRange(r);
+    return a.getTime() === b.getTime() ? t("de.arrivesOn", { date: formatShortDate(b) }) : t("de.arrivesBetween", { from: formatShortDate(a), to: formatShortDate(b) });
+  };
   const fee = rate && subtotal != null ? deliveryFee("standard", rate, subtotal, false) : rate?.fee;
 
   return (
@@ -34,8 +38,7 @@ export function DeliveryEstimator({ rates, subtotal, className, compact }: { rat
           ) : (
             <>
               <p>
-                <b className="text-ink">{fee === 0 ? t("home.freeDelivery") : formatPrice(fee ?? 0)}</b> · {t("de.arrives", { eta: etaText(t, rate) })}
-                {!compact && <> {t("de.by", { date: formatShortDate(etaDate(rate)) })}</>}
+                <b className="text-ink">{fee === 0 ? t("home.freeDelivery") : formatPrice(fee ?? 0)}</b> · {arrives(rate)}
               </p>
               {fee !== 0 && <p>{t("de.freeAbove", { amount: formatPrice(store.shipping.freeThreshold) })}</p>}
               {rate.expressAvailable && <p>{t("de.express", { eta: l(store.shipping.express.eta).toLowerCase(), fee: formatPrice(store.shipping.express.fee) })}</p>}

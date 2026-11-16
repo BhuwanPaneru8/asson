@@ -1,5 +1,7 @@
 import { Header } from "@/components/site/header";
 import { Footer } from "@/components/site/footer";
+import { CheckoutAware } from "@/components/site/checkout-chrome";
+import { CheckoutFooter, CheckoutHeader } from "@/components/site/checkout-frame";
 import { ShopProvider } from "@/components/site/shop-provider";
 import { CartDrawer } from "@/components/cart/cart-drawer";
 import { getCart } from "@/lib/cart";
@@ -17,9 +19,9 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     <ShopProvider cart={cart} user={user && { id: user.id, name: user.name, email: user.email, role: user.role }} wishlist={wishlist}>
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[60] focus:bg-ink focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
       <Suspense fallback={null}><NavProgress /></Suspense>
-      <div className="contents print:hidden"><Header /></div>
+      <div className="contents print:hidden"><CheckoutAware checkout={<CheckoutHeader />} rest={<Header />} /></div>
       <main id="main" className="flex-1">{children}</main>
-      <div className="contents print:hidden"><Footer /></div>
+      <div className="contents print:hidden"><CheckoutAware checkout={<CheckoutFooter />} rest={<Footer />} /></div>
       <CartDrawer />
       <Marketing ids={marketingIds()} initial={consent} />
     </ShopProvider>
