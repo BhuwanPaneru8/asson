@@ -20,10 +20,10 @@ const PICKUP_STEPS: { status: OrderStatus; label: MessageKey }[] = [
   { status: "DELIVERED", label: "status.collected" },
 ];
 
-export function OrderProgress({ status, events, pickup = false, t = makeT("en") }: { status: OrderStatus; events: { status: OrderStatus | null; createdAt: Date | string }[]; pickup?: boolean; t?: T }) {
+export function OrderProgress({ status, events, pickup = false, paid = false, t = makeT("en") }: { status: OrderStatus; events: { status: OrderStatus | null; createdAt: Date | string }[]; pickup?: boolean; /** money was taken (so a cancellation means a refund) */ paid?: boolean; t?: T }) {
   const STEPS = pickup ? PICKUP_STEPS : DELIVERY_STEPS;
   if (status === "RETURNING") return <p className="bg-[#fbeee0] p-4 text-[14.5px] text-[#9a5b13]">{t("ord.returningNote", { phone: store.supportPhone })}</p>;
-  if (status === "CANCELLED") return <p className="bg-[#fbe9e7] p-4 text-[14.5px] text-danger">{t("ord.cancelledNote")}</p>;
+  if (status === "CANCELLED") return <p className="bg-[#fbe9e7] p-4 text-[14.5px] text-danger">{t(paid ? "ord.cancelledNote" : "ord.cancelledNoCharge")}</p>;
   const idx = ["RETURN_REQUESTED", "RETURNED"].includes(status) ? STEPS.length - 1 : STEPS.findIndex((s) => s.status === status);
   return (
     <ol className={cn("grid gap-1", pickup ? "grid-cols-4" : "grid-cols-6")}>

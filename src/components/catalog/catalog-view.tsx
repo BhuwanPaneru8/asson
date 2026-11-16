@@ -6,6 +6,7 @@ import { getFacets, getProductRail, listProducts, searchProducts, SORTS, type Pr
 import { ProductRail } from "@/components/product/product-rail";
 import { ProductGrid } from "@/components/product/product-card";
 import { EmptyState } from "@/components/ui/misc";
+import { cn } from "@/lib/utils";
 import { buttonClass } from "@/components/ui/button";
 import { FilterPanel, ActiveFilters, SortSelect, MobileFilterButton, ResultsShell, FilterProvider } from "./filters";
 import { Pagination } from "./pagination";
@@ -30,6 +31,7 @@ export async function CatalogView({
   // nothing found: never a dead end, offer what others search for and what sells
   const [trending, popular] = result.products.length === 0 && filters.q ? await Promise.all([trendingSearches(6), getProductRail("best", 8)]) : [[], []];
   // what shoppers look for (and don't find) — written after the response, never slows the page
+  const bareMiss = result.total === 0 && isPlainSearch(filters);
   if (isPlainSearch(filters)) after(() => recordSearch(filters.q!, result.total));
   const sorts = [...(filters.q ? [{ id: "relevance" as const }] : []), ...SORTS].map((s) => ({ id: s.id, label: t(`sort.${s.id}`) }));
 
@@ -59,14 +61,15 @@ export async function CatalogView({
 
       <div className="sticky top-[var(--header-offset)] motion-safe:transition-[top] motion-safe:duration-300 z-20 -mx-4 mb-6 flex items-center justify-between gap-3 border-y border-line bg-paper/95 px-4 py-3 backdrop-blur md:mx-0 md:px-0 lg:static lg:border-x-0 lg:bg-transparent">
         <p className="text-[14px] text-muted">{t(result.total === 1 ? "cat.count1" : "cat.countN", { n: result.total.toLocaleString("en-IN" /* lakh grouping, as used in Nepal */) })}{filters.q && <> {t("cat.for", { q: filters.q })}</>}</p>
-        <div className="flex items-center gap-2">
+        {/* a search that found nothing has nothing to filter or sort: the empty state below suggests what to try */}
+        <div className={cn("flex items-center gap-2", bareMiss && "hidden")}>
           <MobileFilterButton facets={facets} filters={filters} total={result.total} />
           <SortSelect sorts={sorts} value={filters.sort ?? "featured"} />
         </div>
       </div>
 
       <div className="flex gap-10">
-        <aside className="hidden w-60 shrink-0 lg:block">
+        <aside className={cn("hidden w-60 shrink-0", !bareMiss && "lg:block")}>
           <div className="sticky top-[calc(var(--header-offset)+2rem)] motion-safe:transition-[top] motion-safe:duration-300 max-h-[calc(100vh-7rem)] overflow-y-auto pb-8 pr-2">
             <FilterPanel facets={facets} filters={filters} />
           </div>

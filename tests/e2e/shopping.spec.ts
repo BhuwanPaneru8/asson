@@ -66,6 +66,12 @@ test("a guest with no email checks out with just their mobile, then tracks the o
   await page.getByRole("button", { name: /Add to bag/ }).first().click();
   await expect(page.getByRole("dialog", { name: /Your bag/ })).toBeVisible();
 
+  // the bag's summary adds up: full price, the saving, then the total
+  await page.goto("/cart");
+  await expect(page.getByText(/^Items \(1\)$/)).toBeVisible();
+  await expect(page.getByText("You save", { exact: true })).toBeVisible();
+  await expect(page.getByText("Total before delivery").first()).toBeVisible();
+
   await page.goto("/checkout");
   await page.waitForLoadState("networkidle");
   await page.getByLabel("Mobile number").fill(mobile);
@@ -79,6 +85,7 @@ test("a guest with no email checks out with just their mobile, then tracks the o
   await page.getByRole("button", { name: "Place order" }).click();
   await expect(page.getByRole("heading", { name: /Thank you/ })).toBeVisible();
   const number = (await page.locator("b", { hasText: /^AS\d{6}$/ }).first().textContent())!;
+  await expect(page.getByText(`We'll text updates to ${mobile}.`)).toBeVisible(); // no email given, and none is claimed
 
   // a fresh visitor finds it with the order number and the mobile number
   await page.context().clearCookies({ name: /^(?!asson_consent$)/ });

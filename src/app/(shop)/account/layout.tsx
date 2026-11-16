@@ -1,6 +1,10 @@
+import type { Metadata } from "next";
 import { requireUser } from "@/lib/auth";
 import { AccountNav } from "@/components/account/account-nav";
 import { getT } from "@/lib/i18n/server";
+
+// each account page sets its own title; this covers the overview
+export const metadata: Metadata = { title: { default: "My account", template: "%s | Asson" }, robots: { index: false } };
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
