@@ -99,3 +99,17 @@ test("a guest with no email checks out with just their mobile, then tracks the o
   await expect(page).toHaveURL(/\/orders\//);
   await expect(page.getByText(number).first()).toBeVisible();
 });
+
+test("the size guide opens on the product page and finds your size from a measurement", async ({ page }) => {
+  await page.goto("/p/oxford-button-down-shirt");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Size guide" }).click();
+  const panel = page.getByRole("dialog", { name: "Size guide" });
+  await expect(panel.getByRole("columnheader", { name: "Chest (in)" })).toBeVisible(); // the tops chart, for a shirt
+  await panel.getByLabel("What's my size?").fill("39");
+  await expect(panel.getByText("Your size: M")).toBeVisible();
+  await panel.getByRole("button", { name: "Choose M" }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Size M/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/\/p\/oxford-button-down-shirt/); // never left the product
+});

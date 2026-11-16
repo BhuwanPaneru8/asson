@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Heart, Ruler, Truck, RotateCcw, ChevronDown, Check, MessageCircle } from "lucide-react";
+import { Heart, Truck, RotateCcw, ChevronDown, Check, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { addToCart } from "@/actions/cart";
 import { toggleWishlist } from "@/actions/wishlist";
@@ -16,6 +15,7 @@ import type { RateMap } from "@/lib/delivery-shared";
 import { cn, formatPrice } from "@/lib/utils";
 import { Gallery } from "./gallery";
 import { NotifyMe } from "./notify-me";
+import { SizePanel } from "./size-panel";
 import { PriceDropAlert } from "./price-drop";
 import { useT } from "@/components/site/i18n-provider";
 
@@ -141,7 +141,7 @@ export function ProductExperience({ product, fitSummary, swapFit, rates }: { pro
             <div id="size-picker" className="mt-7">
               <div className="flex items-center justify-between">
                 <p className={cn("text-[14px]", sizeError && "text-danger")}><span className="font-semibold">{t("pp.size")}</span> {size ?? (sizeError ? t("pp.pickSize") : t("pp.select"))}</p>
-                <Link href="/size-guide" className="flex items-center gap-1.5 text-[13px] underline underline-offset-4"><Ruler className="h-3.5 w-3.5" /> {t("nav.sizeGuide")}</Link>
+                <SizePanel sizes={sizes} onPick={(s) => { setSize(s); setSizeError(false); }} />
               </div>
               <div className={cn("mt-3 grid grid-cols-5 gap-x-2 gap-y-3", sizeError && "animate-[pulse_0.4s_ease-in-out_1]")}>
                 {sizes.map((s) => {

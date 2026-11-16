@@ -7,6 +7,7 @@ import { store } from "@/lib/config";
 import { deliveryFee, etaRange, rateFor, type RateMap } from "@/lib/delivery-shared";
 import { cn, formatPrice, formatShortDate } from "@/lib/utils";
 import { useT } from "@/components/site/i18n-provider";
+import { useShop } from "@/components/site/shop-provider";
 
 const KEY = "asson_district";
 
@@ -15,8 +16,10 @@ export function DeliveryEstimator({ rates, subtotal, className }: { rates: RateM
   const [district, setDistrict] = useState("");
   const { t, l } = useT();
   // restore after hydration — localStorage is client-only
+  // the district chosen on this device, else a signed-in shopper's saved address
+  const saved = useShop().user?.district;
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { try { const d = localStorage.getItem(KEY); if (d) setDistrict(d); } catch {} }, []);
+  useEffect(() => { let d: string | null = null; try { d = localStorage.getItem(KEY); } catch {} if (d || saved) setDistrict(d || saved!); }, [saved]);
   const choose = (d: string) => { setDistrict(d); try { localStorage.setItem(KEY, d); } catch {} };
 
   const rate = rateFor(rates, district);

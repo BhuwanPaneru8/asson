@@ -109,3 +109,25 @@ describe("computeTotals", () => {
     expect(computeTotals([], { method: "standard", rate: ktm }).total).toBe(0);
   });
 });
+
+describe("size charts", () => {
+  it("picks the chart from a product's sizes", async () => {
+    const { chartFor } = await import("@/lib/size-charts");
+    expect(chartFor(["S", "M", "L"])).toBe("tops");
+    expect(chartFor(["28", "30", "32"])).toBe("bottoms");
+    expect(chartFor(["2-3Y", "4-5Y"])).toBe("kids");
+    expect(chartFor(["Free"])).toBe("tops");
+  });
+  it("suggests a size from a measurement, sizing up between two", async () => {
+    const { suggestSize } = await import("@/lib/size-charts");
+    expect(suggestSize("tops", 39)).toBe("M");
+    expect(suggestSize("tops", 38)).toBe("M"); // on the line between S and M: the larger
+    expect(suggestSize("tops", 50)).toBeNull();
+    expect(suggestSize("bottoms", 31)).toBe("32");
+    expect(suggestSize("bottoms", 30)).toBe("30");
+    expect(suggestSize("kids", 112)).toBe("6-7Y"); // between 4-5Y (104–110) and 6-7Y (116–122): size up
+    expect(suggestSize("kids", 80)).toBeNull(); // smaller than the chart
+    expect(suggestSize("kids", 120)).toBe("6-7Y");
+    expect(suggestSize("tops", Number.NaN)).toBeNull();
+  });
+});

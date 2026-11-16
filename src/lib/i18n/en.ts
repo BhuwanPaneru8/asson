@@ -813,6 +813,14 @@ export const en = {
   "size.chest": "Chest:",
   "size.waist": "Waist:",
   "size.hip": "Hip:",
+  "size.whatsMine": "What's my size?",
+  "size.askChest": "Your chest, in inches (around the fullest part)",
+  "size.askWaist": "Your waist, in inches",
+  "size.askHeight": "Your child's height, in cm",
+  "size.yours": "Your size: {size}",
+  "size.pick": "Choose {size}",
+  "size.offChart": "That's outside our chart. Message us and we'll help.",
+  "size.allCharts": "All size charts",
 
   // cancel and return reasons (stored in English for the team; shown translated)
   "why.Ordered by mistake": "Ordered by mistake",
