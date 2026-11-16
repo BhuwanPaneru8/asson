@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { Lock, Tag, X, Check, Plus, Sparkles, Store, Truck } from "lucide-react";
+import { Lock, Tag, X, Check, Plus, Sparkles, Store, Truck, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { placeOrder, quoteCheckout, type Quote } from "@/actions/checkout";
 import type { CartView } from "@/lib/cart";
@@ -39,6 +39,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
   const [coupon, setCoupon] = useState<string | undefined>(initialCode);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [usePoints, setUsePoints] = useState(false);
+  const [showSummary, setShowSummary] = useState(false); // phones: the bag at the top of checkout, folded
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -110,6 +111,28 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
       </div>
       <form onSubmit={submit} className="grid gap-10 lg:grid-cols-12" noValidate>
         <div className="space-y-10 lg:col-span-7">
+          {/* phones: what's in the bag and the total, at the top (the full summary is at the end of the form) */}
+          <div className="border border-line bg-white lg:hidden">
+            <button type="button" onClick={() => setShowSummary((v) => !v)} aria-expanded={showSummary} aria-controls="co-mini-summary" className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-[14px]">
+              <span className="flex items-center gap-1.5 font-medium">{showSummary ? t("co.hideSummary") : t("co.showSummary")} <span className="font-normal text-muted">({cart.count})</span> <ChevronDown className={cn("h-4 w-4 transition-transform", showSummary && "rotate-180")} aria-hidden /></span>
+              <span className="whitespace-nowrap text-[16px] font-semibold tabular-nums">{formatPrice(totals ? totals.total : itemsAfterDiscount)}</span>
+            </button>
+            {showSummary && (
+              <ul id="co-mini-summary" className="space-y-3 border-t border-line px-4 py-4">
+                {cart.lines.map((ln) => (
+                  <li key={ln.id} className="flex items-center gap-3">
+                    <div className="relative h-16 w-12 shrink-0 bg-cloud">{ln.image && <Image src={ln.image} alt="" fill sizes="48px" className="object-cover" />}</div>
+                    <div className="min-w-0 flex-1 text-[13.5px]"><p className="line-clamp-1 font-medium">{pick(locale, ln.name, ln.nameNe)}</p><p className="text-muted">{ln.color} · {ln.size} · ×{ln.quantity}</p></div>
+                    <p className="whitespace-nowrap text-[13.5px] font-medium tabular-nums">{formatPrice(ln.unitPrice * ln.quantity)}</p>
+                  </li>
+                ))}
+                {totals && totals.discount + totals.pointsDiscount > 0 && <li className="flex justify-between text-[13.5px] text-success"><span>{t("sum.discount")}</span><span className="tabular-nums">−{formatPrice(totals.discount + totals.pointsDiscount)}</span></li>}
+                {totals && ready && <li className="flex justify-between text-[13.5px]"><span>{pickup ? t("sum.pickup") : t("sum.delivery")}</span><span className="tabular-nums">{totals.shippingFee === 0 ? t("ship.free") : formatPrice(totals.shippingFee)}</span></li>}
+                <li className="border-t border-line pt-3 text-[12.5px] text-muted">{ready ? t("sum.total") : t("sum.totalBefore")} · {l(store.vatLabel)}</li>
+              </ul>
+            )}
+          </div>
+
           {formError && <div role="alert" className="border border-danger/30 bg-[#fbe9e7] p-4 text-[14.5px] text-danger">{formError}</div>}
 
           <Step n={1} title={t("co.contact")}>
@@ -238,7 +261,7 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
                     <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[11px] text-white">{l.quantity}</span>
                   </div>
                   <div className="min-w-0 flex-1 text-[13.5px]"><p className="line-clamp-1 font-medium">{pick(locale, l.name, l.nameNe)}</p><p className="text-muted">{l.color} · {l.size}</p></div>
-                  <p className="text-[13.5px] font-medium">{formatPrice(l.unitPrice * l.quantity)}</p>
+                  <p className="whitespace-nowrap text-[13.5px] font-medium tabular-nums">{formatPrice(l.unitPrice * l.quantity)}</p>
                 </li>
               ))}
             </ul>
@@ -291,7 +314,6 @@ export function CheckoutForm({ cart, user, addresses, onlineEnabled, rates, pick
               {payment === "COD" ? t("co.place") : t("co.continuePay")}
             </Button>
             <p className="mt-3 text-center text-[12.5px] leading-relaxed text-muted">{rich(t("policies.agree"), { terms: <Link href="/policies/terms" target="_blank" className="underline underline-offset-2 hover:text-ink">{t("policies.terms")}</Link>, privacy: <Link href="/policies/privacy" target="_blank" className="underline underline-offset-2 hover:text-ink">{t("policies.privacy")}</Link> })}</p>
-            <p className="mt-3 text-center text-[12px] text-muted">{rich(t("co.agree"), { terms: <Link href="/help#terms" className="underline">{t("co.termsLink")}</Link>, privacy: <Link href="/help#privacy" className="underline">{t("co.privacyLink")}</Link> })}</p>
           </div>
         </aside>
       </form>

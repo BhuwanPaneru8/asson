@@ -7,12 +7,12 @@ import { makeProduct, makeUser, resetDb } from "../support/db";
 const DAY = 86_400_000;
 const NOW = new Date("2026-11-15T06:00:00Z");
 
-async function order(o: { daysAgo: number; total: number; shipping?: number; userId?: string; phone?: string; channel?: "ONLINE" | "STORE"; status?: "DELIVERED" | "CANCELLED" | "RETURNED"; name?: string }) {
+async function order(o: { daysAgo: number; total: number; shipping?: number; userId?: string; phone?: string; channel?: "ONLINE" | "STORE"; status?: "DELIVERED" | "CANCELLED" | "RETURNED"; name?: string; /** counted from this time instead of NOW */ from?: Date }) {
   return db.order.create({
     data: {
       email: "x@test.local", phone: o.phone ?? "", userId: o.userId, status: o.status ?? "DELIVERED", paymentMethod: "COD", channel: o.channel ?? "ONLINE",
       subtotal: o.total - (o.shipping ?? 0), shippingFee: o.shipping ?? 0, total: o.total, shippingMethod: "standard", shippingAddress: { fullName: o.name ?? "Guest" },
-      createdAt: new Date(NOW.getTime() - o.daysAgo * DAY),
+      createdAt: new Date((o.from ?? NOW).getTime() - o.daysAgo * DAY),
     },
   });
 }
@@ -78,12 +78,14 @@ describe("shop funnel", () => {
     for (let i = 0; i < 60; i++) await recordFunnel("view", b.id);
     await recordFunnel("add", b.id); // 1 in 60: weak
     for (let i = 0; i < 6; i++) await recordFunnel("checkout");
-    await order({ daysAgo: 0, total: 100_000, phone: "9800000009" });
-    const f = await funnelInsights(30, new Date());
+    // the funnel counts on the real clock (recordFunnel stamps today), so these orders do too
+    const today = new Date();
+    await order({ daysAgo: 0, total: 100_000, phone: "9800000009", from: today });
+    const f = await funnelInsights(30, today);
     expect(f).toMatchObject({ views: 120, adds: 13, checkouts: 6, orders: 1 });
     // orders from before counting began aren't compared with views
-    await order({ daysAgo: 20, total: 100_000, phone: "9800000010" });
-    expect((await funnelInsights(30, new Date())).orders).toBe(1);
+    await order({ daysAgo: 20, total: 100_000, phone: "9800000010", from: today });
+    expect((await funnelInsights(30, today)).orders).toBe(1);
     expect(f.rates).toMatchObject({ viewToAdd: 10.8, addToCheckout: 46.2, checkoutToOrder: 16.7 });
     expect(f.products.map((p) => [p.name, p.addRate, p.weak])).toEqual(expect.arrayContaining([["Linen Shirt", 20, false], ["Wool Coat", 1.7, true]]));
     expect(await db.productStat.count()).toBe(2); // one row per product per day, not per view
