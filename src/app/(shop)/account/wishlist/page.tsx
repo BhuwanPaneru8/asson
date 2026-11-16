@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { cardSelect, toCard } from "@/lib/catalog";
 import { ProductGrid } from "@/components/product/product-card";
 import { EmptyState } from "@/components/ui/misc";
+import { ProductRail } from "@/components/product/product-rail";
+import { getProductRail } from "@/lib/catalog";
 import { buttonClass } from "@/components/ui/button";
 import { getT } from "@/lib/i18n/server";
 
@@ -14,7 +16,14 @@ export default async function WishlistPage() {
   const user = await requireUser("/account/wishlist");
   const { t } = await getT();
   const items = await db.wishlistItem.findMany({ where: { userId: user.id, product: { status: "ACTIVE" } }, orderBy: { createdAt: "desc" }, include: { product: { select: cardSelect } } });
-  if (!items.length) return <EmptyState icon={<Heart className="h-10 w-10" strokeWidth={1.2} />} title={t("acc.wishEmpty")} body={t("acc.wishEmptyBody")} action={<Link href="/shop" className={buttonClass()}>{t("acc.discover")}</Link>} />;
+  if (!items.length)
+    return (
+      <>
+        <EmptyState icon={<Heart className="h-10 w-10" strokeWidth={1.2} />} title={t("acc.wishEmpty")} body={t("acc.wishEmptyBody")} action={<Link href="/shop" className={buttonClass()}>{t("acc.discover")}</Link>} />
+        {/* something to start with: tap a heart here */}
+        <div className="-mx-4 md:mx-0"><ProductRail title={t("bag.popular")} products={await getProductRail("best", 8)} /></div>
+      </>
+    );
   return (
     <div>
       <h2 className="mb-6 text-[18px] font-semibold">{t("acc.saved", { n: items.length })}</h2>

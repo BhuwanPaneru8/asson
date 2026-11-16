@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Package, Store, Truck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Package, Store, Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewOrder } from "@/lib/order-access";
 import { exchangeOptions } from "@/lib/exchanges";
 import { BuyAgain, OrderChange } from "@/components/account/order-change";
 import { CUSTOMER_CANCELLABLE } from "@/lib/orders";
-import { store } from "@/lib/config";
+import { store, whatsappUrl } from "@/lib/config";
 import { addressLines, formatDate, formatOrderNumber, formatPrice, now } from "@/lib/utils";
 import { OrderProgress } from "@/components/account/order-timeline";
 import { OrderActions } from "@/components/account/order-actions";
@@ -57,24 +57,27 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <div className="mb-10 flex flex-col items-center text-center">
           <CheckCircle2 className="h-14 w-14 text-success" strokeWidth={1.3} />
           <h1 className="mt-4 font-display text-4xl">{a?.fullName ? t("ord.thanksName", { name: a.fullName.split(" ")[0] }) : t("ord.thanks")}</h1>
-          <p className="mt-2 max-w-md text-[15px] text-muted">{rich(t("ord.confirmed", { email: order.email }), { number: <b className="text-ink">{formatOrderNumber(order.number)}</b> })}</p>
+          <p className="mt-2 max-w-md text-[15px] text-muted">{rich(t("ord.confirmed", { phone: order.phone }), { number: <b className="text-ink">{formatOrderNumber(order.number)}</b> })}</p>
           {!order.userId && <p className="mt-3 max-w-md text-[13.5px] text-muted">{rich(t("ord.guest"), { link: <Link href="/register" className="underline">{t("ord.createAccount")}</Link> })}</p>}
         </div>
       )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          {!placed && user && order.userId === user.id && (
+            <Link href="/account/orders" className="mb-3 inline-flex items-center gap-1.5 text-[13.5px] text-muted hover:text-ink"><ArrowLeft className="h-4 w-4" aria-hidden /> {t("ord.allOrders")}</Link>
+          )}
           {!placed && <h1 className="font-display text-3xl">{t("ord.title", { number: formatOrderNumber(order.number) })}</h1>}
           <p className="mt-1 text-[14px] text-muted">{t("ord.placedOn", { date: formatDate(order.createdAt), n: order.items.reduce((s, i) => s + i.quantity, 0) })}</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "success" : "neutral"}>{t(pickup && order.status === "PACKED" ? "status.readyForPickup" : pickup && order.status === "DELIVERED" ? "status.collected" : `status.${order.status}`)}</Badge>
-          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? (pickup ? t("co.payAtShop") : t("pay.cod")) : t("ord.prepaid")} · {t(`paystatus.${order.paymentStatus}`)}</Badge>
+          <Badge tone={order.paymentStatus === "PAID" ? "success" : order.paymentStatus === "REFUNDED" ? "warn" : "neutral"}>{order.paymentMethod === "COD" ? (pickup ? t("co.payAtShop") : t("pay.cod")) : t("ord.prepaid")}{order.status === "CANCELLED" && order.paymentStatus === "PENDING" ? "" : ` · ${t(`paystatus.${order.paymentStatus}`)}`}</Badge>
         </div>
       </div>
 
       <div className="mt-8 border border-line bg-white p-5 md:p-8">
-        <OrderProgress status={order.status} events={order.events} pickup={pickup} t={t} />
+        <OrderProgress status={order.status} events={order.events} pickup={pickup} paid={order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED"} t={t} />
         {pickup && order.status === "PACKED" && (
           <p className="mt-6 flex items-center gap-2 text-[14px]"><Store className="h-4 w-4 shrink-0" /> <span>{rich(order.paymentStatus !== "PAID" ? t("ord.readyAtPay", { amount: formatPrice(order.total) }) : t("ord.readyAt"), { store: <b>{a.store}</b> })}</span></p>
         )}
@@ -126,7 +129,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="flex justify-between border-t border-line pt-2 text-[15px] font-semibold"><dt>{t("sum.total")}</dt><dd>{formatPrice(order.total)}</dd></div>
             </dl>
           </div>
-          <p className="text-[13px] text-muted"><Link href={`/help?order=${formatOrderNumber(order.number)}#write`} className="font-medium text-ink underline underline-offset-4">{t("care.problemWithOrder")}</Link> {t("ord.help", { phone: store.supportPhone, email: store.supportEmail })}</p>
+          <p className="text-[13px] text-muted"><Link href={`/help?order=${formatOrderNumber(order.number)}#write`} className="font-medium text-ink underline underline-offset-4">{t("care.problemWithOrder")}</Link>{" "}
+            {rich(t("ord.helpLinks"), {
+              phone: <a href={`tel:${store.phonePrefix}${store.supportPhone}`} className="font-medium text-ink underline underline-offset-4">{store.supportPhone}</a>,
+              whatsapp: <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="font-medium text-ink underline underline-offset-4">WhatsApp</a>,
+              email: <a href={`mailto:${store.supportEmail}?subject=${encodeURIComponent(`Order ${formatOrderNumber(order.number)}`)}`} className="font-medium text-ink underline underline-offset-4">{store.supportEmail}</a>,
+            })}
+          </p>
         </div>
       </div>
       {placed && <div className="mt-12 text-center"><Link href="/shop" className={buttonClass("secondary")}>{t("bag.continue")}</Link></div>}

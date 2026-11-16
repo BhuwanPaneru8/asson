@@ -37,7 +37,7 @@ export default async function AccountHome() {
     <div className="space-y-10">
       <div className="grid grid-cols-3 gap-3">
         {[[t("footer.orders"), count, "/account/orders"], [t("nav.wishlist"), wish, "/account/wishlist"], [t("acc.totalSpent"), formatPrice(spent._sum.total ?? 0), "/account/orders"]].map(([l, v, h]) => (
-          <Link key={l as string} href={h as string} className="border border-line bg-white p-4 hover:border-ink"><p className="text-[13px] text-muted">{l}</p><p className="mt-1 text-2xl font-semibold">{v}</p></Link>
+          <Link key={l as string} href={h as string} className="min-w-0 border border-line bg-white p-3 hover:border-ink sm:p-4"><p className="truncate text-[13px] text-muted">{l}</p><p className="mt-1 whitespace-nowrap text-[clamp(1.05rem,5vw,1.5rem)] font-semibold tabular-nums">{v}</p></Link>
         ))}
       </div>
       <ReferralCard

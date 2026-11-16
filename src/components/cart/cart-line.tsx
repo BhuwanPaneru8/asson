@@ -39,9 +39,9 @@ export function CartLine({ line, onNavigate, compact }: { line: Line; onNavigate
             <Link href={`/p/${line.slug}`} onClick={onNavigate} className="line-clamp-2 text-[14.5px] font-medium leading-snug hover:text-accent">{name}</Link>
             <p className="mt-1 text-[13px] text-muted">{t("line.variant", { color: line.color, size: line.size })}</p>
           </div>
-          <div className="text-right">
-            <p className="text-[14.5px] font-semibold">{formatPrice(line.unitPrice * qty)}</p>
-            {line.compareAtPrice && line.compareAtPrice > line.unitPrice && <p className="text-[12.5px] text-muted line-through">{formatPrice(line.compareAtPrice * qty)}</p>}
+          <div className="shrink-0 text-right">
+            <p className="whitespace-nowrap text-[14.5px] font-semibold tabular-nums">{formatPrice(line.unitPrice * qty)}</p>
+            {line.compareAtPrice && line.compareAtPrice > line.unitPrice && <p className="whitespace-nowrap text-[12.5px] text-muted line-through tabular-nums">{formatPrice(line.compareAtPrice * qty)}</p>}
           </div>
         </div>
         {!line.available && (

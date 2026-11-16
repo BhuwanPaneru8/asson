@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { AuthPanel } from "@/components/account/auth-panel";
-import { Heart, Menu, ShoppingBag, User, ChevronRight } from "lucide-react";
+import { Heart, Menu, ShoppingBag, User, ChevronRight, Package, LifeBuoy, MessageCircle } from "lucide-react";
+import { whatsappUrl } from "@/lib/config";
 import { Sheet } from "@/components/ui/sheet";
 import { useShop } from "./shop-provider";
 import { useT } from "./i18n-provider";
@@ -82,8 +83,9 @@ export function MobileNavButton({ nav, collections, hasSale = true, hasLooks = f
             <div className="mt-auto space-y-3 border-t border-line px-5 py-6 text-[15px]">
               <Link onClick={close} href={user ? "/account" : "/login"} className="flex items-center gap-3"><User className="h-5 w-5" strokeWidth={1.6} /> {user ? t("nav.hi", { name: user.name.split(" ")[0] }) : t("nav.signInOrCreate")}</Link>
               <Link onClick={close} href="/account/wishlist" className="flex items-center gap-3"><Heart className="h-5 w-5" strokeWidth={1.6} /> {t("nav.wishlist")}</Link>
-              <Link onClick={close} href="/track" className="block pl-8 text-muted">{t("nav.track")}</Link>
-              <Link onClick={close} href="/help" className="block pl-8 text-muted">{t("nav.help")}</Link>
+              <Link onClick={close} href="/track" className="flex items-center gap-3"><Package className="h-5 w-5" strokeWidth={1.6} /> {t("nav.track")}</Link>
+              <Link onClick={close} href="/help" className="flex items-center gap-3"><LifeBuoy className="h-5 w-5" strokeWidth={1.6} /> {t("nav.help")}</Link>
+              <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3"><MessageCircle className="h-5 w-5" strokeWidth={1.6} /> {t("nav.whatsapp")}</a>
             </div>
           </div>
         ) : (
