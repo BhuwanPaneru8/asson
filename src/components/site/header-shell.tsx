@@ -12,12 +12,14 @@ import { cn } from "@/lib/utils";
 export function HeaderShell({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const [hidden, setHidden] = useState(false);
+  const [scrolled, setScrolled] = useState(false); // a soft shadow once the page moves under the header
 
   useEffect(() => {
     let last = window.scrollY, ticking = false;
     const update = () => {
       ticking = false;
       const y = window.scrollY, dy = y - last;
+      setScrolled(y > 8);
       if (Math.abs(dy) < 6) return;
       last = y;
       const focused = ref.current?.contains(document.activeElement) && document.activeElement !== document.body;
@@ -37,7 +39,8 @@ export function HeaderShell({ children }: { children: React.ReactNode }) {
       ref={ref}
       onFocusCapture={() => setHidden(false)}
       className={cn(
-        "sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/85 motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        "sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur supports-[backdrop-filter]:bg-paper/85 motion-safe:transition-[transform,box-shadow] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        scrolled && "shadow-[0_1px_12px_rgba(20,20,20,0.06)]",
         hidden && "-translate-y-full",
       )}
     >

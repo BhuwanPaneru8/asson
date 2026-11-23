@@ -19,6 +19,9 @@ const sizes: Record<Size, string> = {
   icon: "h-10 w-10 justify-center",
 };
 
+/** a light press on tap (not for people who asked for less motion) */
+const base = "inline-flex items-center justify-center gap-2 font-medium tracking-wide transition-[background-color,border-color,color,opacity,transform] duration-200 active:scale-[0.985] motion-reduce:active:scale-100";
+
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; loading?: boolean };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -30,7 +33,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium tracking-wide transition-colors select-none disabled:cursor-not-allowed",
+        base, "select-none disabled:cursor-not-allowed",
         variants[variant],
         sizes[size],
         className,
@@ -44,5 +47,5 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 });
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", className?: string) {
-  return cn("inline-flex items-center justify-center gap-2 font-medium tracking-wide transition-colors", variants[variant], sizes[size], className);
+  return cn(base, variants[variant], sizes[size], className);
 }
