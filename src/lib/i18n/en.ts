@@ -181,6 +181,8 @@ export const en = {
   "home.useCodeMin": "Use code {code} at checkout on orders over {amount}. Easy {days}-day returns.",
   "home.startShopping": "Start shopping",
   "rail.viewAll": "View all",
+  "rail.prev": "Previous: {title}",
+  "rail.next": "Next: {title}",
   "col.label": "Collection",
   "rail.recent": "Recently viewed",
 
@@ -248,6 +250,8 @@ export const en = {
   "pc.unsave": "Remove from wishlist",
   "pc.save": "Save to wishlist",
   "pc.quickAdd": "Quick add",
+  "pc.chooseSize": "Choose a size for {name}",
+  "pc.closeSizes": "Close sizes",
   "pp.review1": "{n} review",
   "pp.reviewN": "{n} reviews",
   "pp.colour": "Colour:",

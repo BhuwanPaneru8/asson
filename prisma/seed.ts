@@ -1,30 +1,29 @@
 /**
- * Development seed. Creates a realistic catalogue, demo accounts, coupons, reviews and order history.
+ * Development seed: a year of demo trading so every part of Asson Commerce OS has realistic data to look at.
+ * ⚠ WIPES the database first (refuses in production). Run with `npm run db:seed`.
  *
  * Demo accounts (development only — change or delete before going live):
- *   admin@asson.test    / Admin@12345     (ADMIN)
- *   manager@asson.test  / Manager@12345   (MANAGER — approval PIN 2580)
- *   cashier@asson.test  / Cashier@12345   (CASHIER — store POS only)
- *   staff@asson.test    / Staff@12345     (STAFF — online order fulfilment)
- *   (owner approval PIN: 1357)
- *   customer@asson.test / Customer@12345  (CUSTOMER)
+ *   admin@asson.test    / Admin@12345     (owner, approval PIN 1357)
+ *   manager@asson.test  / Manager@12345   (operations manager, approval PIN 2580)
+ *   cashier@asson.test  / Cashier@12345   (cashier at the Flagship)
+ *   staff@asson.test    / Staff@12345     (warehouse and online orders)
+ *   customer@asson.test / Customer@12345  (a regular customer with a year of orders)
+ * Everyone else on the team (one per job and shop, see prisma/demo/people.ts) signs in with Demo@12345;
+ * shop managers' approval PINs are 4711 (Pokhara) and 4712 (Labim). Managers set up two-step sign-in on first login.
+ *
+ * What's in it and how it's built: prisma/demo/*.ts (history.ts runs the year; shared.ts explains the rules kept).
  */
-import { PrismaClient, type Gender, type OrderStatus } from "@prisma/client";
+import { DAY, IS_E2E, NOW, TODAY, U, addDays, db, int, pick, rand, slugify } from "./demo/shared";
 import bcrypt from "bcryptjs";
+import type { Gender } from "@prisma/client";
 import { CATEGORIES, SUPPLIERS, deliveryRates } from "./reference-data";
 import { loadOldMoneyEdit } from "./catalogue-old-money";
-
-const db = new PrismaClient();
-
-// Deterministic PRNG so the seed is reproducible
-let s = 42;
-const rand = () => ((s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296);
-const pick = <T,>(a: readonly T[]) => a[Math.floor(rand() * a.length)];
-const int = (min: number, max: number) => Math.floor(rand() * (max - min + 1)) + min;
-
-const U = (id: string) => `https://images.unsplash.com/photo-${id}`;
-
-const slugify = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+import { EXTRA_COLLECTIONS, EXTRA_LOOKS, EXTRA_TEMPLATES } from "./demo/catalogue-extra";
+import { createTeam, leaveDayMap, planAbsences, planLeave, planRota, runPayroll, writePeople, type Shop } from "./demo/people";
+import { FESTIVE, HISTORY_DAYS, runHistory } from "./demo/history";
+import type { P } from "./demo/context";
+import { HOLIDAYS, writeAlerts, writeCare, writeChecklists, writeIssues, writeReviews, writeStats, writeVisits } from "./demo/ops";
+import { buildLinks, lockDays, planMarkdowns, resetSequences, writeCounts, writeExpenses, writePayables, writeStatement } from "./demo/finance";
 
 const COLORS = {
   White: "#F5F5F2", Black: "#1C1C1C", Navy: "#1F2A44", Grey: "#9A9A9A", Charcoal: "#3C3C3C",
@@ -162,9 +161,10 @@ async function main() {
   if (process.env.NODE_ENV === "production" && process.env.SEED_FORCE !== "1") {
     throw new Error("Refusing to seed: this wipes all data. Set SEED_FORCE=1 to override.");
   }
-  console.log("Resetting data…");
-  // the cash book and damaged register are append-only (triggers block DELETE); TRUNCATE empties them for a fresh seed
-  await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit", "DamageEntry"`);
+  const started = Date.now();
+  console.log(`Resetting data… (${IS_E2E ? "E2E database" : "development"})`);
+  // append-only tables (triggers block DELETE): the cash book, the damaged register, statement lines, the audit trail
+  await db.$executeRawUnsafe(`TRUNCATE "StatementLine", "CashEntry", "BankDeposit", "DamageEntry", "AuditLog"`);
   // issued invoices and credit notes can't be deleted (triggers): TRUNCATE them and their prints/CBMS outbox, and restart numbering
   await db.$executeRawUnsafe(`TRUNCATE "CbmsSync", "InvoicePrint", "CreditNote", "TaxInvoice", "InvoiceSeries"`);
   // closed months and filed VAT returns lock expenses, bills and payments (triggers): clear them before wiping
@@ -181,11 +181,13 @@ async function main() {
     db.commissionRule.deleteMany(),
     db.checklistRun.deleteMany(), db.checklistTemplate.deleteMany(), db.announcement.deleteMany(),
     db.issueEvent.deleteMany(), db.issue.deleteMany(), db.careMessage.deleteMany(), db.careCase.deleteMany(), db.vmEvent.deleteMany(), db.vmSubmission.deleteMany(), db.vmBrief.deleteMany(), db.visitAction.deleteMany(), db.storeVisit.deleteMany(), db.visitTemplate.deleteMany(), db.shopBudget.deleteMany(), db.recurringCost.deleteMany(), db.binAssignment.deleteMany(), db.bin.deleteMany(), db.priceAlert.deleteMany(), db.priceEventItem.deleteMany(), db.priceEvent.deleteMany(), db.exchangeItem.deleteMany(), db.exchange.deleteMany(), db.deliveryAttempt.deleteMany(), db.returnToOrigin.deleteMany(), db.sopSignoff.deleteMany(), db.sop.deleteMany(), db.shiftSwap.deleteMany(), db.rosterShift.deleteMany(), db.rosterWeek.deleteMany(), db.manifestOrder.deleteMany(), db.manifest.deleteMany(), db.packCheck.deleteMany(), db.waveOrder.deleteMany(), db.pickWave.deleteMany(),
+    db.stockCountLine.deleteMany(), db.stockCount.deleteMany(), db.productLink.deleteMany(), db.holiday.deleteMany(), db.handbookRead.deleteMany(),
+    db.searchStat.deleteMany(), db.funnelStat.deleteMany(), db.notification.deleteMany(),
     db.stockAlert.deleteMany(), db.pointsEntry.deleteMany(),
     db.returnItem.deleteMany(), db.return.deleteMany(), db.goodsReceiptItem.deleteMany(), db.goodsReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(), db.purchaseOrder.deleteMany(), db.supplier.deleteMany(), db.expense.deleteMany(),
     db.posException.deleteMany(), db.posDevice.deleteMany(),
-    db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(),
+    db.orderEvent.deleteMany(), db.orderItem.deleteMany(), db.tender.deleteMany(), db.payment.deleteMany(), db.order.deleteMany(), db.codRemittance.deleteMany(),
     db.staffLocation.deleteMany(), db.look.deleteMany(), db.dayClose.deleteMany(), db.shift.deleteMany(), db.stockTransfer.deleteMany(),
     db.inventoryLog.deleteMany(), db.cartItem.deleteMany(), db.cart.deleteMany(),
     db.wishlistItem.deleteMany(), db.review.deleteMany(), db.productImage.deleteMany(),
@@ -193,70 +195,30 @@ async function main() {
     db.category.deleteMany(), db.address.deleteMany(), db.coupon.deleteMany(), db.user.deleteMany(),
   ]);
 
-  console.log("Users…");
-  const [admin, staff, customer] = await Promise.all([
-    db.user.create({ data: { email: "admin@asson.test", name: "Store Owner", role: "ADMIN", passwordHash: await bcrypt.hash("Admin@12345", 12), approvalPinHash: await bcrypt.hash("1357", 10) } }),
-    db.user.create({ data: { email: "staff@asson.test", name: "Ops Staff", role: "STAFF", passwordHash: await bcrypt.hash("Staff@12345", 12) } }),
-    db.user.create({
-      data: {
-        email: "customer@asson.test", name: "Aarav Shrestha", phone: "9841234567", passwordHash: await bcrypt.hash("Customer@12345", 12),
-        addresses: { create: { fullName: "Aarav Shrestha", phone: "9841234567", line1: "Naya Baneshwor-10, House 24", line2: "Behind Everest Bank", city: "Kathmandu Metropolitan City", district: "Kathmandu", state: "Bagmati", postalCode: "44600", isDefault: true } },
-      },
-    }),
-  ]);
-  void admin; void staff;
-  await db.user.create({ data: { email: "manager@asson.test", name: "Sita Manager", role: "MANAGER", passwordHash: await bcrypt.hash("Manager@12345", 12), approvalPinHash: await bcrypt.hash("2580", 10) } });
-  await db.user.create({ data: { email: "cashier@asson.test", name: "Ram Cashier", role: "CASHIER", passwordHash: await bcrypt.hash("Cashier@12345", 12) } });
-  // Locations: online orders are filled from the warehouse first, then the shops
-  const [warehouse, flagship, pokhara] = await Promise.all([
-    db.store.create({ data: { code: "WH-KTM", name: "Main warehouse", kind: "WAREHOUSE", district: "Kathmandu", address: "Balaju Industrial Area, Kathmandu", priority: 10 } }),
-    db.store.create({ data: { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP", district: "Kathmandu", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: "10am – 7pm, Sun–Fri", pickup: true, priority: 20 } }),
-    db.store.create({ data: { code: "PKR", name: "Asson Pokhara", kind: "SHOP", district: "Kaski", address: "Lakeside, Pokhara", hours: "10am – 8pm, every day", pickup: true, priority: 30 } }),
-  ]);
-  // where demo staff work: ops staff and the manager across the business (HQ), the cashier at the Flagship
-  await db.user.updateMany({ where: { email: { in: ["staff@asson.test", "manager@asson.test"] } }, data: { allLocations: true } });
-  await db.staffLocation.create({ data: { user: { connect: { email: "cashier@asson.test" } }, store: { connect: { id: flagship.id } } } });
-  // the manager also works the Flagship floor (on its roster), besides seeing every location
-  await db.staffLocation.create({ data: { user: { connect: { email: "manager@asson.test" } }, store: { connect: { id: flagship.id } } } });
-  // a missed shift for the manager to decide (People → Missed shifts): the cashier, on a weekday last month (this
-  // month's payroll stays free of it, so building and approving it in a demo isn't blocked)
-  {
-    const d = new Date(Date.now() + 345 * 60_000); // Nepal time
-    d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); d.setUTCDate(10);
-    while (d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1); // never the Saturday off
-    const cashier = await db.user.findUniqueOrThrow({ where: { email: "cashier@asson.test" }, select: { id: true } });
-    await db.absence.create({ data: { userId: cashier.id, storeId: flagship.id, date: d.toISOString().slice(0, 10), start: "10:00", end: "18:00" } });
-  }
-
-  const FIRST = ["Sita", "Bikash", "Anjali", "Prakash", "Sunita", "Rohan", "Pooja", "Nabin", "Srijana", "Suman", "Kritika", "Bibek", "Asmita", "Ramesh", "Manisha", "Sagar", "Pratiksha", "Aayush", "Sabina", "Dipesh"];
-  const LAST = ["Shrestha", "Maharjan", "Thapa", "Gurung", "Adhikari", "Rai", "Karki", "Tamang", "Bhandari", "Poudel", "KC", "Joshi", "Sharma", "Lama", "Yadav", "Magar", "Limbu", "Basnet"];
-  // [city, district, province, postal code, tole] — weighted toward the Valley like real demand
-  const CITIES = [
-    ["Kathmandu Metropolitan City", "Kathmandu", "Bagmati", "44600", "Baneshwor"], ["Kathmandu Metropolitan City", "Kathmandu", "Bagmati", "44600", "Maharajgunj"],
-    ["Budhanilkantha", "Kathmandu", "Bagmati", "44600", "Narayanthan"], ["Lalitpur Metropolitan City", "Lalitpur", "Bagmati", "44700", "Jhamsikhel"],
-    ["Lalitpur Metropolitan City", "Lalitpur", "Bagmati", "44700", "Kupondole"], ["Bhaktapur", "Bhaktapur", "Bagmati", "44800", "Suryabinayak"],
-    ["Pokhara Metropolitan City", "Kaski", "Gandaki", "33700", "Lakeside"], ["Biratnagar", "Morang", "Koshi", "56613", "Traffic Chowk"],
-    ["Butwal", "Rupandehi", "Lumbini", "32907", "Traffic Chowk"], ["Bharatpur", "Chitwan", "Bagmati", "44200", "Narayangadh"],
-    ["Dharan", "Sunsari", "Koshi", "56700", "Bhanu Chowk"], ["Birgunj", "Parsa", "Madhesh", "44300", "Ghantaghar"],
-    ["Janakpur", "Dhanusha", "Madhesh", "45600", "Bhanu Chowk"], ["Nepalgunj", "Banke", "Lumbini", "21900", "Dhamboji"],
-    ["Dhangadhi", "Kailali", "Sudurpashchim", "10900", "Chauraha"], ["Birendranagar", "Surkhet", "Karnali", "21700", "Birendra Chowk"],
-    ["Jomsom", "Mustang", "Gandaki", "33100", "Jomsom Bazaar"],
+  console.log("Locations and the team…");
+  // online orders are filled from the warehouse first, then the shops; Labim opened five months ago
+  const D0 = addDays(TODAY, -HISTORY_DAYS);
+  const longAgo = addDays(D0, -30);
+  const shopRows = [
+    { code: "WH-KTM", name: "Main warehouse", kind: "WAREHOUSE" as const, district: "Kathmandu", address: "Balaju Industrial Area, Kathmandu", priority: 10, opened: longAgo, closedOn: [6], hours: [9, 17] as [number, number] },
+    { code: "FLAGSHIP", name: "Asson Flagship", kind: "SHOP" as const, district: "Kathmandu", address: "Durbar Marg, Kathmandu", phone: "9761452270", hours: [10, 19] as [number, number], hoursText: "10am – 7pm, Sun–Fri", pickup: true, priority: 20, opened: longAgo, closedOn: [6] },
+    { code: "PKR", name: "Asson Pokhara", kind: "SHOP" as const, district: "Kaski", address: "Lakeside, Pokhara", hours: [10, 20] as [number, number], hoursText: "10am – 8pm, every day", pickup: true, priority: 30, opened: longAgo, closedOn: [] as number[] },
+    { code: "LTP", name: "Asson Labim", kind: "SHOP" as const, district: "Lalitpur", address: "Labim Mall, Pulchowk, Lalitpur", hours: [11, 20] as [number, number], hoursText: "11am – 8pm, every day", pickup: true, priority: 25, opened: addDays(TODAY, -150), closedOn: [] as number[] },
   ];
-  const pwHash = await bcrypt.hash("Customer@12345", 10);
-  const shoppers = [customer];
-  for (let i = 0; i < 40; i++) {
-    const name = `${pick(FIRST)} ${pick(LAST)}`;
-    const c = pick(CITIES);
-    shoppers.push(
-      await db.user.create({
-        data: {
-          email: `${slugify(name).replace("-", ".")}${i}@example.com`, name, phone: `98${int(10000000, 99999999)}`, passwordHash: pwHash,
-          createdAt: new Date(Date.now() - int(1, 180) * 86400000),
-          addresses: { create: { fullName: name, phone: `98${int(10000000, 99999999)}`, line1: `${c[4]}, House ${int(1, 300)}`, line2: pick(["Near the temple", "Opposite the bank", "Behind the school", null]), city: c[0], district: c[1], state: c[2], postalCode: c[3], isDefault: true } },
-        },
-      }),
-    );
+  const shops: Record<string, Shop> = {};
+  for (const r of shopRows) {
+    const row = await db.store.create({ data: { code: r.code, name: r.name, kind: r.kind, district: r.district, address: r.address, phone: "phone" in r ? r.phone : null, hours: "hoursText" in r ? r.hoursText : null, pickup: "pickup" in r ? r.pickup : false, priority: r.priority, minStaff: r.kind === "SHOP" ? 2 : 1, createdAt: new Date(`${r.opened}T03:00:00Z`) } });
+    shops[r.code] = { id: row.id, code: r.code, name: r.name, kind: r.kind, opened: r.opened, closedOn: r.closedOn, hours: r.hours };
   }
+  const people = await createTeam(db, shops);
+  const owner = people.owner;
+  const customerHash = await bcrypt.hash("Customer@12345", 10);
+  const aarav = await db.user.create({
+    data: {
+      email: "customer@asson.test", name: "Aarav Shrestha", phone: "9841234567", passwordHash: await bcrypt.hash("Customer@12345", 12), createdAt: new Date(`${addDays(D0, 10)}T09:00:00Z`), birthday: "03-14", referralCode: "AARAV10",
+      addresses: { create: { fullName: "Aarav Shrestha", phone: "9841234567", line1: "Naya Baneshwor-10, House 24", line2: "Behind Everest Bank", city: "Kathmandu Metropolitan City", district: "Kathmandu", state: "Bagmati", postalCode: "44600", isDefault: true } },
+    },
+  });
 
   console.log("Categories & collections…");
   const catIds = new Map<string, string>();
@@ -277,81 +239,93 @@ async function main() {
     { slug: "streetwear", name: "Streetwear", description: "Boxy fits and heavyweight cotton.", image: U("1529374255404-311a2a4f1fd9"), featured: false },
     { slug: "summer-edit", name: "Summer Edit", description: "Linen, voile and breathable cottons.", image: U("1469334031218-e382a71b716b"), featured: false },
     { slug: "party-edit", name: "Party Edit", description: "Satin, sparkle and statement silhouettes.", image: U("1515372039744-b8f02a3ae446"), featured: false },
+    ...EXTRA_COLLECTIONS,
   ];
   for (const [i, c] of COLLS.entries()) await db.collection.create({ data: { ...c, sortOrder: i } });
 
   console.log("Products…");
-  const all = [...TEMPLATES];
+  type Tpl = T & { nameNe?: string; status?: "DRAFT" | "ARCHIVED"; age?: number };
+  const all: Tpl[] = [...TEMPLATES];
   // a handful of "organic" line extensions on staples
   for (const t of TEMPLATES.filter((x) => ["Essential Crew Tee", "Ribbed Fitted Tee", "Classic Pullover Hoodie", "Stretch Chinos"].includes(x.name))) {
     for (const e of EXTRA_LINES) {
-      all.push({ ...t, name: `${t.name} ${e.suffix}`, brand: e.brand, price: t.price + e.priceDelta, mrp: undefined, featured: false, tags: [...t.tags, "organic"], material: "100% GOTS-certified organic cotton" });
+      all.push({ ...t, name: `${t.name} ${e.suffix}`, brand: e.brand, price: t.price + e.priceDelta, mrp: undefined, featured: false, tags: [...t.tags, "organic"], material: "100% GOTS-certified organic cotton", age: 150 });
     }
   }
+  // made-in-Nepal pieces, a draft and last season's archived tee (after the originals, so their SKUs don't move)
+  all.push(...(EXTRA_TEMPLATES as unknown as Tpl[]));
 
-  const productIds: { id: string; cat: string; price: number; name: string; slug: string; images: string[]; variants: { id: string; sku: string; color: string; size: string; costPrice: number | null }[] }[] = [];
+  const products: P[] = [];
+  const opening: { storeId: string; variantId: string; quantity: number; at: Date }[] = [];
   let skuN = 1000;
-  for (const [i, t] of all.entries()) {
+  for (const t of all) {
     const slug = slugify(t.name);
-    const created = new Date(Date.now() - int(0, 120) * 86400000);
+    // most of the range has been on sale for over a year; a few are recent arrivals
+    const ageDays = t.age ?? (rand() < 0.08 ? int(25, 70) : int(HISTORY_DAYS + 5, HISTORY_DAYS + 40));
+    const created = new Date(NOW.getTime() - ageDays * DAY);
     // purchase cost ≈ 42–54% of the selling price (typical for a brand buying from wholesalers)
     const unitCost = Math.round((npr(t.price) * (0.42 + rand() * 0.12))) * 100;
     const variantsData = t.colors.flatMap((color, ci) =>
       t.sizes.map((size, si) => {
-        // realistic stock curve: middle sizes deeper, some sold out, some low
+        // stock curve: middle sizes deeper; a few sizes start thin and sell out during the year
         const mid = Math.abs(si - (t.sizes.length - 1) / 2);
-        let stock = Math.max(0, Math.round(int(15, 60) - mid * 10));
-        const r = rand();
-        if (r < 0.08) stock = 0;
-        else if (r < 0.16) stock = int(1, 4);
-        return { sku: `AS-${String(skuN++).padStart(5, "0")}`, color, colorHex: COLORS[color], size, stock, position: ci * 100 + si, costPrice: unitCost };
+        let stock = Math.max(2, Math.round(int(18, 60) - mid * 10));
+        if (rand() < 0.1) stock = int(1, 3);
+        return { sku: `AS-${String(skuN++).padStart(5, "0")}`, color, colorHex: COLORS[color as ColorName] ?? "#888888", size, stock, position: ci * 100 + si, costPrice: unitCost };
       }),
     );
     const p = await db.product.create({
       data: {
-        name: t.name, slug, brand: t.brand, gender: t.gender, status: "ACTIVE",
+        name: t.name, nameNe: t.nameNe ?? null, slug, brand: t.brand, gender: t.gender, status: t.status ?? "ACTIVE",
         description: t.desc, details: t.details, material: t.material, fit: t.fit,
         care: "Machine wash cold with like colours. Do not bleach. Tumble dry low. Warm iron if needed.",
         tags: t.tags, featured: !!t.featured,
         price: npr(t.price) * 100, compareAtPrice: t.mrp ? npr(t.mrp) * 100 : null,
-        soldCount: int(5, 900), createdAt: created,
+        createdAt: created,
         categoryId: catIds.get(t.cat)!,
         collections: { connect: (t.collections ?? []).map((slug) => ({ slug })) },
         images: { create: t.images.map((id, pos) => ({ url: U(id), alt: `${t.name}${pos ? " — alternate view" : ""}`, position: pos })) },
-        // stock is added per location below (Variant.stock is derived from it)
+        // stock is added per location by the history (Variant.stock is derived from it)
         variants: { create: variantsData.map((v) => ({ ...v, stock: 0 })) },
       },
       include: { variants: true },
     });
-    const split = p.variants.flatMap((v) => {
-      const total = variantsData.find((x) => x.sku === v.sku)!.stock;
-      const wh = Math.ceil(total * 0.6), shop = Math.floor((total - wh) * 0.6);
-      return ([[warehouse.id, wh], [flagship.id, shop], [pokhara.id, total - wh - shop]] as const).filter(([, q]) => q > 0).map(([storeId, quantity]) => ({ variantId: v.id, storeId, quantity }));
-    });
-    await db.storeStock.createMany({ data: split });
-    await db.inventoryLog.createMany({ data: split.map(({ variantId, storeId, quantity }) => ({ variantId, storeId, delta: quantity, reason: "RECEIVED", note: "Opening stock", createdAt: created })) });
-    p.variants = await db.variant.findMany({ where: { productId: p.id } });
-    productIds.push({ id: p.id, cat: t.cat, price: p.price, name: p.name, slug: p.slug, images: t.images.map(U), variants: p.variants });
-    void i;
+    if (t.status !== "DRAFT") {
+      for (const v of p.variants) {
+        const total = variantsData.find((x) => x.sku === v.sku)!.stock;
+        const whQ = Math.ceil(total * 0.6), shopQ = Math.floor((total - whQ) * 0.6);
+        for (const [storeId, quantity] of [[shops["WH-KTM"].id, whQ], [shops.FLAGSHIP.id, shopQ], [shops.PKR.id, total - whQ - shopQ]] as const) if (quantity > 0) opening.push({ storeId, variantId: v.id, quantity, at: created });
+      }
+    }
+    const popularity = (t.featured ? 2.2 : 1) * (0.5 + rand() * 1.2) * (p.price < 150_000 ? 1.5 : p.price > 600_000 ? 0.45 : 1);
+    products.push({ id: p.id, name: p.name, slug: p.slug, cat: t.cat, gender: t.gender, brand: t.brand, price: p.price, status: p.status, createdAt: created, image: U(t.images[0]), popularity, tags: t.tags, variants: p.variants.map((v) => ({ id: v.id, sku: v.sku, color: v.color, size: v.size, costPrice: v.costPrice, productId: p.id })) });
   }
 
-  console.log("Complete-the-look pairings…");
+  // the Old Money Edit: a featured collection, two categories and four looks (same loader the live shop uses);
+  // its stock went into the warehouse. Launched about two months ago in this demo.
+  console.log("Old Money Edit:", await loadOldMoneyEdit(db));
+  const launched = new Date(NOW.getTime() - 58 * DAY);
+  const heritage = await db.product.findMany({ where: { id: { notIn: products.map((p) => p.id) } }, include: { variants: true, category: { select: { slug: true } }, images: { take: 1, orderBy: { position: "asc" } } } });
+  await db.product.updateMany({ where: { id: { in: heritage.map((p) => p.id) } }, data: { createdAt: launched } });
+  await db.inventoryLog.updateMany({ where: { variant: { productId: { in: heritage.map((p) => p.id) } } }, data: { createdAt: launched } });
+  for (const p of heritage) products.push({ id: p.id, name: p.name, slug: p.slug, cat: p.category.slug, gender: p.gender, brand: p.brand, price: p.price, status: p.status, createdAt: launched, image: p.images[0]?.url ?? "", popularity: (p.featured ? 1.8 : 0.9) * (0.6 + rand()), tags: p.tags, variants: p.variants.map((v) => ({ id: v.id, sku: v.sku, color: v.color, size: v.size, costPrice: v.costPrice, productId: p.id })) });
+
+  console.log("Complete-the-look pairings & Lookbook…");
   const LOOKS: [string, string[]][] = [
     ["men-t-shirts", ["men-jeans", "men-trousers", "men-jackets"]],
     ["men-shirts", ["men-trousers", "men-blazers"]],
     ["men-hoodies", ["men-jeans"]],
     ["women-tops", ["women-jeans", "women-skirts", "women-jackets"]],
     ["women-knitwear", ["women-skirts", "women-jeans"]],
+    ["men-ethnic", ["men-ethnic"]],
   ];
   for (const [top, bottoms] of LOOKS) {
-    const pool = productIds.filter((p) => bottoms.includes(p.cat));
-    for (const [k, p] of productIds.filter((x) => x.cat === top).entries()) {
-      const picks = [...new Set([pool[k % pool.length], pool[(k + 1) % pool.length], pool[(k + 3) % pool.length]].filter(Boolean).map((x) => x.id))];
-      await db.product.update({ where: { id: p.id }, data: { pairsWith: { connect: picks.map((id) => ({ id })) } } });
+    const pool = products.filter((p) => bottoms.includes(p.cat) && p.status === "ACTIVE");
+    for (const [k, p] of products.filter((x) => x.cat === top && x.status === "ACTIVE").entries()) {
+      const picks = [...new Set([pool[k % pool.length], pool[(k + 1) % pool.length], pool[(k + 3) % pool.length]].filter((x) => x && x.id !== p.id).map((x) => x.id))];
+      if (picks.length) await db.product.update({ where: { id: p.id }, data: { pairsWith: { connect: picks.map((id) => ({ id })) } } });
     }
   }
-
-  console.log("Lookbook…");
   // demo looks from seeded products (their own photos as heroes); the owner curates real ones in Admin → Lookbook
   const LOOKBOOK: { title: string; subtitle: string; story: string; cats: string[] }[] = [
     { title: "Weekend in Pokhara", subtitle: "Soft cotton, broken-in denim and a light layer for the lakeside breeze", story: "Easy pieces for a slow Saturday: a tee you can live in, jeans that only get better, and a jacket for when the evening turns cool by Phewa.", cats: ["men-t-shirts", "men-jeans", "men-jackets"] },
@@ -359,154 +333,87 @@ async function main() {
     { title: "City errands", subtitle: "Relaxed denim, a soft top and a jacket with pockets that matter", story: "From Jhamsikhel coffee to New Road shopping: comfortable enough to walk all day, put-together enough for lunch.", cats: ["women-tops", "women-jeans", "women-jackets"] },
     { title: "Winter in the valley", subtitle: "Warm knits over a swishy skirt", story: "Kathmandu mornings ask for wool. Layer a knit over a skirt with boots and you are ready from the first cup of tea to the last.", cats: ["women-knitwear", "women-skirts"] },
   ];
+  const lookStart = (await db.look.aggregate({ _max: { position: true } }))._max.position ?? 0;
   for (const [i, l] of LOOKBOOK.entries()) {
-    const picks = l.cats.map((c) => productIds.find((p) => p.cat === c)).filter((p): p is (typeof productIds)[number] => !!p);
+    const picks = l.cats.map((c) => products.find((p) => p.cat === c && p.status === "ACTIVE")).filter((p): p is P => !!p);
     if (picks.length < 2) continue;
-    await db.look.create({ data: { title: l.title, slug: slugify(l.title), subtitle: l.subtitle, story: l.story, published: true, position: i, items: { create: picks.map((p, n) => ({ productId: p.id, position: n })) } } });
+    await db.look.create({ data: { title: l.title, slug: slugify(l.title), subtitle: l.subtitle, story: l.story, published: true, position: lookStart + 1 + i, items: { create: picks.map((p, n) => ({ productId: p.id, position: n })) } } });
+  }
+  for (const [i, l] of EXTRA_LOOKS.entries()) {
+    const pieces = l.pieces.map((s) => products.find((p) => p.slug === s)).filter((p): p is P => !!p);
+    if (pieces.length < 2) continue;
+    await db.look.create({ data: { title: l.title, slug: slugify(l.title), subtitle: l.subtitle, story: l.story, published: l.published, position: lookStart + 10 + i, items: { create: pieces.map((p, n) => ({ productId: p.id, position: n, note: l.notes?.[n] ?? null })) } } });
   }
 
-  console.log("Delivery rates…");
+  console.log("Delivery rates, suppliers, coupons, holidays…");
   await db.deliveryRate.deleteMany();
   await db.deliveryRate.createMany({ data: deliveryRates() });
-
-
-  console.log("Suppliers, purchasing & expenses…");
-  const ownerId = (await db.user.findUniqueOrThrow({ where: { email: "admin@asson.test" } })).id;
+  const rates = new Map(deliveryRates().map((r) => [r.district, { zone: r.zone, fee: r.fee, etaMax: r.etaMaxDays }]));
   const suppliers = [];
-  for (const sp of SUPPLIERS) suppliers.push(await db.supplier.create({ data: sp }));
-  const shirtVariants = productIds.filter((p) => /Shirt|Tee|Polo/.test(p.name)).flatMap((p) => p.variants).slice(0, 6);
-  const jeanVariants = productIds.filter((p) => /Jeans/.test(p.name)).flatMap((p) => p.variants).slice(0, 6);
-  // a fully received PO (history) and an open one awaiting delivery
-  const received = await db.purchaseOrder.create({
-    data: {
-      supplierId: suppliers[0].id, status: "RECEIVED", landedCost: 150000, createdById: ownerId, orderedAt: new Date(Date.now() - 20 * 86400000), createdAt: new Date(Date.now() - 21 * 86400000),
-      items: { create: shirtVariants.map((v) => ({ variantId: v.id, quantityOrdered: 20, quantityReceived: v === shirtVariants[0] ? 18 : 20, quantityDamaged: v === shirtVariants[0] ? 2 : 0, unitCost: v.costPrice ?? 50000 })) },
-    },
-    include: { items: true },
-  });
-  await db.goodsReceipt.create({ data: { purchaseOrderId: received.id, receivedById: ownerId, note: "Invoice RT-2211 · 2 shirts with stains returned", createdAt: new Date(Date.now() - 18 * 86400000), items: { create: received.items.map((i) => ({ poItemId: i.id, variantId: i.variantId, quantity: i.quantityReceived, damaged: i.quantityDamaged, landedUnitCost: i.unitCost + 1250 })) } } });
-  await db.purchaseOrder.create({
-    data: {
-      supplierId: suppliers[3].id, status: "ORDERED", landedCost: 800000, notes: "Cargo via Birgunj, ~10 days", createdById: ownerId, orderedAt: new Date(Date.now() - 3 * 86400000), expectedAt: new Date(Date.now() + 7 * 86400000),
-      items: { create: jeanVariants.map((v) => ({ variantId: v.id, quantityOrdered: 30, unitCost: v.costPrice ?? 90000 })) },
-    },
-  });
-  const ym = (offset: number) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - offset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
-  for (const [offset, day] of [[1, "02"], [0, "02"]] as const) {
-    const m = ym(offset);
-    await db.expense.createMany({
-      data: [
-        { date: `${m}-${day}`, category: "RENT", amount: 1000000, description: "Shop rent", paidVia: "Bank", createdById: ownerId },
-        { date: `${m}-${day}`, category: "SALARIES", amount: 3000000, description: "Staff salaries (3)", paidVia: "Bank", createdById: ownerId },
-        { date: `${m}-0${Number(day) + 2}`, category: "UTILITIES", amount: 450000, description: "Electricity, water, internet", paidVia: "eSewa", createdById: ownerId },
-        { date: `${m}-0${Number(day) + 3}`, category: "MARKETING", amount: 800000, description: "Instagram & TikTok ads", paidVia: "Card", createdById: ownerId },
-        { date: `${m}-0${Number(day) + 4}`, category: "PACKAGING", amount: 250000, description: "Mailer bags, tissue, stickers", paidVia: "Cash", createdById: ownerId },
-      ],
-    });
+  for (const sp of SUPPLIERS) {
+    const nepal = sp.country === "Nepal";
+    suppliers.push(await db.supplier.create({ data: { ...sp, pan: nepal ? `60${int(1000000, 9999999)}` : null, contact: nepal ? pick(["Ramesh ji", "Kamala didi", "Suresh dai"]) : null, paymentTermsDays: nepal ? 30 : 45, createdAt: new Date(`${longAgo}T05:00:00Z`) } }));
   }
-
-  console.log("Coupons…");
+  const day = (d: string, hh = 0) => new Date(`${d}T${String(hh).padStart(2, "0")}:00:00+05:45`);
   await db.coupon.createMany({
     data: [
       { code: "WELCOME10", description: "10% off your first order (up to Rs. 500)", type: "PERCENT", value: 10, maxDiscount: 50000, minSubtotal: 0, showOnHome: true },
       { code: "FLAT300", description: "Rs. 300 off orders above Rs. 2,499", type: "FIXED", value: 30000, minSubtotal: 249900 },
       { code: "FREESHIP", description: "Free standard delivery anywhere in Nepal", type: "FREE_SHIPPING", value: 0 },
-      { code: "DASHAIN25", description: "Dashain offer: 25% off above Rs. 4,999 (max Rs. 1,500)", type: "PERCENT", value: 25, maxDiscount: 150000, minSubtotal: 499900, usageLimit: 1000 },
+      { code: "WINTER200", description: "Rs. 200 off winter wear above Rs. 2,999", type: "FIXED", value: 20000, minSubtotal: 299900, startsAt: day(addDays(TODAY, -3)), endsAt: day(addDays(TODAY, 40), 23) },
+      { code: "DASHAIN25", description: "Dashain offer: 25% off above Rs. 4,999 (max Rs. 1,500)", type: "PERCENT", value: 25, maxDiscount: 150000, minSubtotal: 499900, usageLimit: 1000, startsAt: day(FESTIVE[2][0]), endsAt: day(FESTIVE[2][1], 23) },
+      { code: "TIHAR15", description: "Tihar: 15% off (max Rs. 1,000)", type: "PERCENT", value: 15, maxDiscount: 100000, minSubtotal: 199900, startsAt: day(FESTIVE[3][0]), endsAt: day(FESTIVE[3][1], 23) },
+      { code: "DASHAIN2082", description: "Last year's Dashain offer", type: "PERCENT", value: 20, maxDiscount: 120000, minSubtotal: 399900, startsAt: day(FESTIVE[0][0]), endsAt: day(FESTIVE[0][1], 23) },
+      { code: "NEWYEAR2083", description: "Nepali New Year: Rs. 500 off above Rs. 3,999", type: "FIXED", value: 50000, minSubtotal: 399900, usageLimit: 300, startsAt: day("2026-04-10"), endsAt: day("2026-04-20", 23) },
+      { code: "STAFF20", description: "Staff and family (paused)", type: "PERCENT", value: 20, minSubtotal: 0, active: false },
     ],
   });
+  const coupons = [
+    { code: "WELCOME10", type: "PERCENT" as const, value: 10, maxDiscount: 50000, minSubtotal: 0 },
+    { code: "FLAT300", type: "FIXED" as const, value: 30000, minSubtotal: 249900 },
+    { code: "FREESHIP", type: "FREE_SHIPPING" as const, value: 0, minSubtotal: 0, from: addDays(TODAY, -200) },
+    { code: "WINTER200", type: "FIXED" as const, value: 20000, minSubtotal: 299900, from: addDays(TODAY, -3) },
+    { code: "DASHAIN25", type: "PERCENT" as const, value: 25, maxDiscount: 150000, minSubtotal: 499900, from: FESTIVE[2][0], to: FESTIVE[2][1] },
+    { code: "TIHAR15", type: "PERCENT" as const, value: 15, maxDiscount: 100000, minSubtotal: 199900, from: FESTIVE[3][0], to: FESTIVE[3][1] },
+    { code: "DASHAIN2082", type: "PERCENT" as const, value: 20, maxDiscount: 120000, minSubtotal: 399900, from: FESTIVE[0][0], to: FESTIVE[0][1] },
+    { code: "NEWYEAR2083", type: "FIXED" as const, value: 50000, minSubtotal: 399900, from: "2026-04-10", to: "2026-04-20" },
+  ];
+  await db.holiday.createMany({ data: HOLIDAYS.map(([date, name]) => ({ date, name })) });
 
-  console.log("Reviews…");
-  const TITLES = [["Love it", 5], ["Perfect fit", 5], ["Great quality for the price", 5], ["Very comfortable", 4], ["Nice, but runs a bit small", 4], ["Good basic", 4], ["Decent", 3], ["Colour slightly different", 3], ["Not for me", 2]] as const;
-  const BODIES = ["Fabric feels premium and it washed really well.", "Ordered my usual size and it fits exactly as expected.", "Delivery was quick and packaging was neat.", "Bought a second colour after the first one.", "Stitching is solid. Would recommend.", "Comfortable enough to wear all day.", "Good value, though I'd size up next time."];
-  const FITS = ["True to size", "True to size", "True to size", "Runs small", "Runs large"];
-  for (const p of productIds) {
-    const n = int(0, 9);
-    const used = new Set<string>();
-    let sum = 0, count = 0;
-    for (let k = 0; k < n; k++) {
-      const u = pick(shoppers);
-      if (used.has(u.id)) continue;
-      used.add(u.id);
-      const [title, rating] = pick(TITLES);
-      await db.review.create({ data: { productId: p.id, userId: u.id, rating, title, body: pick(BODIES), fit: pick(FITS), verified: rand() > 0.3, createdAt: new Date(Date.now() - int(1, 90) * 86400000) } });
-      sum += rating; count++;
-    }
-    if (count) await db.product.update({ where: { id: p.id }, data: { ratingAvg: Math.round((sum / count) * 10) / 10, ratingCount: count } });
-  }
+  console.log("Team rota, leave and missed shifts…");
+  const leave = planLeave(people);
+  const { away } = planAbsences(people);
+  const rota = planRota(people, shops, `${addDays(TODAY, -130).slice(0, 8)}01`, leaveDayMap(leave), away);
+  await writePeople(db, people, shops, rota, leave);
 
-  console.log("Order history…");
-  const STATUS_MIX: OrderStatus[] = ["DELIVERED", "DELIVERED", "DELIVERED", "DELIVERED", "SHIPPED", "OUT_FOR_DELIVERY", "PACKED", "CONFIRMED", "PENDING", "PENDING", "CANCELLED", "RETURNED"];
-  const FLOW: OrderStatus[] = ["PENDING", "CONFIRMED", "PACKED", "SHIPPED", "OUT_FOR_DELIVERY", "DELIVERED"];
-  for (let n = 0; n < 160; n++) {
-    const u = pick(shoppers);
-    const addr = await db.address.findFirst({ where: { userId: u.id } });
-    const daysAgo = Math.floor(Math.pow(rand(), 1.4) * 60);
-    const created = new Date(Date.now() - daysAgo * 86400000 - int(0, 86000) * 1000);
-    let status = pick(STATUS_MIX);
-    if (daysAgo > 7 && ["PENDING", "CONFIRMED", "PACKED"].includes(status)) status = "DELIVERED";
-    if (daysAgo < 1 && status === "DELIVERED") status = "CONFIRMED";
-    const lines = Array.from({ length: int(1, 3) }, () => {
-      const p = pick(productIds);
-      const v = pick(p.variants);
-      return { p, v, q: rand() > 0.8 ? 2 : 1 };
-    });
-    const subtotal = lines.reduce((s, l) => s + l.p.price * l.q, 0);
-    const zone = ["Kathmandu", "Lalitpur", "Bhaktapur"].includes(addr?.district ?? "") ? "VALLEY" : addr?.district === "Mustang" ? "REMOTE" : "OUTSIDE";
-    const shippingFee = subtotal >= 250000 ? 0 : { VALLEY: 10000, OUTSIDE: 15000, REMOTE: 25000 }[zone];
-    const paymentMethod = rand() > 0.7 ? "ONLINE" : "COD"; // COD dominates in Nepal
-    const paid = paymentMethod === "ONLINE" ? status !== "CANCELLED" || rand() > 0.5 : status === "DELIVERED";
-    const flowIdx = FLOW.indexOf(status === "RETURNED" ? "DELIVERED" : status);
-    const events =
-      status === "CANCELLED"
-        ? [{ status: "PENDING" as OrderStatus, message: "Order placed", actor: "customer", createdAt: created }, { status: "CANCELLED" as OrderStatus, message: "Cancelled by customer", actor: "customer", createdAt: new Date(created.getTime() + 3600000) }]
-        : FLOW.slice(0, flowIdx + 1).map((st, k) => ({ status: st, message: k === 0 ? "Order placed" : `Status changed to ${st.replace(/_/g, " ").toLowerCase()}`, actor: k === 0 ? "customer" : "staff@asson.test", createdAt: new Date(created.getTime() + k * 20 * 3600000) }));
-    if (status === "RETURNED") events.push({ status: "RETURNED", message: "Return received & refunded", actor: "staff@asson.test", createdAt: new Date(created.getTime() + 8 * 86400000) });
-    const o = await db.order.create({
-      include: { items: true },
-      data: {
-        userId: u.id, email: u.email, phone: u.phone ?? "9000000000", status,
-        paymentMethod, paymentStatus: status === "RETURNED" ? "REFUNDED" : paid ? "PAID" : "PENDING",
-        subtotal, shippingFee, total: subtotal + shippingFee, shippingMethod: "standard",
-        shippingAddress: addr ? { fullName: addr.fullName, phone: addr.phone, line1: addr.line1, line2: addr.line2, city: addr.city, district: addr.district, state: addr.state, postalCode: addr.postalCode, country: addr.country, zone } : {},
-        carrier: flowIdx >= 3 ? (zone === "VALLEY" ? pick(["Own rider", "Pathao Parcel"]) : pick(["Nepal Can Move (NCM)", "Upaya City Cargo", "Aramex Nepal"])) : null,
-        trackingNumber: flowIdx >= 3 ? `NP${int(10000000, 99999999)}` : null,
-        createdAt: created, updatedAt: events[events.length - 1].createdAt,
-        items: { create: lines.map((l) => ({ variantId: l.v.id, unitCost: l.v.costPrice, productId: l.p.id, name: l.p.name, slug: l.p.slug, sku: l.v.sku, color: l.v.color, size: l.v.size, image: l.p.images[0], unitPrice: l.p.price, quantity: l.q })) },
-        events: { create: events },
-      },
-    });
-    // demo history: where open and past orders were filled from (packed onwards = already picked)
-    if (status !== "CANCELLED") {
-      await db.orderAllocation.createMany({
-        data: o.items.map((it) => ({ orderId: o.id, orderItemId: it.id, variantId: it.variantId, storeId: warehouse.id, quantity: it.quantity, createdAt: created, ...(flowIdx >= 2 ? { pickedAt: new Date(created.getTime() + 30 * 3600000) } : {}) })),
-      });
-    }
-  }
+  console.log("A year of trading (online orders, tills, purchasing, transfers)…");
+  const protect = ["oxford-button-down-shirt", "two-piece-wool-suit"];
+  const markdowns = planMarkdowns(products, protect);
+  const regular = { id: aarav.id, email: aarav.email, phone: aarav.phone!, name: aarav.name, district: "Kathmandu", createdAt: aarav.createdAt, zone: "VALLEY", home: "FLAGSHIP", address: { fullName: "Aarav Shrestha", phone: "9841234567", line1: "Naya Baneshwor-10, House 24", line2: "Behind Everest Bank", city: "Kathmandu Metropolitan City", district: "Kathmandu", state: "Bagmati", postalCode: "44600", country: "Nepal" } };
+  const { c, customers, bills } = await runHistory(db, { products, shops, people, suppliers: suppliers.map((s) => ({ id: s.id, name: s.name, country: s.country, pan: s.pan })), rates, coupons, markdowns: markdowns.windows, tillOf: rota.tillOf, regular, opening, protect, passwordHash: customerHash });
+  await markdowns.write(db, owner.id);
 
-  console.log("Loyalty points & stock alerts…");
-  // credit points for the delivered history (1 pt / Rs 100 of goods), plus the welcome bonus
-  for (const u of shoppers.slice(0, 9)) {
-    const delivered = await db.order.findMany({ where: { userId: u.id, status: "DELIVERED" }, orderBy: { createdAt: "asc" }, select: { id: true, total: true, shippingFee: true, createdAt: true } });
-    const entries: { userId: string; delta: number; reason: string; note: string; createdAt: Date; orderId?: string }[] = [{ userId: u.id, delta: 100, reason: "WELCOME", note: "Welcome to Asson", createdAt: new Date(Date.now() - 90 * 86400000) }];
-    for (const o of delivered) {
-      const pts = Math.floor((o.total - o.shippingFee) / 10000);
-      if (!pts) continue;
-      await db.order.update({ where: { id: o.id }, data: { pointsEarned: pts } });
-      entries.push({ userId: u.id, delta: pts, reason: "EARN", note: "Classic tier", createdAt: new Date(o.createdAt.getTime() + 3 * 86400000), orderId: o.id });
-    }
-    await db.pointsEntry.createMany({ data: entries });
-    await db.user.update({ where: { id: u.id }, data: { points: entries.reduce((s, e) => s + e.delta, 0) } });
-  }
-  const soldOut = await db.variant.findMany({ where: { stock: 0 }, take: 6, select: { id: true } });
-  for (const [k, v] of soldOut.entries()) {
-    await db.stockAlert.createMany({ data: Array.from({ length: (k % 3) + 1 }, (_, j) => ({ variantId: v.id, phone: `98${String(41000000 + k * 10 + j).padStart(8, "0")}` })) });
-  }
+  console.log("Payroll, reviews, care, operations and the books…");
+  await runPayroll(db, people);
+  await writeReviews(db, c);
+  await writeCare(db, c, customers.filter((x) => x.id));
+  await writeIssues(db, c);
+  const shopList = [shops.FLAGSHIP, shops.PKR, shops.LTP];
+  await writeChecklists(db, c, shopList);
+  await writeVisits(db, c, shopList);
+  await writeExpenses(db, c, shopList);
+  await writePayables(db, c, bills);
+  await writeStatement(db, c);
+  await writeCounts(db, c);
+  await writeStats(db, c);
+  await writeAlerts(db, c, customers.filter((x) => x.id));
+  console.log("Day closes and recommendations (with the app's own code)…");
+  await lockDays(db, c, shopList);
+  await buildLinks();
+  await resetSequences(db);
 
-  // the Old Money Edit: a featured collection, two categories and four looks (same loader the live shop uses)
-  console.log("Old Money Edit:", await loadOldMoneyEdit(db));
-
-  const counts = await Promise.all([db.product.count(), db.variant.count(), db.order.count(), db.user.count()]);
-  console.log(`Done: ${counts[0]} products, ${counts[1]} variants, ${counts[2]} orders, ${counts[3]} users`);
+  const counts = await Promise.all([db.product.count(), db.variant.count(), db.order.count(), db.user.count(), db.taxInvoice.count(), db.inventoryLog.count()]);
+  console.log(`Done in ${Math.round((Date.now() - started) / 1000)} s: ${counts[0]} products, ${counts[1]} variants, ${counts[2]} orders, ${counts[3]} users, ${counts[4]} tax invoices, ${counts[5]} stock moves`);
 }
 
 main()

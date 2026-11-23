@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { Heart } from "lucide-react";
+import { Heart, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { ProductCardData } from "@/lib/catalog";
@@ -19,6 +19,7 @@ import { pick } from "@/lib/i18n";
 export function ProductCard({ p, priority }: { p: ProductCardData; priority?: boolean }) {
   const [color, setColor] = useState(p.colors[0]?.name);
   const [pending, start] = useTransition();
+  const [sizesOpen, setSizesOpen] = useState(false); // phones: the + button opens the sizes (desktop shows them on hover)
   const { wishlist, openCart } = useShop();
   const router = useRouter();
   const { t, locale } = useT();
@@ -38,7 +39,7 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
       const v = p.variants.find((x) => x.color === color && x.size === size);
       if (!v) return;
       const r = await addToCart({ variantId: v.id });
-      if (r.ok) { toast.success(t("pc.added", { name, size }), { action: { label: t("pc.viewBag"), onClick: openCart } }); if (r.message) toast(r.message); }
+      if (r.ok) { setSizesOpen(false); toast.success(t("pc.added", { name, size }), { action: { label: t("pc.viewBag"), onClick: openCart } }); if (r.message) toast(r.message); }
       else toast.error(r.error);
     });
 
@@ -63,15 +64,38 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
         <button onClick={heart} disabled={pending} className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm transition hover:scale-105" aria-label={saved ? t("pc.unsave") : t("pc.save")} aria-pressed={saved}>
           <Heart className={cn("h-[18px] w-[18px]", saved ? "fill-accent text-accent" : "text-ink")} strokeWidth={1.8} />
         </button>
+        {p.inStock && sizes.length > 0 && !sizesOpen && (
+          <button
+            type="button"
+            onClick={() => setSizesOpen(true)}
+            className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur transition active:scale-95 md:hidden"
+            aria-label={t("pc.chooseSize", { name })}
+            aria-expanded={false}
+          >
+            <Plus className="h-[18px] w-[18px]" strokeWidth={1.8} />
+          </button>
+        )}
         {p.inStock && sizes.length > 0 && (
-          <div className="absolute inset-x-2 bottom-2 hidden translate-y-2 bg-white/95 p-2 opacity-0 shadow-sm backdrop-blur transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 md:block">
-            <p className="mb-1.5 text-center text-[11.5px] font-semibold uppercase tracking-wider text-muted">{t("pc.quickAdd")}</p>
+          <div
+            className={cn(
+              "absolute inset-x-2 bottom-2 bg-white/95 p-2 shadow-sm backdrop-blur transition-all duration-300",
+              sizesOpen ? "block animate-slide-up" : "hidden translate-y-2 opacity-0 md:block md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100",
+            )}
+          >
+            <div className="relative mb-1.5 flex items-center justify-center">
+              <p className="text-center text-[11.5px] font-semibold uppercase tracking-wider text-muted">{t("pc.quickAdd")}</p>
+              {sizesOpen && (
+                <button type="button" onClick={() => setSizesOpen(false)} className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center" aria-label={t("pc.closeSizes")}>
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap justify-center gap-1">
               {sizes.map((s) => {
                 const v = p.variants.find((x) => x.color === color && x.size === s);
                 const oos = !v || v.stock <= 0;
                 return (
-                  <button key={s} onClick={() => quickAdd(s)} disabled={oos || pending} className={cn("h-8 min-w-9 border px-2 text-[12.5px] font-medium transition-colors", oos ? "border-line text-muted/50 line-through" : "border-line hover:border-ink hover:bg-ink hover:text-white")}>
+                  <button key={s} onClick={() => quickAdd(s)} disabled={oos || pending} className={cn("h-9 min-w-9 border px-2 text-[12.5px] font-medium transition-colors md:h-8", oos ? "border-line text-muted/50 line-through" : "border-line hover:border-ink hover:bg-ink hover:text-white")}>
                     {s}
                   </button>
                 );
@@ -91,8 +115,8 @@ export function ProductCard({ p, priority }: { p: ProductCardData; priority?: bo
             {p.colors.length > 5 && <span className="text-[12px] text-muted">+{p.colors.length - 5}</span>}
           </div>
         )}
-        <p className="text-[12px] uppercase tracking-wider text-muted">{p.brand}</p>
-        <Link href={href} className="line-clamp-1 text-[14.5px] font-medium hover:text-accent">{name}</Link>
+        <p className="text-[11.5px] uppercase tracking-[0.12em] text-muted">{p.brand}</p>
+        <Link href={href} className="line-clamp-1 text-[14.5px] font-medium decoration-1 underline-offset-4 hover:underline">{name}</Link>
         <Price price={p.price} compareAt={p.compareAtPrice} size="sm" offWord={t("price.off")} />
         {p.ratingCount > 0 && (
           <div className="flex items-center gap-1.5 text-[12px] text-muted"><Stars value={p.ratingAvg} size={12} /> ({p.ratingCount})</div>

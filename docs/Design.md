@@ -104,7 +104,7 @@ Rules: one display headline per section · never bold Fraunces · `tabular-nums`
 | | Storefront | Admin |
 |---|---|---|
 | Corner radius | **0, square.** Tailored, editorial | `rounded-md` / `rounded-lg`, friendlier for dense tools |
-| Exceptions | Swatches, the wishlist heart and count badges are round | — |
+| Exceptions | Swatches, the wishlist heart, the quick-add + on card photos, product-row arrow buttons and count badges are round | — |
 | Borders | 1 px `line`; hover `ink-soft`; focus or selected `ink` | same |
 | Shadows | Only on overlays (drawers, menus, dropdowns, toasts) | Cards are flat with a border |
 
@@ -119,7 +119,8 @@ Rules: one display headline per section · never bold Fraunces · `tabular-nums`
 | **Badge** | 11 px uppercase: `accent` (−25%), `dark` (Sold out), `warn` (Few left), neutral (New) |
 | **Price** | Selling price in ink and semibold; MRP struck through in `muted`; "% off" in `accent` |
 | **Stars** | Ink-filled on a `line` background; partial fill supported |
-| **Product card** | 3:4 image; second image on hover; badges top-left; heart top-right; quick-add sizes on hover (desktop); swatches, brand eyebrow, name, price, rating |
+| **Product card** | 3:4 image; second image on hover; badges top-left; heart top-right; quick-add sizes on hover or focus (desktop) and from a round + button on the photo (phones); swatches, brand eyebrow, name, price, rating |
+| **Product row** (`ProductRail`) | Eyebrow + Fraunces title, "View all →", round 40 px arrow buttons (desktop, hidden when everything fits); swipe on phones; 2.2 / 3 / 4 cards visible |
 | **Empty state** | Icon (1.2 stroke), Fraunces title, one sentence, one action |
 | **Toasts** (sonner) | Bottom centre, square, short; success, error, or info with an action |
 

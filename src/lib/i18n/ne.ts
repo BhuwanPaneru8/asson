@@ -178,6 +178,8 @@ export const ne: Record<keyof typeof en, string> = {
   "home.useCodeMin": "{amount} भन्दा माथिको अर्डरमा चेकआउटमा कोड {code} प्रयोग गर्नुहोस्। {days} दिनभित्र सजिलो फिर्ता।",
   "home.startShopping": "किनमेल सुरु गर्नुहोस्",
   "rail.viewAll": "सबै हेर्नुहोस्",
+  "rail.prev": "अघिल्लो: {title}",
+  "rail.next": "अर्को: {title}",
   "col.label": "कलेक्सन",
   "rail.recent": "हालै हेरिएका",
 
@@ -243,6 +245,8 @@ export const ne: Record<keyof typeof en, string> = {
   "pc.unsave": "मनपर्ने सूचीबाट हटाउनुहोस्",
   "pc.save": "मनपर्ने सूचीमा सेभ गर्नुहोस्",
   "pc.quickAdd": "छिटो थप्नुहोस्",
+  "pc.chooseSize": "{name} को साइज छान्नुहोस्",
+  "pc.closeSizes": "साइज बन्द गर्नुहोस्",
   "pp.review1": "{n} समीक्षा",
   "pp.reviewN": "{n} समीक्षा",
   "pp.colour": "रङ:",
